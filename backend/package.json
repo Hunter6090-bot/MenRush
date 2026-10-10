@@ -28,6 +28,7 @@
     "verification:purge-sensitive": "ts-node src/scripts/purge-verification-files.ts",
     "test:security": "ts-node scripts/security-checks.ts",
     "test:veriff": "ts-node --transpile-only scripts/veriff-checks.ts",
+    "test:mandatory-age": "ts-node --transpile-only scripts/mandatory-age-checks.ts",
     "test:adult-assurance": "ts-node --transpile-only scripts/adult-assurance-checks.ts",
     "test:adult-assurance-rate-limit": "ts-node --transpile-only scripts/adult-assurance-rate-limit-checks.ts",
     "test:rate-limit-client-ip": "ts-node --transpile-only scripts/rate-limit-client-ip-checks.ts",
@@ -79,7 +80,11 @@
     "test:call-ice-buffer": "ts-node scripts/call-ice-buffer-checks.ts",
     "test:common-sense": "ts-node scripts/common-sense-checks.ts",
     "predeploy": "npm run build && bash ../test-features.sh",
-    "audit:safety": "bash ../scripts/audit-safety.sh"
+    "audit:safety": "bash ../scripts/audit-safety.sh",
+    "test:billing-disabled": "ts-node scripts/billing-disabled-checks.ts",
+    "test:verotel": "ts-node scripts/verotel-checks.ts",
+    "test:veriff-badges": "ts-node --transpile-only scripts/veriff-badge-checks.ts",
+    "verification:badge-inventory": "ts-node scripts/veriff-badge-inventory.ts"
   },
   "dependencies": {
     "@huggingface/inference": "^4.13.21",

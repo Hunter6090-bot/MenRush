@@ -138,6 +138,11 @@ const verifyTokenInternal = (token: string): TokenPayload => {
 
 export const authService = {
   async register(data: RegisterInput) {
+    const assuranceRequired = isAdultAssuranceRequiredAtSignup();
+    const assuranceToken = data.adult_assurance_token?.trim();
+    if (assuranceRequired && !assuranceToken) {
+      throw new Error('Adult assurance is required. Complete the 18+ check and try again.');
+    }
     const id = uuidv4();
     const hashedPassword = await bcryptjs.hash(data.password, 10);
     const inviteCode = data.invite_code?.trim();
@@ -260,14 +265,10 @@ export const authService = {
     }
 
     // Signup records DOB/age as self-attested for profile display. Adult assurance
-    // (verified_age_18_plus) requires a Veriff liveness / age-estimation pass when configured.
+    // (verified_age_18_plus) requires a provider-backed age-estimation pass.
     // Optional ID on the same flow may set is_verified (Verified tick) — never stores ID.
-    const autoVerify = process.env.DEV_AUTO_VERIFY === 'true';
-    const assuranceRequired = isAdultAssuranceRequiredAtSignup();
-    const assuranceToken = data.adult_assurance_token?.trim();
-    if (assuranceRequired && !assuranceToken) {
-      throw new Error('Adult assurance is required. Complete the 18+ check and try again.');
-    }
+    const autoVerify = process.env.NODE_ENV === 'test' && process.env.DEV_AUTO_VERIFY === 'true';
+
 
     let age = data.age;
     let dateOfBirth: string | null = data.date_of_birth ?? null;

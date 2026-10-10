@@ -18,12 +18,14 @@ describe('isNearbyPlaceholderFace', () => {
 
   it('does not treat a loading /uploads photo as Brand empty (media lock)', () => {
     expect(isNearbyPlaceholderFace('/uploads/x.jpg', 'loading')).toBe(false);
+    expect(isNearbyPlaceholderFace('https://media.example/uploads/x.jpg', 'loading')).toBe(false);
   });
 
   it('treats loading without a real upload, fallback, and generic avatars as placeholders', () => {
     expect(isNearbyPlaceholderFace(undefined, 'loading')).toBe(true);
     expect(isNearbyPlaceholderFace(undefined, 'fallback')).toBe(true);
     expect(isNearbyPlaceholderFace('/avatars/generic/02.svg', 'ready')).toBe(true);
+    expect(isNearbyPlaceholderFace('https://menrush.com/avatars/generic/09.svg?v=1', 'ready')).toBe(true);
   });
 
   it('never treats a ready /uploads photo as a placeholder (media lock)', () => {

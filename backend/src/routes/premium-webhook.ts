@@ -1,24 +1,21 @@
-import { Router, Request, Response } from 'express';
-import express from 'express';
-import { premiumService } from '../services/premium.service';
+import { Router } from 'express';
+import { receiveVerotelPostback } from '../services/verotel.service';
+import { VerotelError } from '../services/verotel-contract';
 
 const router = Router();
-
-router.post(
-  '/',
-  express.urlencoded({ extended: true }),
-  async (req: Request, res: Response) => {
-    try {
-      const result = await premiumService.handleWebhook(req.body ?? {});
-      res.json(result);
-    } catch (err: any) {
-      if (err?.code === 'invalid_signature') {
-        return res.status(400).json({ error: 'invalid_signature' });
-      }
-      console.error('[premium] webhook error:', err);
-      return res.status(500).json({ error: 'webhook_failed' });
-    }
-  },
-);
-
+router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
+// FlexPay v4 postbacks are signed GETs, not JSON/form POSTs. Never trust a user ID in a callback.
+router.get('/', async (req, res) => {
+  if (req.method !== 'GET') return res.set('Allow', 'GET').status(405).type('text/plain').send('ERROR');
+  try {
+    await receiveVerotelPostback(req.originalUrl.split('?')[1] || '');
+    return res.status(200).type('text/plain').send('OK');
+  } catch (error) {
+    // Do not log signed query strings, card/buyer details, secrets, or raw database errors.
+    const known = error instanceof VerotelError;
+    console.error('[premium] postback rejected:', known ? error.code : 'transaction_failed');
+    return res.status(known ? error.status : 503).type('text/plain').send('ERROR');
+  }
+});
+router.all('/', (_req, res) => res.set('Allow', 'GET').status(405).type('text/plain').send('ERROR'));
 export default router;

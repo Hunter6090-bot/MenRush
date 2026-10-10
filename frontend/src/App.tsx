@@ -2,6 +2,7 @@ import { lazy, Suspense, type ComponentType, type ReactElement, type ReactNode }
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { LegacyInviteRedirect } from './components/LegacyInviteRedirect';
 import { useEffect } from 'react';
+import { RequireAdult } from './components/RequireAdult';
 import { RequireProfileSetup } from './components/RequireProfileSetup';
 import { useAuthStore } from './hooks/store';
 import { usePushNotifications } from './hooks/usePushNotifications';
@@ -39,6 +40,7 @@ const ComingSoon = lazyNamed(() => import('./pages/ComingSoon'), 'ComingSoon');
 const GetTheApp = lazyNamed(() => import('./pages/GetTheApp'), 'GetTheApp');
 const BetaAccess = lazyNamed(() => import('./pages/BetaAccess'), 'BetaAccess');
 const Login = lazyNamed(() => import('./pages/Login'), 'Login');
+const AgeAssurance = lazyNamed(() => import('./pages/AgeAssurance'), 'AgeAssurance');
 const Register = lazyNamed(() => import('./pages/Register'), 'Register');
 const RegisterUnderage = lazyNamed(
   () => import('./pages/RegisterUnderage'),
@@ -121,8 +123,7 @@ function ProtectedRoute({ children }: { children: ReactElement }) {
   return children;
 }
 
-// Hard gate is OFF for beta — unverified users enter the app. Verification
-// pages stay available but must not block Discover / Matches / Chat.
+// Mandatory age assurance is separate from the optional identity badge.
 function RequireVerified({
   children,
   allowIncompleteProfile = false,
@@ -144,8 +145,8 @@ function RequireVerified({
     if (user?.verification_status === 'rejected') return <Navigate to="/verify/rejected" replace />;
     return <Navigate to="/verify/id" replace />;
   }
-  if (allowIncompleteProfile) return children;
-  return <RequireProfileSetup>{children}</RequireProfileSetup>;
+  if (allowIncompleteProfile) return <RequireAdult>{children}</RequireAdult>;
+  return <RequireAdult><RequireProfileSetup>{children}</RequireProfileSetup></RequireAdult>;
 }
 
 function NotFound() {
@@ -252,6 +253,7 @@ function AppShell() {
       {token ? <ToastNotifications /> : null}
       <LazyRoute>
         <Routes>
+          <Route path="/age-assurance" element={<ProtectedRoute><AgeAssurance /></ProtectedRoute>} />
           <Route path="/" element={<ComingSoon />} />
           <Route path="/get-the-app" element={<GetTheApp />} />
           <Route path="/install" element={<Navigate to="/get-the-app" replace />} />

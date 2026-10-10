@@ -5,10 +5,11 @@ import {
   resolveDisplayThumbCandidates,
   resolveUploadUrlCandidates,
 } from '../lib/assetUrl';
+import { FadedBrandFace } from './FadedBrandFace';
+import { isPlaceholderAvatar } from '../lib/profileMedia';
 import { profilePathForUser } from '../lib/profileLinks';
 import { useAuthStore } from '../hooks/store';
 import { realAvatarUrl } from '../lib/avatarFallback';
-import { FadedBrandFace } from './FadedBrandFace';
 
 type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
@@ -39,7 +40,8 @@ const sizes: Record<Size, { outer: string; text: string; dot: string; dotPos: st
   xl: { outer: 'w-24 h-24', text: 'text-3xl', dot: 'w-4 h-4', dotPos: 'bottom-1 right-1' },
 };
 
-export const getPhotoUrl = (url?: string) => resolveAssetUrl(url);
+export const getPhotoUrl = (url?: string) =>
+  isPlaceholderAvatar(url) ? undefined : resolveAssetUrl(url);
 
 export type ResolvingPhotoOptions = {
   /** Prefer `/api/media/display` thumbs (Nearby / Matches grids — iPhone decode). */

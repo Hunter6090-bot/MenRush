@@ -68,124 +68,36 @@ describe('Register page', () => {
     checkboxes.forEach((cb) => fireEvent.click(cb));
   };
 
-  it('submits registration directly without Veriff when required is false', async () => {
-    mocks.register.mockResolvedValue({
-      data: {
-        token: 'test-jwt-token',
-        user: { id: 'u1', name: 'AlexLondon', email: 'alex@example.com' },
-      },
-    });
-
-    render(
-      <MemoryRouter>
-        <Register />
-      </MemoryRouter>,
-    );
-
-    await waitFor(() => {
-      expect(mocks.adultAssuranceRequired).toHaveBeenCalled();
-    });
-
-    // Form is directly visible (no AdultAssuranceFlow blocking the page)
-    expect(screen.getByTestId('register-username-input')).toBeVisible();
-    expect(screen.queryByTestId('adult-assurance-flow')).not.toBeInTheDocument();
-
-    fillForm();
-
-    const submitBtn = screen.getByRole('button', { name: 'Create Account' });
-    fireEvent.click(submitBtn);
-
-    await waitFor(() => {
-      expect(mocks.register).toHaveBeenCalledTimes(1);
-    });
-
-    const payload = mocks.register.mock.calls[0][0];
-    expect(payload.email).toBe('alex@example.com');
-    expect(payload.name).toBe('AlexLondon');
-    expect(payload.date_of_birth).toBe('1995-06-15');
-    expect(payload.age).toBeGreaterThanOrEqual(18);
-    // Crucial: adult_assurance_token is NOT included
-    expect(payload.adult_assurance_token).toBeUndefined();
-
-    await waitFor(() => {
-      expect(mocks.navigate).toHaveBeenCalledWith('/profile/setup', { replace: true });
-    });
+  it.each([
+    { required: false, available: true },
+    { required: true, available: false },
+    { required: true },
+  ])('fails closed for unavailable or legacy configuration %j', async (configuration) => {
+    mocks.adultAssuranceRequired.mockResolvedValue({ data: configuration });
+    render(<MemoryRouter><Register /></MemoryRouter>);
+    await waitFor(() => expect(mocks.adultAssuranceRequired).toHaveBeenCalled());
+    fillForm(); fireEvent.click(screen.getByRole('button', { name: 'Create Account' }));
+    await waitFor(() => expect(screen.getByTestId('register-error')).toHaveTextContent('currently unavailable'));
+    expect(mocks.register).not.toHaveBeenCalled();
   });
-
-  it('displays human-readable duplicate email error with sign-in guidance instead of generic 400', async () => {
-    mocks.register.mockRejectedValue({
-      message: 'Request failed with status code 400',
-      response: {
-        status: 400,
-        data: { error: 'Email already exists' },
-      },
-    });
-
-    render(
-      <MemoryRouter>
-        <Register />
-      </MemoryRouter>,
-    );
-
-    fillForm();
-    fireEvent.click(screen.getByRole('button', { name: 'Create Account' }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('register-error')).toBeInTheDocument();
-    });
-
-    const errorEl = screen.getByTestId('register-error');
-    expect(errorEl).toHaveTextContent('An account with this email already exists.');
-    expect(errorEl).not.toHaveTextContent('Request failed with status code 400');
-
-    // Duplicate email guidance links
-    const helpEl = screen.getByTestId('register-duplicate-email-help');
-    expect(helpEl).toBeInTheDocument();
-    expect(helpEl).toHaveTextContent('Sign in or reset your password.');
+  it('does not bypass age assurance on configuration network failure', async () => {
+    mocks.adultAssuranceRequired.mockRejectedValue(new Error('offline'));
+    render(<MemoryRouter><Register /></MemoryRouter>);
+    await waitFor(() => expect(mocks.adultAssuranceRequired).toHaveBeenCalled());
+    fillForm(); fireEvent.click(screen.getByRole('button', { name: 'Create Account' }));
+    await waitFor(() => expect(screen.getByTestId('register-error')).toHaveTextContent('currently unavailable'));
+    expect(mocks.register).not.toHaveBeenCalled();
   });
-
-  it('allows skipping Veriff when required is true and completing registration without adult token', async () => {
-    mocks.adultAssuranceRequired.mockResolvedValue({
-      data: { required: true, fixtureAllowed: false },
-    });
-    mocks.register.mockResolvedValue({
-      data: {
-        token: 'test-jwt-token',
-        user: { id: 'u1', name: 'AlexLondon', email: 'alex@example.com' },
-      },
-    });
-
-    render(
-      <MemoryRouter>
-        <Register />
-      </MemoryRouter>,
-    );
-
-    await waitFor(() => {
-      expect(mocks.adultAssuranceRequired).toHaveBeenCalled();
-    });
-
-    fillForm();
-    fireEvent.click(screen.getByRole('button', { name: 'Create Account' }));
-
-    // When required, AdultAssuranceFlow is shown
-    await waitFor(() => {
-      expect(screen.getByTestId('adult-assurance-flow')).toBeInTheDocument();
-    });
-
-    // Tap Skip / Continue without Veriff
-    const skipBtn = screen.getByTestId('adult-assurance-skip-cta');
-    fireEvent.click(skipBtn);
-
-    // Registration is submitted without adult assurance token
-    await waitFor(() => {
-      expect(mocks.register).toHaveBeenCalledTimes(1);
-    });
-
-    const payload = mocks.register.mock.calls[0][0];
-    expect(payload.adult_assurance_token).toBeUndefined();
-    await waitFor(() => {
-      expect(mocks.navigate).toHaveBeenCalledWith('/profile/setup', { replace: true });
-    });
+  it('opens mandatory assurance without a skip path and retains form values on cancel', async () => {
+    mocks.adultAssuranceRequired.mockResolvedValue({ data: { required:true, available:true, fixtureAllowed:false } });
+    render(<MemoryRouter><Register /></MemoryRouter>);
+    await waitFor(() => expect(mocks.adultAssuranceRequired).toHaveBeenCalled());
+    fillForm(); fireEvent.click(screen.getByRole('button', { name: 'Create Account' }));
+    await waitFor(() => expect(screen.getByTestId('adult-assurance-flow')).toBeInTheDocument());
+    expect(screen.queryByTestId('adult-assurance-skip-cta')).not.toBeInTheDocument();
+    expect(mocks.register).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Back', exact:true }));
+    expect(screen.getByPlaceholderText('you@email.com')).toHaveValue('alex@example.com');
+    expect(mocks.register).not.toHaveBeenCalled();
   });
 });

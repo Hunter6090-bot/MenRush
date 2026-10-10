@@ -123,9 +123,9 @@ function wiringChecks() {
     ['post', '/forgot-password', ['forgotPasswordLimiter', 'forgotPasswordAccountLimiter']],
     ['post', '/confirm-email', ['confirmEmailLimiter']],
     ['post', '/resend-confirm', ['resendConfirmLimiter', 'resendConfirmAccountLimiter']],
-    ['post', '/change-password', ['authMiddleware', 'accountChangeLimiter']],
+    ['post', '/change-password', ['sessionAuthMiddleware', 'accountChangeLimiter']],
     ['post', '/change-email', ['authMiddleware', 'accountChangeLimiter']],
-    ['post', '/delete-account', ['authMiddleware', 'accountChangeLimiter']],
+    ['post', '/delete-account', ['sessionAuthMiddleware', 'accountChangeLimiter']],
     ['get', '/adult-assurance/:sessionId', ['adultAssuranceStatusPollLimiter', 'adultAssurancePollSessionLimiter']],
   ];
   for (const [method, route, chain] of routes) {

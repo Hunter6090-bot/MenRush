@@ -1,3 +1,4 @@
+import { profileMediaPath } from '../lib/profileMedia';
 import { BRAND_MEDALLION_CUTOUT } from '../lib/brand';
 import type { GridPhotoPhase } from '../lib/nearbyPhotoSrc';
 import { isPlaceholderAvatarUrl } from '../lib/avatarFallback';
@@ -29,7 +30,7 @@ export function isNearbyPlaceholderFace(
 ): boolean {
   const trimmed = photoUrl?.trim() || '';
   // Real user media still loading — not an empty Brand face (media lock).
-  if (phase === 'loading' && trimmed.startsWith('/uploads/')) return false;
+  if (phase === 'loading' && profileMediaPath(trimmed).startsWith('/uploads/')) return false;
   if (phase === 'loading' || phase === 'empty' || phase === 'fallback') return true;
   // Empty, generic /avatars/*, logo plates, initials services → Brand placeholder.
   return isPlaceholderAvatarUrl(trimmed);

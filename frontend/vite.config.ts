@@ -2,6 +2,9 @@
 import { defineConfig, type ProxyOptions } from 'vite';
 import react from '@vitejs/plugin-react';
 import type { IncomingMessage } from 'http';
+import { randomUUID } from 'node:crypto';
+
+const appBuildId = randomUUID();
 
 const backendTarget = process.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
@@ -23,7 +26,14 @@ function devProxy(pathPrefix: string, options: ProxyOptions = {}): ProxyOptions 
 }
 
 export default defineConfig({
-  plugins: [react()],
+  define: { 'import.meta.env.VITE_APP_BUILD_ID': JSON.stringify(appBuildId) },
+  plugins: [react(), {
+    name: 'menrush-build-version',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'app-version.json', source: JSON.stringify({ buildId: appBuildId }) });
+    },
+  }],
   build: {
     // Mobile phones were parsing a ~2.8MB monolith (Mapbox + every route).
     // Split vendors so chat/profile/matches do not download mapbox-gl.

@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import './observability/sentry';
 import express from 'express';
+import { adultMediaResponses, requireUploadGrant } from './middleware/adult-media';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import http from 'http';
 import path from 'path';
@@ -54,6 +55,7 @@ import { sendPushToUser } from './services/push.service';
 import { notificationService } from './services/notification.service';
 import { messageService } from './services/message.service';
 import { accessControl } from './security/access';
+import { installAdultSocketGate } from './security/adult-socket';
 import { logResendMailerStatus } from './services/mailer.service';
 import { startVerificationRetentionWorker } from './services/verification/retention.worker';
 import { Sentry } from './observability/sentry';
@@ -95,6 +97,7 @@ app.use('/api/verify/veriff', veriffRoutes);
 // Primary portal URL remains /api/verify/veriff/webhook.
 app.post('/api/verify/webhook', veriffWebhookRawParser, handleVeriffDecisionWebhook);
 app.use(express.json());
+app.use(adultMediaResponses);
 app.use('/api/verify', verifyRoutes);
 // Profile / message / album media. fallthrough:true so missing files hit a clean 404
 // (not 500). Production mounts a Railway volume at /app/uploads (see Dockerfile + UPLOADS_ROOT).
@@ -108,13 +111,14 @@ void probeUploadsWritable().then((probe) => {
 
 app.use(
   '/uploads',
+  requireUploadGrant,
   express.static(uploadsRoot, {
     dotfiles: 'deny',
     fallthrough: true,
     // Do not immutable-cache — profile photos are replaced; avoid sticky 404s in CDNs.
     maxAge: '1h',
     setHeaders(res) {
-      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+      res.setHeader('Cache-Control', 'private, no-store');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     },
   }),
@@ -389,6 +393,8 @@ async function authorizeSocketTarget(
 
 io.on('connection', (socket: Socket) => {
   console.log('User connected:', socket.id);
+
+  installAdultSocketGate(socket, () => socketToUser.get(socket.id));
 
   socket.on('authenticate', async (token: string) => {
     try {

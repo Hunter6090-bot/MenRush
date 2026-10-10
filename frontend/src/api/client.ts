@@ -69,6 +69,10 @@ apiClient.interceptors.response.use(
     const reqUrl = String(error?.config?.url ?? '');
     const isAuthChallenge = AUTH_CHALLENGE_PATHS.some((p) => reqUrl.includes(p));
 
+    if (status === 403 && error?.response?.data?.error === 'adult_assurance_required' &&
+        window.location.pathname !== '/age-assurance') {
+      window.location.replace('/age-assurance');
+    }
     if (status === 401 && !isAuthChallenge && !sessionExpiredHandling) {
       const store = useAuthStore.getState();
       const hadSession = Boolean(store.token || readStoredToken());
@@ -97,14 +101,16 @@ export const authAPI = {
     }>('/auth/register', data),
   /** Signup 18+ liveness gate. Optional ID → Verified tick (same flow). */
   adultAssuranceRequired: () =>
-    apiClient.get<{ required: boolean; fixtureAllowed: boolean }>('/auth/adult-assurance/required'),
-  startAdultAssurance: () =>
-    apiClient.post<{ sessionId: string; sessionUrl: string }>('/auth/adult-assurance/start'),
+    apiClient.get<{ required: boolean; available: boolean; fixtureAllowed: boolean }>('/auth/adult-assurance/required'),
+  adultAccountStatus: () => apiClient.get<{ assured: boolean; available: boolean }>('/auth/adult-assurance/account'),
+  completeAdultAccount: (token: string) => apiClient.post('/auth/adult-assurance/account/complete', { token }),
+  startAdultAssurance: (account = false) =>
+    apiClient.post<{ sessionId: string; sessionUrl: string }>(account ? '/auth/adult-assurance/account/start' : '/auth/adult-assurance/start'),
   startAdultAssuranceId: (sessionId: string) =>
     apiClient.post<{ sessionId: string; sessionUrl: string }>(
       `/auth/adult-assurance/${sessionId}/start-id`,
     ),
-  adultAssuranceStatus: (sessionId: string) =>
+  adultAssuranceStatus: (sessionId: string, account = false) =>
     apiClient.get<{
       sessionId: string;
       status: string;
@@ -112,7 +118,7 @@ export const authAPI = {
       underage?: boolean;
       id_verified?: boolean;
       id_status?: string | null;
-    }>(`/auth/adult-assurance/${sessionId}`),
+    }>(`/auth/adult-assurance/${account ? 'account/' : ''}${sessionId}`),
   markAdultAssuranceSubmitted: (sessionId: string) =>
     apiClient.post(`/auth/adult-assurance/${sessionId}/submitted`),
   /** Non-prod BOA90 / CI fixture only — never in production. */

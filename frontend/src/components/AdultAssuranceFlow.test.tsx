@@ -67,7 +67,7 @@ describe('AdultAssuranceFlow', () => {
     expect(onCancel).not.toHaveBeenCalled();
   });
 
-  it('hardens "Opening Veriff…": shows skip and back buttons during liveness phase and allows skipping', async () => {
+  it('hardens "Opening Veriff…": shows only back during mandatory liveness', async () => {
     render(
       <AdultAssuranceFlow
         fixtureAllowed={false}
@@ -88,18 +88,10 @@ describe('AdultAssuranceFlow', () => {
     });
     expect(screen.getByText('Opening Veriff…')).toBeInTheDocument();
 
-    // In liveness phase, skip button MUST be present so user is never stuck
-    const livenessSkip = screen.getByTestId('adult-assurance-liveness-skip');
-    expect(livenessSkip).toBeInTheDocument();
-    expect(livenessSkip).toHaveTextContent('Skip / Continue without Veriff');
-
-    const backBtn = screen.getByTestId('adult-assurance-liveness-back');
-    expect(backBtn).toBeInTheDocument();
-
-    // Clicking skip while stuck on Opening Veriff closes the frame and calls onSkip
-    fireEvent.click(livenessSkip);
-    expect(mocks.closeFrame).toHaveBeenCalled();
-    expect(onSkip).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('adult-assurance-liveness-skip')).not.toBeInTheDocument();
+    expect(screen.getByTestId('adult-assurance-liveness-back')).toBeInTheDocument();
+    expect(onSkip).not.toHaveBeenCalled();
+    expect(onComplete).not.toHaveBeenCalled();
   });
 
   it('allows cancelling from Opening Veriff… back to the form', async () => {
@@ -125,4 +117,30 @@ describe('AdultAssuranceFlow', () => {
     expect(mocks.closeFrame).toHaveBeenCalled();
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
+  it('lets an assured adult skip optional ID and uses the latest one-time token', async () => {
+    mocks.submitted.mockResolvedValue({});
+    mocks.status.mockResolvedValueOnce({ data: {status:'passed', assurance_token:'first-token'} })
+      .mockResolvedValueOnce({ data: {status:'passed', assurance_token:'fresh-token'} });
+    render(<AdultAssuranceFlow fixtureAllowed={false} required onComplete={onComplete} onCancel={onCancel} />);
+    fireEvent.click(screen.getByTestId('adult-assurance-intro-cta'));
+    await waitFor(()=>expect(mocks.launch).toHaveBeenCalled());
+    act(()=>mocks.launch.mock.calls[0][1].onSubmitted());
+    await waitFor(()=>expect(screen.getByTestId('adult-assurance-upsell-skip')).toBeInTheDocument(), {timeout:3000});
+    fireEvent.click(screen.getByTestId('adult-assurance-upsell-skip'));
+    await waitFor(()=>expect(onComplete).toHaveBeenCalledWith({token:'fresh-token', idVerified:false}));
+    expect(mocks.startId).not.toHaveBeenCalled();
+  });
+  it('uses account-bound endpoints and completes without an ID upsell for existing users', async () => {
+    mocks.submitted.mockResolvedValue({});
+    mocks.status.mockResolvedValue({data:{status:'passed',assurance_token:'bound-token'}});
+    render(<AdultAssuranceFlow fixtureAllowed={false} required account onComplete={onComplete} onCancel={onCancel} />);
+    fireEvent.click(screen.getByTestId('adult-assurance-intro-cta'));
+    await waitFor(()=>expect(mocks.launch).toHaveBeenCalled());
+    act(()=>mocks.launch.mock.calls[0][1].onSubmitted());
+    await waitFor(()=>expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({token:'bound-token'})));
+    expect(mocks.start).toHaveBeenCalledWith(true);
+    expect(mocks.status).toHaveBeenCalledWith('session-123',true);
+    expect(mocks.startId).not.toHaveBeenCalled();
+  });
+
 });
