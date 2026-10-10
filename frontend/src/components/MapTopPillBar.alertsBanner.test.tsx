@@ -167,6 +167,10 @@ function mockLayout(state: LayoutState) {
     if (id === 'map-layer-chrome' || id === 'layer-toggle-people' || id === 'layer-toggle-hotspots') {
       return boxFor(id === 'map-layer-chrome' ? 120 : 44, clampTop(layersTop, LAYER_HEIGHT), LAYER_HEIGHT, state.width - 140);
     }
+    if (id === 'map-short-notes-info' || id === 'map-short-notes' || id === 'map-short-notes-dot') {
+      if (!short) return boxFor(44, 0, 0);
+      return boxFor(44, clampTop(pillsTop, 44), 44, state.width - 100);
+    }
     if (id === 'hotspots-map-helper-dismiss') {
       return boxFor(44, clampTop(spotsTop, 44), 44, state.width - 72);
     }
@@ -295,6 +299,8 @@ function renderNearby(opts: { pulse?: boolean } = {}) {
           leading={opts.pulse ? <QuietPulseCard /> : null}
           layers={<LayerButtons />}
           notes={<MapPrivacyNote text="Your pin is moved 80 to 320 m" />}
+          spotsNoteText="Map spots include independent venues and outdoor locations. 18+ only."
+          pinNoteText="Your pin is moved 80 to 320 m"
           footer={<MapEmptyRadius compact nextRadiusKm={10} onWiden={vi.fn()} />}
         >
           <SpotsNote />
@@ -541,6 +547,7 @@ function mockElementFromPoint() {
     value: (x: number, y: number) => {
       const overlay = [
         'push-alert-banner',
+        'map-short-notes-info',
         'pulse-nudge-start',
         'pulse-nudge-dismiss',
         'map-pill-radius',
@@ -777,6 +784,21 @@ function measureRendered(el: Element, memo: WeakMap<Element, DOMRect>): DOMRect 
     return box;
   }
 
+  if (id === 'map-short-notes-info' || id === 'map-short-notes' || id === 'map-short-notes-dot') {
+    const top = html.closest('[data-testid="map-overlay-top"]') ?? html;
+    const topBox = measureRendered(top, memo);
+    const col = html.closest('[data-testid="map-overlay-column"]') ?? html;
+    const colBox = measureRendered(col, memo);
+    if (colBox.height >= MAP_SHORT_HEIGHT_PX) {
+      const box = boxFor(0, 0, 0);
+      memo.set(el, box);
+      return box;
+    }
+    const box = boxFor(44, topBox.top + PILL_ROW_PADDING_PX, 44, topBox.left + topBox.width - 100);
+    memo.set(el, box);
+    return box;
+  }
+
   if (
     id === 'map-layer-chrome' ||
     id === 'map-top-stack-layers' ||
@@ -887,6 +909,8 @@ function InteractiveQuietMap({
           leading={pulse ? <QuietPulseCard /> : null}
           layers={<LayerButtons />}
           notes={<MapPrivacyNote text="Your pin is moved 80 to 320 m" />}
+          spotsNoteText="Map spots include independent venues and outdoor locations. 18+ only."
+          pinNoteText="Your pin is moved 80 to 320 m"
           footer={<MapEmptyRadius compact nextRadiusKm={16} onWiden={() => setRadius(16)} />}
         >
           <SpotsNote />
@@ -1117,12 +1141,15 @@ describe.each(LANDSCAPE)('short landscape hit targets $name', (vp) => {
         expect(screen.queryByTestId('map-overlay-scroll')).toBeNull();
         expect(screen.queryByTestId('map-overlay-scroll-cue')).toBeNull();
         expect(screen.getByTestId('map-top-pill-bar')).toContainElement(screen.getByTestId('map-layer-chrome'));
+        expect(screen.getByTestId('map-top-pill-bar')).toContainElement(screen.getByTestId('map-short-notes-info'));
+        expect(screen.getByTestId('map-short-notes-dot')).toBeInTheDocument();
 
         for (const id of [
           'map-pill-radius',
           'map-pill-filters',
           'layer-toggle-people',
           'layer-toggle-hotspots',
+          'map-short-notes-info',
           'mapbox-locate',
           'pulse-fab',
         ]) {
@@ -1130,6 +1157,35 @@ describe.each(LANDSCAPE)('short landscape hit targets $name', (vp) => {
         }
       });
     });
+  });
+});
+
+describe('short-map notes info', () => {
+  it('opens the 18+ spots text from the info button', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 844 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 390 });
+    installRenderedLayoutRects();
+    mockElementFromPoint();
+    const user = userEvent.setup();
+    render(
+      <InteractiveQuietMap
+        theme="dark"
+        pulse
+        banner={false}
+        width={844}
+        height={390}
+        header={52}
+        tabHeight={64}
+      />,
+    );
+    await settle();
+    expect(screen.getByTestId('map-overlay-column')).toHaveAttribute('data-map-short', 'true');
+    expect(screen.queryByTestId('hotspots-map-helper-copy')).toBeNull();
+    expect(hitCentre('map-short-notes-info')).toBe(screen.getByTestId('map-short-notes-info'));
+
+    await user.click(screen.getByTestId('map-short-notes-info'));
+    expect(screen.getByTestId('hotspots-map-helper-copy')).toHaveTextContent(/18\+/);
+    expect(screen.getByTestId('map-privacy-note')).toHaveTextContent(/80 to 320 m/);
   });
 });
 

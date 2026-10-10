@@ -124,7 +124,7 @@ export const MAP_OVERLAY_BOTTOM_CLEARANCE_CLASS =
 /** Pinned footer may not eat the top stack on a short or landscape map. */
 export const MAP_OVERLAY_PINNED_MAX_CLASS = 'max-h-[25%]';
 
-/** Landscape and other short maps: no Pulse card, pin note, spots note or scroll. */
+/** Landscape and other short maps: no Pulse card or scroll; notes live on the info button. */
 export const MAP_SHORT_HEIGHT_PX = 480;
 
 /**

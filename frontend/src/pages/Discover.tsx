@@ -146,7 +146,7 @@ function MapFloatingChrome({
   /** Travel (plane): Look around another city or plan a trip. */
   onTravel?: () => void;
   placement?: 'stacked' | 'absolute';
-  /** Split so short maps can put layers on the pills row and drop the 18+ note. */
+  /** Split so short maps can put layers on the pills row; 18+ lives on the info button. */
   section?: 'all' | 'layers' | 'spots';
 }) {
   // One-time Legal quiet-face dismiss — same localStorage pattern as match coach.
@@ -2350,6 +2350,10 @@ export const Discover = () => {
                 <MapPrivacyNote text={formatFuzzPrivacyNote(mapPinFuzzM)} />
               ) : null
             }
+            spotsNoteText={HOT_SPOTS_MAP_BANNER}
+            pinNoteText={
+              !needsLocationGate && !tokenMissing ? formatFuzzPrivacyNote(mapPinFuzzM) : null
+            }
             footer={
               !loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
                 <MapEmptyRadius compact nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
@@ -2491,6 +2495,10 @@ export const Discover = () => {
                 !needsLocationGate && !tokenMissing ? (
                   <MapPrivacyNote text={formatFuzzPrivacyNote(mapPinFuzzM)} />
                 ) : null
+              }
+              spotsNoteText={HOT_SPOTS_MAP_BANNER}
+              pinNoteText={
+                !needsLocationGate && !tokenMissing ? formatFuzzPrivacyNote(mapPinFuzzM) : null
               }
               footer={
                 !loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (

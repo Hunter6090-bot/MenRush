@@ -11,6 +11,7 @@ import {
  * Pete redesign Step 1.
  */
 import { formatRadiusControlLabel } from '../lib/discoveryFormat';
+import { MapShortNotesInfo } from './MapShortNotesInfo';
 
 const pillClass =
   'inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-[rgba(196,131,42,0.55)] bg-[rgba(30,21,8,0.92)] px-3.5 py-2 text-[15px] font-extrabold text-[#F0E0C0] shadow-md backdrop-blur-sm transition-colors hover:border-[var(--copper)] hover:text-[var(--copper)]';
@@ -25,6 +26,8 @@ export function MapTopPillBar({
   children,
   notes,
   footer,
+  spotsNoteText,
+  pinNoteText,
 }: {
   radiusKm: number;
   onRadiusClick: () => void;
@@ -40,6 +43,10 @@ export function MapTopPillBar({
   notes?: ReactNode;
   /** Compact empty-radius pill. Pinned, max ~25% of the map. */
   footer?: ReactNode;
+  /** 18+ spots copy. Short maps open this from the info button. */
+  spotsNoteText?: string | null;
+  /** Discretion pin copy. Short maps open this from the info button. */
+  pinNoteText?: string | null;
 }) {
   const radiusLabel = formatRadiusControlLabel(radiusKm);
   const columnRef = useRef<HTMLDivElement | null>(null);
@@ -130,7 +137,7 @@ export function MapTopPillBar({
         data-testid="map-overlay-top"
       >
         <div
-          className={`flex shrink-0 flex-col gap-2 px-3 pt-3 ${short ? 'pr-14' : ''}`}
+          className={`relative flex shrink-0 flex-col gap-2 px-3 pt-3 ${short ? 'pr-14' : ''}`}
           data-testid="map-top-stack"
           data-offset-for-banner={offset}
         >
@@ -148,6 +155,7 @@ export function MapTopPillBar({
                   {layers}
                 </div>
               ) : null}
+              {short ? <MapShortNotesInfo spotsText={spotsNoteText} pinText={pinNoteText} /> : null}
             </div>
           </div>
         </div>
@@ -181,7 +189,7 @@ export function MapTopPillBar({
             </div>
             {moreBelow ? (
               <div
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[var(--bg-primary)] to-transparent"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#0D0A06] via-[rgba(240,224,192,0.22)] to-transparent [[data-theme=light]_&]:from-[#F5EDE0] [[data-theme=light]_&]:via-[rgba(184,115,42,0.22)]"
                 data-testid="map-overlay-scroll-cue"
                 aria-hidden
               />

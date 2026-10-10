@@ -1,26 +1,35 @@
 import { useState } from 'react';
 
-const SESSION_KEY = 'menrush_map_privacy_note_dismissed';
+export const MAP_PRIVACY_NOTE_DISMISS_KEY = 'menrush_map_privacy_note_dismissed';
 
-function readDismissed(): boolean {
+export function isMapPrivacyNoteDismissed(): boolean {
   try {
-    return sessionStorage.getItem(SESSION_KEY) === '1';
+    return sessionStorage.getItem(MAP_PRIVACY_NOTE_DISMISS_KEY) === '1';
   } catch {
     return false;
   }
 }
 
+export function dismissMapPrivacyNote(): void {
+  try {
+    sessionStorage.setItem(MAP_PRIVACY_NOTE_DISMISS_KEY, '1');
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * Discretion pin note. Compact, closeable (44px). The card is paint-only;
- * only the close button captures taps so map pins stay hittable.
+ * only the close button captures taps so map pins stay hittable. Text wraps
+ * so the metre figures stay visible.
  */
 export function MapPrivacyNote({ text }: { text: string }) {
-  const [open, setOpen] = useState(() => !readDismissed());
+  const [open, setOpen] = useState(() => !isMapPrivacyNoteDismissed());
   if (!open) return null;
   return (
     <div className="pointer-events-none flex justify-center px-2" data-testid="map-privacy-note-wrap">
       <div
-        className="pointer-events-none relative w-fit max-w-[220px] rounded-full py-0.5 pl-2.5 pr-10 text-[15px] font-medium leading-tight"
+        className="pointer-events-none relative w-fit max-w-[min(90%,20rem)] rounded-2xl py-1.5 pl-3 pr-12 text-[15px] font-medium leading-snug"
         style={{
           background: 'rgba(13,10,6,0.72)',
           color: 'rgba(240,224,192,0.85)',
@@ -29,7 +38,10 @@ export function MapPrivacyNote({ text }: { text: string }) {
         data-testid="map-privacy-note-card"
         role="status"
       >
-        <p className="pointer-events-none truncate text-center text-[15px]" data-testid="map-privacy-note">
+        <p
+          className="pointer-events-none whitespace-normal break-words text-center text-[15px] leading-snug"
+          data-testid="map-privacy-note"
+        >
           {text}
         </p>
         <button
@@ -38,14 +50,10 @@ export function MapPrivacyNote({ text }: { text: string }) {
           aria-label="Dismiss pin note"
           title="Dismiss"
           onClick={() => {
-            try {
-              sessionStorage.setItem(SESSION_KEY, '1');
-            } catch {
-              /* ignore */
-            }
+            dismissMapPrivacyNote();
             setOpen(false);
           }}
-          className="pointer-events-auto absolute right-0 top-1/2 flex h-11 w-11 min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-center rounded-full text-[20px] leading-none text-[rgba(240,224,192,0.85)]"
+          className="pointer-events-auto absolute right-0 top-0 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-[20px] leading-none text-[rgba(240,224,192,0.85)]"
         >
           ×
         </button>

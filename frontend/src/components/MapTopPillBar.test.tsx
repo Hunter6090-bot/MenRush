@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MapTopPillBar } from './MapTopPillBar';
 import { MapEmptyRadius } from './MapEmptyRadius';
@@ -9,6 +9,12 @@ import { loadThemeTokens, tokenContrast, type Theme } from '../test/themeContras
 
 const css = readFileSync(resolve(__dirname, '../styles/menrush-tokens.css'), 'utf8');
 loadThemeTokens(css);
+
+beforeEach(() => {
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+  vi.restoreAllMocks();
+});
 
 function tallColumnRect(): DOMRect {
   return {
@@ -73,9 +79,12 @@ describe('MapTopPillBar stacking', () => {
     expect(column.className).toMatch(/overflow-hidden/);
     expect(leading).toContainElement(screen.getByTestId('pulse-nudge'));
     expect(pills.compareDocumentPosition(leading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(readFileSync(resolve(__dirname, './MapTopPillBar.tsx'), 'utf8')).toMatch(
-      /from-\[var\(--bg-primary\)\]/,
-    );
+    const pillSrc = readFileSync(resolve(__dirname, './MapTopPillBar.tsx'), 'utf8');
+    expect(pillSrc).toMatch(/via-\[rgba\(240,224,192,0\.22\)\]/);
+    expect(pillSrc).toMatch(/\[\[data-theme=light\]_&\]:from-\[#F5EDE0\]/);
+    expect(pillSrc).toMatch(/\[\[data-theme=light\]_&\]:via-\[rgba\(184,115,42,0\.22\)\]/);
+    expect(pillSrc).not.toMatch(/from-\[var\(--bg-primary\)\]/);
+    expect(pillSrc).toMatch(/data-testid="map-overlay-scroll"[\s\S]*map-overlay-scroll-cue/);
   });
 
   it('puts layer icons on the pills row and skips Pulse on a short map', () => {
@@ -93,6 +102,8 @@ describe('MapTopPillBar stacking', () => {
         leading={<div data-testid="pulse-nudge">Quiet map? Start Pulse</div>}
         layers={<div data-testid="map-layer-chrome">Layers</div>}
         notes={<div data-testid="map-privacy-note">pin</div>}
+        spotsNoteText="Map spots include independent venues and outdoor locations. 18+ only."
+        pinNoteText="Your pin is moved 80 to 320 m"
       >
         <div data-testid="hotspots-map-helper">Spots</div>
       </MapTopPillBar>,
@@ -105,6 +116,8 @@ describe('MapTopPillBar stacking', () => {
     expect(screen.queryByTestId('hotspots-map-helper')).toBeNull();
     expect(screen.queryByTestId('map-privacy-note')).toBeNull();
     expect(screen.getByTestId('map-top-pill-bar')).toContainElement(screen.getByTestId('map-layer-chrome'));
+    expect(screen.getByTestId('map-top-pill-bar')).toContainElement(screen.getByTestId('map-short-notes-info'));
+    expect(screen.getByTestId('map-short-notes-dot')).toBeInTheDocument();
   });
 });
 
@@ -153,9 +166,14 @@ describe('pin note hit area', () => {
     render(<MapPrivacyNote text="Your pin is moved 80 to 320 m" />);
     const card = screen.getByTestId('map-privacy-note-card');
     const close = screen.getByTestId('map-privacy-note-close');
+    const copy = screen.getByTestId('map-privacy-note');
     expect(card.className).toMatch(/pointer-events-none/);
     expect(close.className).toMatch(/pointer-events-auto/);
     expect(close.className).toMatch(/min-h-\[44px\]/);
+    expect(copy.textContent).toBe('Your pin is moved 80 to 320 m');
+    expect(copy.className).toMatch(/whitespace-normal/);
+    expect(copy.className).not.toMatch(/truncate|line-clamp|text-ellipsis|whitespace-nowrap/);
+    expect(card.className).not.toMatch(/max-w-\[220px\]|truncate/);
   });
 });
 
