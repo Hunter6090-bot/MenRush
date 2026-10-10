@@ -13,7 +13,7 @@
  * check cannot hide Radius / Filters / Pulse. A banner that arrives after
  * that timeout may animate once from the released position.
  */
-import { useLayoutEffect, useState, useSyncExternalStore, type RefObject } from 'react';
+import { useLayoutEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
 
 export type TopPromptSnapshot = {
   bottom: number | null;
@@ -131,7 +131,8 @@ export const MAP_SHORT_HEIGHT_PX = 480;
  * How far `anchorRef` must move down to clear the banner. Re-measures when the
  * banner changes and whenever the anchor or its parent resizes. Chrome stays
  * hidden until `settled` so the first painted y is already the final y.
- * After that, a late banner (past the 800ms release) may animate once.
+ * After that, only a real banner show/hide animates — never the first
+ * settled paint or a ResizeObserver remasure.
  */
 export function useClearanceBelowTopPrompt(anchorRef: RefObject<HTMLElement | null>): {
   offset: number;
@@ -141,6 +142,8 @@ export function useClearanceBelowTopPrompt(anchorRef: RefObject<HTMLElement | nu
   const { bottom: bannerBottom, settled } = useTopPromptSnapshot();
   const [offset, setOffset] = useState(0);
   const [animate, setAnimate] = useState(false);
+  const prevBannerRef = useRef<number | null | undefined>(undefined);
+  const paintedRef = useRef(false);
 
   useLayoutEffect(() => {
     const anchor = anchorRef.current;
@@ -167,13 +170,27 @@ export function useClearanceBelowTopPrompt(anchorRef: RefObject<HTMLElement | nu
   }, [anchorRef, bannerBottom, settled]);
 
   useLayoutEffect(() => {
-    if (!settled) {
+    const snap = getTopPromptSnapshot();
+    if (!snap.settled) {
+      setAnimate(false);
+      paintedRef.current = false;
+      return;
+    }
+    if (!paintedRef.current) {
+      paintedRef.current = true;
+      prevBannerRef.current = snap.bottom;
       setAnimate(false);
       return;
     }
-    const id = requestAnimationFrame(() => setAnimate(true));
-    return () => cancelAnimationFrame(id);
-  }, [settled]);
+    if (prevBannerRef.current === snap.bottom) {
+      setAnimate(false);
+      return;
+    }
+    prevBannerRef.current = snap.bottom;
+    setAnimate(true);
+    const id = window.setTimeout(() => setAnimate(false), 220);
+    return () => clearTimeout(id);
+  }, [settled, bannerBottom]);
 
   return { offset, ready: settled, animate };
 }

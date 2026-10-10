@@ -10,6 +10,7 @@ import userEvent from '@testing-library/user-event';
 import { MapTopPillBar } from './MapTopPillBar';
 import { MapEmptyRadius } from './MapEmptyRadius';
 import { MapPrivacyNote } from './MapPrivacyNote';
+import { mapNotesSheetCeilingPx, mapNotesSheetMaxHeightPx } from './MapShortNotesInfo';
 import { PushAlertBanner } from './PushAlertBanner';
 import { useAuthStore } from '../hooks/store';
 import { resetPromptPrefsSyncForTests } from '../lib/promptDismissal';
@@ -548,14 +549,14 @@ function mockElementFromPoint() {
       const overlay = [
         'push-alert-banner',
         'map-short-notes-info',
+        'hotspots-map-helper-dismiss',
+        'map-privacy-note-close',
         'pulse-nudge-start',
         'pulse-nudge-dismiss',
         'map-pill-radius',
         'map-pill-filters',
         'layer-toggle-people',
         'layer-toggle-hotspots',
-        'hotspots-map-helper-dismiss',
-        'map-privacy-note-close',
         'map-widen-radius',
       ];
       for (const id of overlay) {
@@ -651,10 +652,20 @@ function viewportBox(): DOMRect {
  * column's real classes (inset-0, bottom clearance, pinned shrink-0). Not a
  * parallel invented y table.
  */
+const scrolledIntoView = new WeakSet<Element>();
+
 function installRenderedLayoutRects() {
   const memo = new WeakMap<Element, DOMRect>();
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     return measureRendered(this, memo);
+  });
+  Object.defineProperty(Element.prototype, 'scrollIntoView', {
+    configurable: true,
+    writable: true,
+    value(this: Element) {
+      scrolledIntoView.add(this);
+      memo.delete(this);
+    },
   });
 }
 
@@ -784,6 +795,39 @@ function measureRendered(el: Element, memo: WeakMap<Element, DOMRect>): DOMRect 
     return box;
   }
 
+  if (id === 'map-short-notes-sheet') {
+    const stack =
+      html.closest('[data-testid="map-top-stack"]') ?? document.querySelector('[data-testid="map-top-stack"]');
+    const stackBox = stack ? measureRendered(stack, memo) : containing;
+    const col =
+      html.closest('[data-testid="map-overlay-column"]') ?? document.querySelector('[data-testid="map-overlay-column"]');
+    const colBox = col ? measureRendered(col, memo) : containing;
+    const tab = document.querySelector('[data-testid="mobile-tab-bar"]');
+    const pulseFab = document.querySelector('[data-testid="pulse-fab"]');
+    const dock = document.querySelector('[data-testid="discover-chat-dock-toggle"]');
+    const sheetTop = stackBox.bottom + 8;
+    const styled = Number.parseFloat(html.style.maxHeight);
+    const widthGuess = Math.min(416, Math.max(160, colBox.width - 88));
+    const sheetLeft = colBox.left + (colBox.width - widthGuess) / 2;
+    const maxH = Number.isFinite(styled)
+      ? styled
+      : mapNotesSheetMaxHeightPx(
+          sheetTop,
+          mapNotesSheetCeilingPx({
+            mapBottom: colBox.bottom,
+            sheetLeft,
+            sheetRight: sheetLeft + widthGuess,
+            tab: tab ? measureRendered(tab, memo) : null,
+            pulse: pulseFab ? measureRendered(pulseFab, memo) : null,
+            dock: dock ? measureRendered(dock, memo) : null,
+          }),
+        );
+    const width = Math.min(416, Math.max(160, colBox.width - 88));
+    const box = boxFor(width, sheetTop, maxH, colBox.left + (colBox.width - width) / 2);
+    memo.set(el, box);
+    return box;
+  }
+
   if (id === 'map-short-notes-info' || id === 'map-short-notes' || id === 'map-short-notes-dot') {
     const top = html.closest('[data-testid="map-overlay-top"]') ?? html;
     const topBox = measureRendered(top, memo);
@@ -795,6 +839,33 @@ function measureRendered(el: Element, memo: WeakMap<Element, DOMRect>): DOMRect 
       return box;
     }
     const box = boxFor(44, topBox.top + PILL_ROW_PADDING_PX, 44, topBox.left + topBox.width - 100);
+    memo.set(el, box);
+    return box;
+  }
+
+  const openSheet = document.querySelector('[data-testid="map-short-notes-sheet"]');
+  if (
+    openSheet &&
+    (id === 'hotspots-map-helper-dismiss' ||
+      id === 'hotspots-map-helper-copy' ||
+      id === 'hotspots-map-helper' ||
+      id === 'map-privacy-note' ||
+      id === 'map-privacy-note-close')
+  ) {
+    const sheetBox = measureRendered(openSheet, memo);
+    const isClose = id.endsWith('dismiss') || id.endsWith('close');
+    const isPin = id.startsWith('map-privacy-note');
+    const pinClose = document.querySelector('[data-testid="map-privacy-note-close"]');
+    const pinScrolled = Boolean(pinClose && scrolledIntoView.has(pinClose));
+    let top = sheetBox.top + (isPin ? 80 : 4);
+    if (isPin && pinScrolled) top = sheetBox.bottom - 44;
+    if (!isPin && pinScrolled) top = sheetBox.top - 80;
+    if (isPin) {
+      top = Math.min(Math.max(top, sheetBox.top), Math.max(sheetBox.top, sheetBox.bottom - 44));
+    }
+    const box = isClose
+      ? boxFor(44, top, 44, sheetBox.right - 52)
+      : boxFor(Math.max(80, sheetBox.width - 64), top, Math.min(72, Math.max(20, sheetBox.height - 8)), sheetBox.left + 12);
     memo.set(el, box);
     return box;
   }
@@ -904,7 +975,7 @@ function InteractiveQuietMap({
       >
         <MapTopPillBar
           radiusKm={radius}
-          onRadiusClick={vi.fn()}
+          onRadiusClick={() => setRadius((km) => (km === 5 ? 10 : 5))}
           onFiltersClick={vi.fn()}
           leading={pulse ? <QuietPulseCard /> : null}
           layers={<LayerButtons />}
@@ -1093,6 +1164,32 @@ describe('pills wait for the banner to settle', () => {
     await settle();
     expect(screen.getByTestId('map-top-pill-bar').getBoundingClientRect().top).toBe(firstY);
   });
+
+  it('does not animate the first settled offset or a remasure', async () => {
+    const p = phones[0];
+    mockLayout({ ...p, pulse: true, banner: true, mapHeight: DEFAULT_MAP_HEIGHT });
+    renderNearby({ pulse: true });
+    expect(await screen.findByTestId('push-alert-banner')).toBeInTheDocument();
+    const shift = screen.getByTestId('map-overlay-shift');
+    expect(shift.getAttribute('data-shift-animated')).toBe('false');
+    expect(shift.style.transition).toBe('none');
+    const firstY = screen.getByTestId('map-top-pill-bar').getBoundingClientRect().top;
+    await settle();
+    expect(shift.getAttribute('data-shift-animated')).toBe('false');
+    expect(screen.getByTestId('map-top-pill-bar').getBoundingClientRect().top).toBe(firstY);
+  });
+
+  it('animates only when the banner is hidden, not on remasure', async () => {
+    const p = phones[0];
+    mockLayout({ ...p, pulse: true, banner: true, mapHeight: DEFAULT_MAP_HEIGHT });
+    const user = userEvent.setup();
+    renderNearby({ pulse: true });
+    expect(await screen.findByTestId('push-alert-banner')).toBeInTheDocument();
+    expect(screen.getByTestId('map-overlay-shift').getAttribute('data-shift-animated')).toBe('false');
+    await user.click(screen.getByTestId('alerts-prompt-close'));
+    expect(screen.queryByTestId('push-alert-banner')).toBeNull();
+    expect(screen.getByTestId('map-overlay-shift').getAttribute('data-shift-animated')).toBe('true');
+  });
 });
 
 function hitCentre(id: string): Element | null {
@@ -1186,6 +1283,57 @@ describe('short-map notes info', () => {
     await user.click(screen.getByTestId('map-short-notes-info'));
     expect(screen.getByTestId('hotspots-map-helper-copy')).toHaveTextContent(/18\+/);
     expect(screen.getByTestId('map-privacy-note')).toHaveTextContent(/80 to 320 m/);
+    const radius = screen.getByTestId('map-pill-radius').textContent;
+    await user.click(screen.getByTestId('map-pill-radius'));
+    expect(screen.queryByTestId('map-short-notes-sheet')).toBeNull();
+    expect(screen.getByTestId('map-pill-radius').textContent).toBe(radius);
+  });
+});
+
+describe.each(LANDSCAPE)('short-map notes sheet stays above chrome $name', (vp) => {
+  describe.each(['dark', 'light'] as const)('%s banner on', (theme) => {
+    it('keeps both note close buttons tappable above the tab, PULSE and dock', async () => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: vp.width });
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: vp.height });
+      installRenderedLayoutRects();
+      mockElementFromPoint();
+      const user = userEvent.setup();
+      render(
+        <InteractiveQuietMap
+          theme={theme}
+          pulse
+          banner
+          width={vp.width}
+          height={vp.height}
+          header={vp.header}
+          tabHeight={vp.tabHeight}
+        />,
+      );
+      expect(await screen.findByTestId('push-alert-banner')).toBeInTheDocument();
+      await user.click(screen.getByTestId('map-short-notes-info'));
+      await settle();
+
+      const sheet = screen.getByTestId('map-short-notes-sheet');
+      const tab = screen.getByTestId('mobile-tab-bar').getBoundingClientRect();
+      const pulse = screen.getByTestId('pulse-fab').getBoundingClientRect();
+      const dock = screen.getByTestId('discover-chat-dock-toggle').getBoundingClientRect();
+      const map = screen.getByTestId('discover-map-panel').getBoundingClientRect();
+      const sheetBox = sheet.getBoundingClientRect();
+      expect(sheetBox.bottom).toBeLessThanOrEqual(tab.top);
+      expect(sheetBox.bottom).toBeLessThanOrEqual(map.bottom);
+      if (sheetBox.left < pulse.right && pulse.left < sheetBox.right) {
+        expect(sheetBox.bottom).toBeLessThanOrEqual(pulse.top);
+      }
+      if (sheetBox.left < dock.right && dock.left < sheetBox.right) {
+        expect(sheetBox.bottom).toBeLessThanOrEqual(dock.top);
+      }
+      expect(sheet).toHaveAttribute('data-sheet-max-h');
+      expect(sheet.className).toMatch(/overflow-y-auto/);
+
+      expect(hitCentre('hotspots-map-helper-dismiss')).toBe(screen.getByTestId('hotspots-map-helper-dismiss'));
+      screen.getByTestId('map-privacy-note-close').scrollIntoView();
+      expect(hitCentre('map-privacy-note-close')).toBe(screen.getByTestId('map-privacy-note-close'));
+    });
   });
 });
 
