@@ -110,7 +110,7 @@ async function main() {
   const { publicPinSql } = await import('../src/lib/mapPinSql');
 
   const ids: string[] = [];
-  async function mk(name: string, lat: number, lng: number, fuzz = 800, id = randomUUID()) {
+  async function mk(name: string, lat: number, lng: number, fuzz: number, id: string) {
     ids.push(id);
     // Seeded ids repeat across runs: clear rows left by an earlier run that
     // crashed before cleanup.
@@ -223,11 +223,18 @@ async function main() {
     assert.ok(Math.abs(dropRealM - R) > 100, 'drop-out does not reveal the real distance');
     assert.ok(Math.abs(dropRealM - R) <= fmax + 20, 'drop-out error is bounded by the fuzz (pin, not noise)');
 
-    // Shrinking the radius at a fixed origin: same story.
-    await place(viewer, realLat + 600 / M_PER_DEG_LAT, realLng);
+    // Shrinking the radius at a fixed origin: same story. Put the origin 1200 m
+    // from the real point on the side away from the pin, so both distances are
+    // above the 0.8 km minimum and far apart: a raw-GPS filter would show him at
+    // about 1200 m, the pin filter only much later.
+    const shrinkLat = realLat + ((pin.lat > realLat ? -1 : 1) * 1200) / M_PER_DEG_LAT;
+    await place(viewer, shrinkLat, realLng);
     resetLocationJumpGate();
-    const toPinFixed = distanceMeters(realLat + 600 / M_PER_DEG_LAT, realLng, pin.lat, pin.lng);
-    const toRealFixed = distanceMeters(realLat + 600 / M_PER_DEG_LAT, realLng, realLat, realLng);
+    const toPinFixed = distanceMeters(shrinkLat, realLng, pin.lat, pin.lng);
+    const toRealFixed = distanceMeters(shrinkLat, realLng, realLat, realLng);
+    assert.ok(toRealFixed > 800 + 20 && toPinFixed > 800 + 20, 'shrink origin: both distances above the minimum radius');
+    assert.ok(toPinFixed <= 2400 - 20, 'shrink origin: the pin is reached inside the walk');
+    assert.ok(Math.abs(toPinFixed - toRealFixed) > 150, 'shrink origin: pin and real distances clearly apart');
     // Pin-only prediction: the first radius on the 10 m grid that reaches the pin.
     const predictedAppearM = Math.max(800, Math.ceil(toPinFixed / 10) * 10);
     let firstSeenM = -1;
