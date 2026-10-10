@@ -61,19 +61,27 @@ export function offsetBelowTopPrompt(containerTop: number, bannerBottom: number 
  * The anchor's border-box top must stay stable when the offset is applied
  * (padding-top on the same node is safe; margin-top on the same node is not).
  */
-export function useClearanceBelowTopPrompt(anchorRef: RefObject<HTMLElement | null>): number {
+export function useClearanceBelowTopPrompt(anchorRef: RefObject<HTMLElement | null>): {
+  offset: number;
+  ready: boolean;
+} {
   const bannerBottom = useTopPromptBottom();
   const [offset, setOffset] = useState(0);
+  // Hide until the first layout measure when a banner is up, so the first
+  // painted frame is never the stale offset-0 / leftover-offset jump (QC P2).
+  const [ready, setReady] = useState(bannerBottom == null);
 
   useLayoutEffect(() => {
     const anchor = anchorRef.current;
     if (!anchor || bannerBottom == null) {
       setOffset(0);
+      setReady(true);
       return;
     }
 
     const measure = () => {
       setOffset(offsetBelowTopPrompt(anchor.getBoundingClientRect().top, bannerBottom));
+      setReady(true);
     };
 
     measure();
@@ -88,5 +96,5 @@ export function useClearanceBelowTopPrompt(anchorRef: RefObject<HTMLElement | nu
     };
   }, [anchorRef, bannerBottom]);
 
-  return offset;
+  return { offset, ready };
 }

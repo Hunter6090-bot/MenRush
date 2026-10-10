@@ -249,6 +249,50 @@ function MapFloatingChrome({
   );
 }
 
+function QuietMapPulseCard({
+  onStart,
+  onDismiss,
+  compact = false,
+}: {
+  onStart: () => void;
+  onDismiss: () => void;
+  /** On the map overlay: no extra side margin (the stack already pads). */
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={`${compact ? '' : 'mx-3 mb-3 '}rounded-2xl border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.1)] px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.35)]`}
+      role="status"
+      data-testid="pulse-nudge"
+    >
+      <div className="flex flex-col gap-3">
+        <div className="min-w-0">
+          <p className="text-base font-extrabold text-[var(--cream)]">Quiet map? Start Pulse</p>
+          <p className="mt-1 text-[15px] text-[var(--cream-muted)]">Seen first for 90 minutes.</p>
+        </div>
+        <div className="flex flex-wrap gap-2" data-testid="pulse-nudge-actions">
+          <button
+            type="button"
+            data-testid="pulse-nudge-start"
+            onClick={onStart}
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-[#C4832A] px-4 text-[15px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+          >
+            Start Pulse
+          </button>
+          <button
+            type="button"
+            data-testid="pulse-nudge-dismiss"
+            onClick={onDismiss}
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-[rgba(196,131,42,0.45)] px-4 text-[15px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)] transition-colors hover:text-[var(--cream)]"
+          >
+            Not now
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const INJECT_ID = '__discover_styles_v3__';
 if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
   document.querySelectorAll('style[id^="__discover_styles"]').forEach((el) => el.remove());
@@ -2039,6 +2083,28 @@ export const Discover = () => {
     else requestOpenPulse();
   }, [pulseUntil, handleStopPulse, requestOpenPulse]);
 
+  const dismissQuietPulse = useCallback(() => {
+    setPulseNudgeDismissed(true);
+    try {
+      localStorage.setItem('menrush_pulse_nudge_dismissed', '1');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const showQuietPulse =
+    !needsLocationGate &&
+    !loading &&
+    nearbyCount === 0 &&
+    !pulseUntil &&
+    !pulseNudgeDismissed &&
+    lat != null &&
+    lng != null;
+  const pulseOnMap = Boolean(
+    showQuietPulse && (isDesktopLayout ? nearbyView === 'map' : mapPanelMode !== 'hidden'),
+  );
+  const pulseOnGrid = Boolean(showQuietPulse && !pulseOnMap);
+
   // Fields-complete users must not be dumped onto /profile/setup for missing GPS.
   const showFinishProfileEmptyCta =
     activationProfile != null && profileFieldBlockers(activationProfile).length > 0;
@@ -2165,51 +2231,9 @@ export const Discover = () => {
         </div>
       ) : null}
 
-      {!needsLocationGate &&
-      !loading &&
-      nearbyCount === 0 &&
-      !pulseUntil &&
-      !pulseNudgeDismissed &&
-      lat != null &&
-      lng != null ? (
+      {pulseOnGrid ? (
         <ClearTopPrompt testId="pulse-nudge-clearance">
-        <div
-          className="mx-3 mb-3 rounded-2xl border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.1)] px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
-          role="status"
-          data-testid="pulse-nudge"
-        >
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-base font-extrabold text-[var(--cream)]">Quiet map? Start Pulse</p>
-              <p className="mt-1 text-[15px] text-[var(--cream-muted)]">Seen first for 90 minutes.</p>
-            </div>
-            <div className="flex shrink-0 flex-wrap gap-2">
-              <button
-                type="button"
-                data-testid="pulse-nudge-start"
-                onClick={requestOpenPulse}
-                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-[#C4832A] px-4 text-[15px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
-              >
-                Start Pulse
-              </button>
-              <button
-                type="button"
-                data-testid="pulse-nudge-dismiss"
-                onClick={() => {
-                  setPulseNudgeDismissed(true);
-                  try {
-                    localStorage.setItem('menrush_pulse_nudge_dismissed', '1');
-                  } catch {
-                    /* ignore */
-                  }
-                }}
-                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-[rgba(196,131,42,0.45)] px-4 text-[15px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)] transition-colors hover:text-[var(--cream)]"
-              >
-                Not now
-              </button>
-            </div>
-          </div>
-        </div>
+          <QuietMapPulseCard onStart={requestOpenPulse} onDismiss={dismissQuietPulse} />
         </ClearTopPrompt>
       ) : null}
 
@@ -2295,6 +2319,11 @@ export const Discover = () => {
             onRadiusClick={handleRadiusCycle}
             onFiltersClick={() => setFiltersSheetOpen(true)}
             filtersActive={countActiveDiscoveryFilters(discoveryFilters) > 0}
+            leading={
+              pulseOnMap ? (
+                <QuietMapPulseCard compact onStart={requestOpenPulse} onDismiss={dismissQuietPulse} />
+              ) : null
+            }
             footer={
               !loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
                 <MapEmptyRadius nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
@@ -2429,6 +2458,11 @@ export const Discover = () => {
               onRadiusClick={handleRadiusCycle}
               onFiltersClick={() => setFiltersSheetOpen(true)}
               filtersActive={countActiveDiscoveryFilters(discoveryFilters) > 0}
+              leading={
+                pulseOnMap ? (
+                  <QuietMapPulseCard compact onStart={requestOpenPulse} onDismiss={dismissQuietPulse} />
+                ) : null
+              }
               footer={
                 !loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
                   <MapEmptyRadius nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />

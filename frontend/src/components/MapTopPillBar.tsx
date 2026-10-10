@@ -17,6 +17,7 @@ export function MapTopPillBar({
   onRadiusClick,
   onFiltersClick,
   filtersActive = false,
+  leading,
   children,
   footer,
 }: {
@@ -24,24 +25,30 @@ export function MapTopPillBar({
   onRadiusClick: () => void;
   onFiltersClick: () => void;
   filtersActive?: boolean;
+  /** Floated on the map (quiet-map Pulse). Does not shrink the map panel. */
+  leading?: ReactNode;
   /** Second row (Discretion / layers): stacked in-flow so it never sits under wrapping pills. */
   children?: ReactNode;
   /** Bottom of the map overlay column (empty-radius card). Flex spacer keeps it off the top stack. */
   footer?: ReactNode;
 }) {
   const radiusLabel = formatRadiusControlLabel(radiusKm);
-  // One full-height column: banner clearance is padding (it takes space), then
-  // pills / layers / Map spots, then a flex spacer, then the empty-radius card.
-  // CSS `top` on the old stack slid it over later siblings when the Pulse card
-  // loaded and the map moved; padding + flex cannot overlap.
+  // Full-height column clipped to the map. Banner clearance is padding (it takes
+  // space). Pulse floats in `leading` so it never pushes the map down. Overflow
+  // scrolls inside the map, so Widen / Map spots cannot sit under the tab bar,
+  // PULSE FAB or chat dock. Hidden until the first layout measure so the first
+  // paint is never a leftover offset (QC P2, y606 jump).
   const columnRef = useRef<HTMLDivElement | null>(null);
-  const offset = useClearanceBelowTopPrompt(columnRef);
+  const { offset, ready } = useClearanceBelowTopPrompt(columnRef);
 
   return (
     <div
       ref={columnRef}
-      className="pointer-events-none absolute inset-0 z-20 flex flex-col"
+      className="pointer-events-none absolute inset-0 z-20 flex flex-col overflow-y-auto overscroll-y-contain"
+      style={{ visibility: ready ? 'visible' : 'hidden' }}
       data-testid="map-overlay-column"
+      data-offset-for-banner={offset}
+      data-overlay-ready={ready ? 'true' : 'false'}
     >
       <div
         className="flex flex-col gap-2 px-3 pt-3"
@@ -49,6 +56,11 @@ export function MapTopPillBar({
         data-offset-for-banner={offset}
         data-testid="map-top-stack"
       >
+        {leading ? (
+          <div className="pointer-events-auto w-full" data-testid="map-top-stack-leading">
+            {leading}
+          </div>
+        ) : null}
         {/* flex-nowrap: wrapping at 360px covered Discretion; one scrollable row keeps height stable. */}
         <div
           className="pointer-events-auto flex max-w-full flex-nowrap items-center justify-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"

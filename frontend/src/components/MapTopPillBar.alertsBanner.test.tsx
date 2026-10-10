@@ -1,10 +1,8 @@
 /**
- * QC on #392: pills only remeasured when the banner value changed, so a late
- * Quiet map? Start Pulse card left them ~153px too low. Banner also covered
- * Pulse buttons, and the Don't show again tick was a 24px target.
- *
- * Geometry is mocked with positions measured at 390px and 360px. ResizeObserver
- * is stubbed so a late Pulse (map panel moves) retriggers clearance.
+ * QC on #392 / #405: pills follow the banner; Pulse floats on the map (does
+ * not shrink it); buttons sit under the copy so the card stays short; nothing
+ * interactive goes under the tab bar, PULSE FAB or chat dock. First paint uses
+ * a layout-effect measure (no leftover offset / y606 jump).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
@@ -15,7 +13,6 @@ import { PushAlertBanner } from './PushAlertBanner';
 import { useAuthStore } from '../hooks/store';
 import { resetPromptPrefsSyncForTests } from '../lib/promptDismissal';
 import { resetPromptSlotsForTests } from '../lib/promptSlot';
-import { ClearTopPrompt } from './ClearTopPrompt';
 import { offsetBelowTopPrompt, setTopPromptBottom, TOP_PROMPT_GAP_PX } from '../lib/topPromptOverlay';
 
 vi.mock('../api/client', async (importOriginal) => {
@@ -44,26 +41,31 @@ const phones = [
 ];
 
 const PILL_ROW_PADDING_PX = 12;
-const PULSE_CARD_HEIGHT = 153;
-const MAP_HEIGHT = 560;
+const PULSE_CARD_HEIGHT = 128;
+const DEFAULT_MAP_HEIGHT = 560;
+const SHORT_MAP_HEIGHT = 400;
 const PILL_ROW_HEIGHT = 44;
 const MAP_SPOTS_HEIGHT = 72;
 const EMPTY_HEIGHT = 124;
-const EMPTY_BOTTOM_PAD = 96;
+const EMPTY_BOTTOM_PAD = 112;
 const TICK_PX = 44;
+const TAB_BAR_HEIGHT = 64;
+const FAB_SIZE = 64;
+const DOCK_SIZE = 44;
+const VIEWPORT_HEIGHT = 844;
 
 const realRect = Element.prototype.getBoundingClientRect;
 const roCallbacks = new Set<ResizeObserverCallback>();
 
-function boxFor(width: number, top: number, height: number): DOMRect {
+function boxFor(width: number, top: number, height: number, left = 0): DOMRect {
   return {
     top,
     bottom: top + height,
     height,
-    left: 0,
-    right: width,
+    left,
+    right: left + width,
     width,
-    x: 0,
+    x: left,
     y: top,
     toJSON() {},
   } as DOMRect;
@@ -80,50 +82,71 @@ type LayoutState = {
   mapTop: number;
   pulse: boolean;
   banner: boolean;
+  mapHeight: number;
 };
+
+function mapBottom(state: LayoutState): number {
+  return state.mapTop + state.mapHeight;
+}
 
 function mockLayout(state: LayoutState) {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: state.width });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: VIEWPORT_HEIGHT });
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     const id = this.getAttribute('data-testid');
-    const pulsePad = state.pulse && state.banner
-      ? offsetBelowTopPrompt(state.mapTop, state.bannerTop + state.bannerHeight)
-      : 0;
-    const mapTop = state.pulse ? state.mapTop + pulsePad + PULSE_CARD_HEIGHT : state.mapTop;
+    const bannerBottom = state.banner ? state.bannerTop + state.bannerHeight : null;
+    const offset = offsetBelowTopPrompt(state.mapTop, bannerBottom);
+    const stackTop = state.mapTop;
+    const pulseTop = stackTop + PILL_ROW_PADDING_PX + offset;
+    const pillsTop = state.pulse ? pulseTop + PULSE_CARD_HEIGHT + 8 : stackTop + PILL_ROW_PADDING_PX + offset;
+    const spotsTop = pillsTop + PILL_ROW_HEIGHT + 8;
+    const emptyTop = Math.max(
+      spotsTop + MAP_SPOTS_HEIGHT + 8,
+      mapBottom(state) - EMPTY_BOTTOM_PAD - EMPTY_HEIGHT,
+    );
+    const clampTop = (top: number, height: number) => {
+      const limit = mapBottom(state) - height;
+      return Math.min(Math.max(top, state.mapTop), limit);
+    };
 
     if (id === 'push-alert-banner') {
       return state.banner ? boxFor(state.width, state.bannerTop, state.bannerHeight) : boxFor(state.width, 0, 0);
     }
-    if (id === 'pulse-nudge-clearance') {
-      return boxFor(state.width, state.mapTop, pulsePad + PULSE_CARD_HEIGHT);
+    if (id === 'pulse-nudge' || id === 'map-top-stack-leading') {
+      return boxFor(state.width - 24, clampTop(pulseTop, PULSE_CARD_HEIGHT), PULSE_CARD_HEIGHT);
     }
-    if (id === 'pulse-nudge') {
-      return boxFor(state.width, state.mapTop + pulsePad, PULSE_CARD_HEIGHT);
+    if (id === 'pulse-nudge-start' || id === 'pulse-nudge-dismiss') {
+      return boxFor(120, clampTop(pulseTop + PULSE_CARD_HEIGHT - 44, 44), 44);
     }
     if (id === 'discover-map-panel' || id === 'map-overlay-column') {
-      return boxFor(state.width, mapTop, MAP_HEIGHT);
+      return boxFor(state.width, state.mapTop, state.mapHeight);
     }
     if (id === 'map-top-stack') {
-      const bannerBottom = state.banner ? state.bannerTop + state.bannerHeight : null;
-      const offset = offsetBelowTopPrompt(mapTop, bannerBottom);
-      return boxFor(state.width, mapTop, PILL_ROW_PADDING_PX + offset + PILL_ROW_HEIGHT + 8 + MAP_SPOTS_HEIGHT);
+      const height = PILL_ROW_PADDING_PX + offset + (state.pulse ? PULSE_CARD_HEIGHT + 8 : 0) + PILL_ROW_HEIGHT + 8 + MAP_SPOTS_HEIGHT;
+      return boxFor(state.width, stackTop, height);
     }
-    if (id === 'map-top-pill-bar') {
-      const bannerBottom = state.banner ? state.bannerTop + state.bannerHeight : null;
-      const offset = offsetBelowTopPrompt(mapTop, bannerBottom);
-      return boxFor(state.width, mapTop + PILL_ROW_PADDING_PX + offset, PILL_ROW_HEIGHT);
+    if (id === 'map-top-pill-bar' || id === 'map-pill-radius' || id === 'map-pill-filters') {
+      return boxFor(id === 'map-top-pill-bar' ? state.width : 140, clampTop(pillsTop, PILL_ROW_HEIGHT), PILL_ROW_HEIGHT);
     }
     if (id === 'map-privacy-note' || id === 'hotspots-map-helper') {
-      const bannerBottom = state.banner ? state.bannerTop + state.bannerHeight : null;
-      const offset = offsetBelowTopPrompt(mapTop, bannerBottom);
-      const top = mapTop + PILL_ROW_PADDING_PX + offset + PILL_ROW_HEIGHT + 8;
-      return boxFor(state.width, top, MAP_SPOTS_HEIGHT);
+      return boxFor(state.width - 32, spotsTop, MAP_SPOTS_HEIGHT);
     }
-    if (id === 'map-empty-radius') {
-      return boxFor(state.width, mapTop + MAP_HEIGHT - EMPTY_BOTTOM_PAD - EMPTY_HEIGHT, EMPTY_HEIGHT);
+    if (id === 'map-empty-radius' || id === 'map-widen-radius') {
+      const top = id === 'map-widen-radius' ? emptyTop + EMPTY_HEIGHT - 44 : emptyTop;
+      const height = id === 'map-widen-radius' ? 44 : EMPTY_HEIGHT;
+      return boxFor(state.width - 32, clampTop(top, height), height);
     }
     if (id === 'alerts-prompt-never') {
       return boxFor(TICK_PX, state.bannerTop + 80, TICK_PX);
+    }
+    if (id === 'mobile-tab-bar') {
+      return boxFor(state.width, VIEWPORT_HEIGHT - TAB_BAR_HEIGHT, TAB_BAR_HEIGHT);
+    }
+    if (id === 'pulse-fab') {
+      return boxFor(FAB_SIZE, VIEWPORT_HEIGHT - 104 - FAB_SIZE, FAB_SIZE, state.width - 16 - FAB_SIZE);
+    }
+    if (id === 'discover-chat-dock-toggle') {
+      return boxFor(DOCK_SIZE, mapBottom(state) - 48 - DOCK_SIZE, DOCK_SIZE, 12);
     }
     return realRect.call(this);
   });
@@ -138,17 +161,36 @@ async function settle() {
 
 function QuietPulseCard() {
   return (
-    <ClearTopPrompt testId="pulse-nudge-clearance">
-      <div data-testid="pulse-nudge" role="status">
-        <p>Quiet map? Start Pulse</p>
-        <button type="button" data-testid="pulse-nudge-start">
-          Start Pulse
-        </button>
-        <button type="button" data-testid="pulse-nudge-dismiss">
-          Not now
-        </button>
+    <div data-testid="pulse-nudge" role="status">
+      <div className="flex flex-col gap-3">
+        <div className="min-w-0">
+          <p>Quiet map? Start Pulse</p>
+          <p>Seen first for 90 minutes.</p>
+        </div>
+        <div className="flex flex-wrap gap-2" data-testid="pulse-nudge-actions">
+          <button type="button" data-testid="pulse-nudge-start">
+            Start Pulse
+          </button>
+          <button type="button" data-testid="pulse-nudge-dismiss">
+            Not now
+          </button>
+        </div>
       </div>
-    </ClearTopPrompt>
+    </div>
+  );
+}
+
+function BottomChrome() {
+  return (
+    <>
+      <nav data-testid="mobile-tab-bar" />
+      <button type="button" data-testid="pulse-fab">
+        Pulse
+      </button>
+      <button type="button" data-testid="discover-chat-dock-toggle">
+        Chat
+      </button>
+    </>
   );
 }
 
@@ -156,17 +198,18 @@ function renderNearby(opts: { pulse?: boolean } = {}) {
   return render(
     <>
       <PushAlertBanner />
-      {opts.pulse ? <QuietPulseCard /> : null}
       <div className="relative" data-testid="discover-map-panel">
         <MapTopPillBar
           radiusKm={5}
           onRadiusClick={vi.fn()}
           onFiltersClick={vi.fn()}
+          leading={opts.pulse ? <QuietPulseCard /> : null}
           footer={<MapEmptyRadius nextRadiusKm={10} onWiden={vi.fn()} />}
         >
           <p data-testid="map-privacy-note">Map spots include independent venues and outdoor locations.</p>
         </MapTopPillBar>
       </div>
+      <BottomChrome />
     </>,
   );
 }
@@ -183,6 +226,22 @@ function assertNoOverlap(ids: string[]) {
         `${rects[i].id} overlaps ${rects[j].id}`,
       ).toBe(false);
     }
+  }
+}
+
+function assertAboveBottomChrome(interactiveIds: string[]) {
+  const tab = screen.getByTestId('mobile-tab-bar').getBoundingClientRect();
+  const fab = screen.getByTestId('pulse-fab').getBoundingClientRect();
+  const dock = screen.getByTestId('discover-chat-dock-toggle').getBoundingClientRect();
+  const map = screen.getByTestId('discover-map-panel').getBoundingClientRect();
+  const column = screen.getByTestId('map-overlay-column').getBoundingClientRect();
+  expect(column.bottom).toBeLessThanOrEqual(map.bottom);
+  for (const id of interactiveIds) {
+    const rect = screen.getByTestId(id).getBoundingClientRect();
+    expect(rect.bottom, `${id} under the map`).toBeLessThanOrEqual(map.bottom);
+    expect(rect.bottom, `${id} under the tab bar`).toBeLessThanOrEqual(tab.top);
+    expect(overlap(rect, fab), `${id} under PULSE`).toBe(false);
+    expect(overlap(rect, dock), `${id} under the chat dock`).toBe(false);
   }
 }
 
@@ -220,18 +279,18 @@ afterEach(() => {
 
 describe.each(phones)('Map overlays never overlap ($width px)', (p) => {
   it('moves the pills below the banner while it shows, and back when it closes', async () => {
-    const layout: LayoutState = { ...p, pulse: false, banner: true };
+    const layout: LayoutState = { ...p, pulse: false, banner: true, mapHeight: DEFAULT_MAP_HEIGHT };
     mockLayout(layout);
     const user = userEvent.setup();
     renderNearby();
     expect(await screen.findByTestId('push-alert-banner')).toBeInTheDocument();
-    await settle();
 
     const stack = screen.getByTestId('map-top-stack');
     const bannerBottom = p.bannerTop + p.bannerHeight;
     const expected = bannerBottom + TOP_PROMPT_GAP_PX - p.mapTop;
     expect(stack.getAttribute('data-offset-for-banner')).toBe(String(expected));
     expect(stack.style.paddingTop).toBe(`${PILL_ROW_PADDING_PX + expected}px`);
+    expect(screen.getByTestId('map-overlay-column').getAttribute('data-overlay-ready')).toBe('true');
     const pillsTop = p.mapTop + expected + PILL_ROW_PADDING_PX;
     expect(pillsTop).toBeGreaterThan(bannerBottom);
     expect(screen.getByTestId('map-pill-radius')).toBeEnabled();
@@ -246,44 +305,41 @@ describe.each(phones)('Map overlays never overlap ($width px)', (p) => {
     expect(stack.getAttribute('data-offset-for-banner')).toBe('0');
   });
 
-  it('follows a late-loading Pulse card and keeps every overlay clear', async () => {
-    const layout: LayoutState = { ...p, pulse: false, banner: true };
+  it('follows a late-loading Pulse card on the map without pushing the panel down', async () => {
+    const layout: LayoutState = { ...p, pulse: false, banner: true, mapHeight: DEFAULT_MAP_HEIGHT };
     mockLayout(layout);
     const user = userEvent.setup();
     const view = renderNearby({ pulse: false });
     expect(await screen.findByTestId('push-alert-banner')).toBeInTheDocument();
-    await settle();
 
     const beforePulse = Number(screen.getByTestId('map-top-stack').getAttribute('data-offset-for-banner'));
     expect(beforePulse).toBeGreaterThan(0);
+    const mapTopBefore = screen.getByTestId('discover-map-panel').getBoundingClientRect().top;
 
     layout.pulse = true;
     view.rerender(
       <>
         <PushAlertBanner />
-        <QuietPulseCard />
         <div className="relative" data-testid="discover-map-panel">
           <MapTopPillBar
             radiusKm={5}
             onRadiusClick={vi.fn()}
             onFiltersClick={vi.fn()}
+            leading={<QuietPulseCard />}
             footer={<MapEmptyRadius nextRadiusKm={10} onWiden={vi.fn()} />}
           >
             <p data-testid="map-privacy-note">Map spots include independent venues and outdoor locations.</p>
           </MapTopPillBar>
         </div>
+        <BottomChrome />
       </>,
     );
-    await settle();
 
     const pulse = screen.getByTestId('pulse-nudge');
-    const clearance = screen.getByTestId('pulse-nudge-clearance');
     const banner = screen.getByTestId('push-alert-banner').getBoundingClientRect();
-    expect(clearance.getAttribute('data-offset-for-banner')).not.toBe('0');
     expect(pulse.getBoundingClientRect().top).toBeGreaterThanOrEqual(banner.bottom);
-
-    // Map has been pushed below the banner, so the pills no longer need a leftover offset.
-    expect(screen.getByTestId('map-top-stack').getAttribute('data-offset-for-banner')).toBe('0');
+    expect(screen.getByTestId('discover-map-panel').getBoundingClientRect().top).toBe(mapTopBefore);
+    expect(screen.getByTestId('map-top-stack').getAttribute('data-offset-for-banner')).toBe(String(beforePulse));
     assertNoOverlap([
       'push-alert-banner',
       'pulse-nudge',
@@ -297,12 +353,21 @@ describe.each(phones)('Map overlays never overlap ($width px)', (p) => {
     await settle();
     expect(screen.queryByTestId('push-alert-banner')).toBeNull();
     expect(screen.getByTestId('map-top-stack').getAttribute('data-offset-for-banner')).toBe('0');
-    expect(screen.getByTestId('pulse-nudge-clearance').getAttribute('data-offset-for-banner')).toBe('0');
     assertNoOverlap(['pulse-nudge', 'map-top-pill-bar', 'map-privacy-note', 'map-empty-radius']);
   });
 
+  it('stacks Pulse buttons under the copy so the text keeps the full width', async () => {
+    mockLayout({ ...p, pulse: true, banner: true, mapHeight: DEFAULT_MAP_HEIGHT });
+    renderNearby({ pulse: true });
+    expect(await screen.findByTestId('push-alert-banner')).toBeInTheDocument();
+    const actions = screen.getByTestId('pulse-nudge-actions');
+    expect(actions.className).toMatch(/flex-wrap/);
+    expect(actions.parentElement?.className).toMatch(/flex-col/);
+    expect(actions.parentElement?.className).not.toMatch(/justify-between/);
+  });
+
   it("Don't show again tick is at least 44px", async () => {
-    mockLayout({ ...p, pulse: false, banner: true });
+    mockLayout({ ...p, pulse: false, banner: true, mapHeight: DEFAULT_MAP_HEIGHT });
     renderNearby();
     const tick = await screen.findByTestId('alerts-prompt-never');
     expect(tick.className).toMatch(/min-h-\[44px\]/);
@@ -312,6 +377,62 @@ describe.each(phones)('Map overlays never overlap ($width px)', (p) => {
     const rect = tick.getBoundingClientRect();
     expect(rect.height).toBeGreaterThanOrEqual(44);
     expect(rect.width).toBeGreaterThanOrEqual(44);
+  });
+});
+
+describe('overlay column taller than the map (360 px, banner on)', () => {
+  it('keeps interactive controls inside the map, above the tab bar, PULSE and the dock', async () => {
+    const layout: LayoutState = {
+      width: 360,
+      bannerTop: 60,
+      bannerHeight: 142,
+      mapTop: 116,
+      pulse: true,
+      banner: true,
+      mapHeight: SHORT_MAP_HEIGHT,
+    };
+    mockLayout(layout);
+    renderNearby({ pulse: true });
+    expect(await screen.findByTestId('push-alert-banner')).toBeInTheDocument();
+
+    const column = screen.getByTestId('map-overlay-column');
+    const map = screen.getByTestId('discover-map-panel').getBoundingClientRect();
+    const tab = screen.getByTestId('mobile-tab-bar').getBoundingClientRect();
+    expect(column.className).toMatch(/overflow-y-auto/);
+    expect(column.getBoundingClientRect().height).toBe(SHORT_MAP_HEIGHT);
+    expect(column.getBoundingClientRect().bottom).toBeLessThanOrEqual(map.bottom);
+    expect(column.getBoundingClientRect().bottom).toBeLessThanOrEqual(tab.top);
+    expect(column.getBoundingClientRect().height).toBeLessThan(
+      PILL_ROW_PADDING_PX + 94 + PULSE_CARD_HEIGHT + PILL_ROW_HEIGHT + MAP_SPOTS_HEIGHT + EMPTY_HEIGHT + EMPTY_BOTTOM_PAD,
+    );
+    expect(column.contains(screen.getByTestId('map-widen-radius'))).toBe(true);
+    expect(column.contains(screen.getByTestId('map-empty-radius'))).toBe(true);
+    expect(column.contains(screen.getByTestId('pulse-nudge-start'))).toBe(true);
+
+    assertAboveBottomChrome([
+      'pulse-nudge-start',
+      'pulse-nudge-dismiss',
+      'map-pill-radius',
+      'map-pill-filters',
+      'map-widen-radius',
+    ]);
+    assertNoOverlap(['push-alert-banner', 'pulse-nudge', 'map-top-pill-bar', 'map-privacy-note']);
+  });
+});
+
+describe('first paint has no leftover offset jump', () => {
+  it('measures in the layout effect so the first committed offset is already correct', async () => {
+    const p = phones[0];
+    mockLayout({ ...p, pulse: true, banner: true, mapHeight: DEFAULT_MAP_HEIGHT });
+    renderNearby({ pulse: true });
+    expect(await screen.findByTestId('push-alert-banner')).toBeInTheDocument();
+    const expected = p.bannerTop + p.bannerHeight + TOP_PROMPT_GAP_PX - p.mapTop;
+    const stack = screen.getByTestId('map-top-stack');
+    expect(stack.getAttribute('data-offset-for-banner')).toBe(String(expected));
+    expect(screen.getByTestId('map-overlay-column').getAttribute('data-overlay-ready')).toBe('true');
+    const pillsTop = screen.getByTestId('map-top-pill-bar').getBoundingClientRect().top;
+    expect(pillsTop).toBeLessThan(400);
+    expect(pillsTop).toBeGreaterThan(p.bannerTop + p.bannerHeight);
   });
 });
 

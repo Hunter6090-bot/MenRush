@@ -10,13 +10,17 @@ export function ClearTopPrompt({
   testId?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const offset = useClearanceBelowTopPrompt(ref);
+  const { offset, ready } = useClearanceBelowTopPrompt(ref);
   return (
     <div
       ref={ref}
       data-testid={testId}
       data-offset-for-banner={offset}
-      style={offset > 0 ? { paddingTop: `${offset}px` } : undefined}
+      data-overlay-ready={ready ? 'true' : 'false'}
+      style={{
+        ...(offset > 0 ? { paddingTop: `${offset}px` } : {}),
+        visibility: ready ? 'visible' : 'hidden',
+      }}
     >
       {children}
     </div>
