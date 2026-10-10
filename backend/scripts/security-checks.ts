@@ -209,7 +209,8 @@ export function assertAuthOnlyRouterGuard(route: string, source: string): void {
   assert.ok(guard.index < firstRoute.index, `${route}: router.use must come before the first route`);
   assert.ok(!/\b(?:const|let|var)\s+\w+\s*=\s*router\b/.test(code), `${route}: no aliases of router`);
   assert.ok(!/req\s*\.\s*(?:params|body|query)\s*\.\s*user(?:_?id|Id)\b/i.test(code), `${route}: member id must come from the token`);
-  assert.ok(!/['"`]\/:user(?:_?id|Id)\b/i.test(code), `${route}: no member id in the path`);
+  // stripComments blanks string contents, so the route path check reads the raw source.
+  assert.ok(!/['"`]\/:user(?:_?id|Id)\b/i.test(source), `${route}: no member id in the path`);
 }
 
 type Test = { name: string; run: () => void | Promise<void> };
