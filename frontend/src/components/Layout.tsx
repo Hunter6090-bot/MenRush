@@ -185,7 +185,7 @@ function LayoutInner({ children }: LayoutProps) {
                   sidebarExpanded ? 'gap-3 px-3 py-3' : 'justify-center px-2 py-3'
                 } ${
                   active
-                    ? 'bg-[rgba(196,131,42,0.14)] text-nn-copper-bright'
+                    ? 'bg-[rgba(196,131,42,0.10)] text-[var(--nn-accent-text)]'
                     : 'text-nn-muted hover:bg-nn-card hover:text-nn-text'
                 }`}
               >
