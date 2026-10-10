@@ -389,8 +389,13 @@ export const authService = {
         await referralService.attachAtSignup(resolvedReferrer.referrerId, user!.id as string, client);
       }
 
+      let redeemedInviteId: string | undefined;
       if (inviteCode) {
-        await inviteCodeService.redeemForRegistration(inviteCode, user!.id as string, client);
+        redeemedInviteId = await inviteCodeService.redeemForRegistration(
+          inviteCode,
+          user!.id as string,
+          client,
+        );
       }
 
       // Redeem inside the same transaction so a failed Pride grant rolls back
@@ -402,6 +407,7 @@ export const authService = {
           user!.id as string,
           prideInviteMonths,
           client,
+          redeemedInviteId,
         );
       } else if (usingSharedMr3Free) {
         // MR3FREE = MenRush launch ad campaign. 3 months Premium free, unlocked day one.

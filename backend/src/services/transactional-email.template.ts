@@ -81,16 +81,10 @@ export function buildTransactionalEmail(options: TransactionalEmailOptions): str
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; width:100%; background-color:#1a1208;">
           <tr>
             <td style="padding:30px 40px 25px 40px;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td valign="middle" style="padding-right:18px;">
-                    <img src="https://menrush.com/menrush-logo.png" width="60" height="60" alt="MenRush" style="display:block; width:60px; height:60px; border-radius:50%; border:0;" />
-                  </td>
-                  <td valign="middle">
-                    <span style="font-family:Georgia,'Times New Roman',serif; font-size:32px; font-weight:bold; letter-spacing:6px; color:#F0E0C0;">MENRUSH</span>
-                  </td>
-                </tr>
-              </table>
+              <!-- Header: official MenRush mark (transparent cutout, unmodified) -->
+              <a href="https://menrush.com/" style="text-decoration:none; border:0;">
+                <img src="https://menrush.com/brand/medallion-transparent.png" width="140" height="140" alt="MenRush" style="display:block; width:140px; height:140px; border:0; outline:none; text-decoration:none;" />
+              </a>
             </td>
           </tr>
           <tr>

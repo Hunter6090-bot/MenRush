@@ -6,6 +6,14 @@ import { isAlwaysPremiumName } from '../lib/always-premium';
 
 type Queryable = PoolClient | typeof pool;
 
+/** Options for the no-stack checks when run inside the register transaction. */
+export interface ThreeMonthCheckOptions {
+  /** Transaction client, so rows written earlier in the same transaction are seen. */
+  client?: Queryable;
+  /** Pride invite being redeemed right now: never counted against its own holder. */
+  excludeInviteId?: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -181,13 +189,34 @@ export function europeLondonYmd(d: Date): string {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
+/** Europe/London offset from UTC at instant t, in ms (BST 3600000, GMT 0). */
+function londonUtcOffsetMs(t: number): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: EUROPE_LONDON,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(new Date(t));
+  const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
+  const wall = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+  return wall - t;
+}
+
 /**
- * Start of a Europe/London calendar day as a UTC Date.
- * Claim window (1–5 Oct 2026) is BST (UTC+1); midnight London = previous day 23:00Z.
+ * Start of a Europe/London calendar day as a UTC Date, using the zone's own
+ * rules for that date: BST days start at 23:00Z the day before, GMT days at
+ * 00:00Z. No fixed offset.
  */
 export function startOfEuropeLondonDay(ymd: string): Date {
-  // Oct 2026 claim window is BST. Explicit offset matches Al's Europe/London calendar lock.
-  return new Date(`${ymd}T00:00:00+01:00`);
+  const [y, m, d] = ymd.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d, 0, 0, 0);
+  let t = guess - londonUtcOffsetMs(guess);
+  t = guess - londonUtcOffsetMs(t);
+  return new Date(t);
 }
 
 /**
@@ -338,9 +367,9 @@ export type SharedMr3FreeValidateResult =
 
 export const promoService = {
   /** True if this email was issued a legacy personal Pride code (closed claim form). */
-  async emailHasBrightonPrideClaim(email: string): Promise<boolean> {
+  async emailHasBrightonPrideClaim(email: string, db: Queryable = pool): Promise<boolean> {
     const emailHash = hashEmail(email);
-    const result = await query(
+    const result = await db.query(
       `SELECT 1 FROM promo_codes
        WHERE campaign = $1 AND email_hash = $2
        LIMIT 1`,
@@ -349,9 +378,9 @@ export const promoService = {
     return result.rows.length > 0;
   },
 
-  async emailHasPublicPrideRedeem(email: string): Promise<boolean> {
+  async emailHasPublicPrideRedeem(email: string, db: Queryable = pool): Promise<boolean> {
     const emailHash = hashEmail(email);
-    const result = await query(
+    const result = await db.query(
       `SELECT 1 FROM shared_promo_redemptions
        WHERE campaign = $1 AND email_hash = $2
        LIMIT 1`,
@@ -361,9 +390,9 @@ export const promoService = {
   },
 
   /** True if this email already booked Pride via a Pride-flagged MENRUSH invite. */
-  async emailHasPrideInviteRedeem(email: string): Promise<boolean> {
+  async emailHasPrideInviteRedeem(email: string, db: Queryable = pool): Promise<boolean> {
     const emailHash = hashEmail(email);
-    const result = await query(
+    const result = await db.query(
       `SELECT 1 FROM shared_promo_redemptions
        WHERE campaign = $1 AND email_hash = $2
        LIMIT 1`,
@@ -373,9 +402,9 @@ export const promoService = {
   },
 
   /** True if this email already redeemed BSF26 (one account, no re-use). */
-  async emailHasBsf26Redeem(email: string): Promise<boolean> {
+  async emailHasBsf26Redeem(email: string, db: Queryable = pool): Promise<boolean> {
     const emailHash = hashEmail(email);
-    const result = await query(
+    const result = await db.query(
       `SELECT 1 FROM shared_promo_redemptions
        WHERE campaign = $1 AND email_hash = $2
        LIMIT 1`,
@@ -385,9 +414,9 @@ export const promoService = {
   },
 
   /** True if this email already redeemed MR3FREE (one account, no re-use). */
-  async emailHasMr3FreeRedeem(email: string): Promise<boolean> {
+  async emailHasMr3FreeRedeem(email: string, db: Queryable = pool): Promise<boolean> {
     const emailHash = hashEmail(email);
-    const result = await query(
+    const result = await db.query(
       `SELECT 1 FROM shared_promo_redemptions
        WHERE campaign IN ($1, $2) AND email_hash = $3
        LIMIT 1`,
@@ -396,18 +425,25 @@ export const promoService = {
     return result.rows.length > 0;
   },
 
-  /** Outstanding unused Pride-flagged invite for this email. */
-  async emailHasPendingPrideInvite(email: string): Promise<boolean> {
+  /**
+   * Outstanding unused Pride-flagged invite for this email.
+   * Pass the register transaction client and the invite being redeemed so a
+   * holder's own code is never counted against them (it is marked used inside
+   * that transaction, which a separate pool connection cannot see).
+   */
+  async emailHasPendingPrideInvite(email: string, opts: ThreeMonthCheckOptions = {}): Promise<boolean> {
+    const db: Queryable = opts.client ?? pool;
     const normalised = email.trim().toLowerCase();
-    const pendingInvite = await query(
+    const pendingInvite = await db.query(
       `SELECT 1 FROM beta_invite_codes
        WHERE LOWER(issued_email) = $1
          AND pride_months_free IS NOT NULL
          AND revoked_at IS NULL
          AND use_count < max_uses
          AND (expires_at IS NULL OR expires_at > NOW())
+         AND ($2::text IS NULL OR id::text <> $2::text)
        LIMIT 1`,
-      [normalised],
+      [normalised, opts.excludeInviteId ?? null],
     );
     return pendingInvite.rows.length > 0;
   },
@@ -415,21 +451,23 @@ export const promoService = {
   /**
    * Any Pride path already claimed or outstanding (one grant, no stack).
    */
-  async emailHasAnyPridePath(email: string): Promise<boolean> {
-    if (await this.emailHasPublicPrideRedeem(email)) return true;
-    if (await this.emailHasPrideInviteRedeem(email)) return true;
-    if (await this.emailHasBrightonPrideClaim(email)) return true;
-    if (await this.emailHasPendingPrideInvite(email)) return true;
+  async emailHasAnyPridePath(email: string, opts: ThreeMonthCheckOptions = {}): Promise<boolean> {
+    const db: Queryable = opts.client ?? pool;
+    if (await this.emailHasPublicPrideRedeem(email, db)) return true;
+    if (await this.emailHasPrideInviteRedeem(email, db)) return true;
+    if (await this.emailHasBrightonPrideClaim(email, db)) return true;
+    if (await this.emailHasPendingPrideInvite(email, opts)) return true;
     return false;
   },
 
   /**
-   * Any 3-month promo already claimed or outstanding (Pride, BSF26, or MR3FREE — no stack).
+   * Any 3-month promo already claimed or outstanding (Pride, BSF26 or MR3FREE, no stack).
    */
-  async emailHasAnyThreeMonthPromo(email: string): Promise<boolean> {
-    if (await this.emailHasAnyPridePath(email)) return true;
-    if (await this.emailHasBsf26Redeem(email)) return true;
-    if (await this.emailHasMr3FreeRedeem(email)) return true;
+  async emailHasAnyThreeMonthPromo(email: string, opts: ThreeMonthCheckOptions = {}): Promise<boolean> {
+    const db: Queryable = opts.client ?? pool;
+    if (await this.emailHasAnyPridePath(email, opts)) return true;
+    if (await this.emailHasBsf26Redeem(email, db)) return true;
+    if (await this.emailHasMr3FreeRedeem(email, db)) return true;
     return false;
   },
 
@@ -551,11 +589,12 @@ export const promoService = {
     userId: string,
     monthsFree: number,
     client?: PoolClient,
+    redeemingInviteId?: string,
   ): Promise<{ monthsFree: number; premiumUntil: Date }> {
     const db: Queryable = client ?? pool;
     const emailHash = hashEmail(email);
 
-    if (await this.emailHasAnyThreeMonthPromo(email)) {
+    if (await this.emailHasAnyThreeMonthPromo(email, { client: db, excludeInviteId: redeemingInviteId })) {
       throw new Error(
         'This email already has a 3-month Premium grant. The code cannot be stacked.',
       );

@@ -229,7 +229,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           </p>
         ) : null}
 
-        {user.mood ? (
+        {/* redesign cut mood on cards */ false && user.mood ? (
           <div className="mb-1.5">
             <MoodBadge mood={user.mood} small />
           </div>
