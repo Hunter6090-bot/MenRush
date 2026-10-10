@@ -281,7 +281,7 @@ export function ProfileDrawer({
             {isPulsing ? (
               <p className="mt-1 text-[15px] font-bold text-[var(--nn-accent-text)]">Pulse</p>
             ) : user.online ? (
-              <p className="mt-1 text-[15px] font-bold text-[var(--status-online)]" data-testid="pin-sheet-now">
+              <p className="mt-1 text-[15px] font-bold text-[var(--status-online-text)]" data-testid="pin-sheet-now">
                 Now
               </p>
             ) : (

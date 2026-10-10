@@ -2383,7 +2383,7 @@ export const Discover = () => {
                 data-testid="nearby-counts"
                 data-nearby-count={nearbyCount}
                 data-live-count={liveCount}
-                className="mb-3 inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
+                className="mb-3 inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-elevated)_85%,transparent)] px-3 py-1.5 shadow-md backdrop-blur-sm"
               >
                 <p className="text-[15px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
                   {loading && nearbyCount === 0 ? (
@@ -2568,7 +2568,7 @@ export const Discover = () => {
                 data-testid="nearby-counts"
                 data-nearby-count={nearbyCount}
                 data-live-count={liveCount}
-                className="inline-flex min-h-[36px] max-w-full items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
+                className="inline-flex min-h-[36px] max-w-full items-center rounded-full border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-elevated)_85%,transparent)] px-3 py-1.5 shadow-md backdrop-blur-sm"
               >
                 <p className="text-[15px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
                   {loading && nearbyCount === 0 ? (
