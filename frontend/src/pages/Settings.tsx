@@ -928,6 +928,20 @@ export const Settings = () => {
               <NotificationSettings flush />
 
               <Link
+                to="/get-the-app"
+                className={rowActionClass}
+                data-testid="settings-get-the-app"
+              >
+                <div>
+                  <p className="text-[15px] font-bold text-[var(--cream)]">Get the app</p>
+                  <p className="mt-0.5 text-[15px] text-[var(--cream-muted)]">
+                    Put MenRush on your Home Screen.
+                  </p>
+                </div>
+                <ChevronRight />
+              </Link>
+
+              <Link
                 to="/notifications"
                 className={rowActionClass}
               >

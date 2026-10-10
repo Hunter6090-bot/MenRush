@@ -146,7 +146,11 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
         </p>
         <p className="mx-auto mt-2 max-w-sm text-[15px] leading-relaxed text-[var(--cream-muted)]">
           {hideExpandRadius ? (
-            <>Turn on location and finish your profile so others can find you.</>
+            onFinishProfile ? (
+              <>Turn on location and finish your profile so others can find you.</>
+            ) : (
+              <>Turn on location so others can find you.</>
+            )
           ) : beyondRadiusCount > 0 ? (
             <>
               <span className="font-bold text-[#E0A14A]">
@@ -158,8 +162,10 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
           ) : (
             <>
               Expand your range
-              {radiusLabel ? ` (now ${radiusLabel})` : ''}, turn on location, and finish your profile
-              so others can find you.
+              {radiusLabel ? ` (now ${radiusLabel})` : ''}
+              {onFinishProfile
+                ? ', turn on location, and finish your profile so others can find you.'
+                : ' and turn on location so others can find you.'}
             </>
           )}
         </p>
