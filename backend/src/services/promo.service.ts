@@ -173,7 +173,20 @@ export function pridePremiumWindow(
 ): { premiumStart: Date; premiumEnd: Date } {
   const launch = getMenRushLaunchDate();
   const premiumStart = now.getTime() >= launch.getTime() ? now : launch;
-  return { premiumStart, premiumEnd: premiumEndFromLaunch(premiumStart, months) };
+  return { premiumStart, premiumEnd: pridePremiumEnd(premiumStart, months) };
+}
+
+/**
+ * Pride grants only (invites, public and personal Pride codes): Premium runs to
+ * the END of the London day N months after the start's London date. On-time
+ * launch (1 Oct 2026) ends at the end of 1 Jan 2027 London time
+ * (2027-01-01T23:59:59.999Z), as Terms 7.7 say. MR3FREE and BSF26 use
+ * premiumEndFromLaunch (ends the day before the anniversary).
+ */
+export function pridePremiumEnd(start: Date, months = SHARED_PRIDE_MONTHS_FREE): Date {
+  const [y, m, d] = europeLondonYmd(start).split('-').map(Number);
+  const dayAfterAnniversary = new Date(Date.UTC(y, m - 1 + months, d + 1)).toISOString().slice(0, 10);
+  return new Date(startOfEuropeLondonDay(dayAfterAnniversary).getTime() - 1);
 }
 
 /** YYYY-MM-DD for an instant in Europe/London. */

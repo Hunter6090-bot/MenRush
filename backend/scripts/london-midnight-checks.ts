@@ -3,9 +3,14 @@
  * Run from backend/: npm run test:london-midnight
  */
 import assert from 'assert';
+import { readFileSync } from 'fs';
+import path from 'path';
 import {
   europeLondonYmd,
   premiumEndFromLaunch,
+  pridePremiumEnd,
+  pridePremiumWindow,
+  SHARED_PRIDE_SCHEDULED_LAUNCH,
   mr3FreePremiumWindow,
   bsf26PremiumWindow,
   startOfEuropeLondonDay,
@@ -91,6 +96,30 @@ test('Premium end is always the last ms of a London day, N months generally', ()
       assert.notStrictEqual(europeLondonYmd(end), europeLondonYmd(new Date(end.getTime() + 1)), `${start} +${n}: end is the last ms of a London day`);
     }
   }
+});
+
+test('Pride grant on time ends at the end of 1 Jan 2027 London, matching Terms 7.7', () => {
+  const launch = new Date(SHARED_PRIDE_SCHEDULED_LAUNCH);
+  assert.strictEqual(pridePremiumEnd(launch, 3).toISOString(), '2027-01-01T23:59:59.999Z');
+  // Booked before launch: starts at launch, same end.
+  const booked = pridePremiumWindow(3, new Date('2026-08-25T12:00:00Z'));
+  assert.strictEqual(booked.premiumEnd.toISOString(), '2027-01-01T23:59:59.999Z');
+  assert.strictEqual(europeLondonYmd(booked.premiumEnd), '2027-01-01');
+  assert.notStrictEqual(europeLondonYmd(new Date(booked.premiumEnd.getTime() + 1)), '2027-01-01');
+  // Terms wording still says so.
+  const terms = readFileSync(path.resolve(__dirname, '../../frontend/src/pages/Terms.tsx'), 'utf8');
+  assert.match(terms, /On-time open 1 October 2026 ends 1 January 2027\./);
+});
+
+test('Pride grant redeemed after launch ends at the end of the London anniversary day', () => {
+  // 10 Oct (BST) + 3 = 10 Jan (GMT): end of 10 Jan London.
+  assert.strictEqual(pridePremiumWindow(3, new Date('2026-10-10T10:00:00Z')).premiumEnd.toISOString(), '2027-01-10T23:59:59.999Z');
+  // 27 Oct (GMT) + 3 = 27 Jan.
+  assert.strictEqual(pridePremiumEnd(new Date('2026-10-27T15:00:00Z'), 3).toISOString(), '2027-01-27T23:59:59.999Z');
+  // 15 Jan (GMT) + 3 = 15 Apr (BST): end of 15 Apr London = 22:59:59.999Z.
+  assert.strictEqual(pridePremiumEnd(new Date('2027-01-15T10:00:00Z'), 3).toISOString(), '2027-04-15T22:59:59.999Z');
+  // MR3FREE and BSF26 keep the day-before rule for the same start.
+  assert.strictEqual(premiumEndFromLaunch(new Date('2026-10-27T15:00:00Z'), 3).toISOString(), '2027-01-26T23:59:59.999Z');
 });
 
 test('BST-day windows unchanged (BSF26 1 Oct, MR3FREE 5 Oct)', () => {
