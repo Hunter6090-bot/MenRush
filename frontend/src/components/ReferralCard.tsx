@@ -85,7 +85,7 @@ export function ReferralCard() {
   const joined = summary.progress_to_unlock;
   const earned = summary.unlocks_earned;
   const saved = summary.months_saved ?? 0;
-  const cap = summary.max_months_per_12_months ?? 3;
+  const cap = summary.max_months_per_12_months ?? 6;
   const mode: RewardMode = summary.reward_mode ?? 'end_date';
   const monthWord = (n: number) => (n === 1 ? '1 month' : `${n} months`);
 

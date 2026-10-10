@@ -7,7 +7,7 @@
  *   3. open-ended Premium is never shortened (owner or not): month is banked;
  *   4. while Premium is free for everyone (BETA_PREMIUM_FREE) months are
  *      banked, and start when it ends (login hook and catch-up script);
- *   5. cap: at most 3 earned months in any rolling 12 months;
+ *   5. cap: at most 6 earned months in any rolling 12 months (Pete, 10 Oct);
  *   6. Gmail dedupe: dots and googlemail.com are the same mailbox;
  *   7. viewing the card (getSummary) never grants or writes; the manual
  *      catch-up grants what is owed and is idempotent.
@@ -42,7 +42,7 @@ async function main() {
   const { monthsAfter, referralExtendedEnd } = await import('../src/services/referral-earned-months');
   const { runReferralCatchUp } = await import('./referral-catch-up');
 
-  assert.strictEqual(REFERRAL_MAX_MONTHS_PER_12_MONTHS, 3);
+  assert.strictEqual(REFERRAL_MAX_MONTHS_PER_12_MONTHS, 6);
 
   const sfx = randomUUID().slice(0, 8);
   const ids: string[] = [];
@@ -241,14 +241,24 @@ async function main() {
     assert.strictEqual(sum.months_saved, 0);
     console.log('ok  - free Premium on: months banked; they start when it ends (login + catch-up)');
 
-    // ── 5. Cap: 3 months per rolling 12 months ─────────────────────────────
+    // ── 5. Cap: 6 months per rolling 12 months (Pete, 10 Oct) ──────────────
     const X = await insertUser({ email: mail('x'), name: `RemX${sfx}` });
+    const grantsOf = async (id: string) =>
+      (await query(`SELECT COUNT(*)::int n FROM referral_premium_grants WHERE user_id = $1`, [id])).rows[0].n as number;
     await earn(X, 15);
-    let g = (await query(`SELECT COUNT(*)::int n FROM referral_premium_grants WHERE user_id = $1`, [X])).rows[0].n;
-    assert.strictEqual(g, 3, '15 referrals still only 3 months in 12 months');
+    assert.strictEqual(await grantsOf(X), 5, '15 referrals: 5 months, under the cap');
+    assert.strictEqual((await referralService.getSummary(X)).at_cap, false);
+    await earn(X, 3);
+    assert.strictEqual(await grantsOf(X), 6, '18 referrals: the 6th month is granted');
     sum = await referralService.getSummary(X);
     assert.strictEqual(sum.at_cap, true);
-    assert.strictEqual(sum.verified_count, 15);
+    assert.strictEqual(sum.max_months_per_12_months, 6);
+    await earn(X, 3);
+    let g = await grantsOf(X);
+    assert.strictEqual(g, 6, '21 referrals: the 7th month is held by the cap');
+    sum = await referralService.getSummary(X);
+    assert.strictEqual(sum.at_cap, true);
+    assert.strictEqual(sum.verified_count, 21);
     // A year on, the held-back milestones become grantable (login / catch-up).
     await query(
       `UPDATE referral_premium_grants SET granted_at = NOW() - INTERVAL '13 months' WHERE user_id = $1`,
@@ -256,8 +266,8 @@ async function main() {
     );
     await referralService.syncEarnedMonths(X);
     g = (await query(`SELECT COUNT(*)::int n FROM referral_premium_grants WHERE user_id = $1`, [X])).rows[0].n;
-    assert.strictEqual(g, 5, 'held-back milestones granted once the window allows, up to the cap');
-    console.log('ok  - cap: 3 per rolling 12 months, held-back months granted later');
+    assert.strictEqual(g, 7, 'the held-back 7th month is granted once the window allows');
+    console.log('ok  - cap: 6th month granted, 7th held, then granted once the 12 month window allows');
 
     // ── 6. Gmail dedupe ─────────────────────────────────────────────────────
     assert.strictEqual(referralEmailKey('Pete.Green+x@Gmail.com'), 'petegreen@gmail.com');

@@ -32,9 +32,9 @@ export type EarnedMonthState = 'banked' | 'stacked' | 'applied';
 
 /**
  * Farming cap: at most this many earned months in any rolling 12 months.
- * Default agreed with QC (#355); product can change it here.
+ * 6 by Pete's decision (10 Oct 2026); product can change it here.
  */
-export const REFERRAL_MAX_MONTHS_PER_12_MONTHS = 3;
+export const REFERRAL_MAX_MONTHS_PER_12_MONTHS = 6;
 
 /** Add calendar months to a YYYY-MM-DD (day overflow rolls forward, never short). */
 function addMonthsYmd(ymd: string, months: number): string {

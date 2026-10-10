@@ -67,7 +67,7 @@ describe('ReferralCard', () => {
     expect(screen.getByTestId('referral-rule')).toHaveTextContent(
       'A member counts once they sign up with your code and confirm their email.',
     );
-    expect(screen.getByTestId('referral-rule')).toHaveTextContent('You can earn up to 3 months in any 12 months.');
+    expect(screen.getByTestId('referral-rule')).toHaveTextContent('You can earn up to 6 months in any 12 months.');
     expect(screen.getByTestId('referral-when')).toHaveTextContent(
       'Each month you earn is added after your current Premium end date.',
     );
@@ -100,16 +100,23 @@ describe('ReferralCard', () => {
     }
   });
 
+  it('cap copy says 6 months and never 3 months (Pete, 10 Oct)', async () => {
+    render(<ReferralCard />);
+    const card = await screen.findByTestId('referral-card');
+    expect(card.textContent).toMatch(/Invite 3 members/);
+    expect(card.textContent).not.toMatch(/up to 3 months|earned 3 months/);
+  });
+
   it('says when months are saved and when the cap is reached', async () => {
     mocks.getReferrals.mockResolvedValueOnce({
-      data: { ...summaryWithLegacyMoney, reward_mode: 'free_for_everyone', unlocks_earned: 3, months_saved: 3, at_cap: true },
+      data: { ...summaryWithLegacyMoney, reward_mode: 'free_for_everyone', unlocks_earned: 6, months_saved: 6, max_months_per_12_months: 6, at_cap: true },
     });
     render(<ReferralCard />);
     expect(await screen.findByTestId('referral-earned')).toHaveTextContent(
-      '3 months of Premium earned so far, all saved for later.',
+      '6 months of Premium earned so far, all saved for later.',
     );
     expect(screen.getByTestId('referral-cap')).toHaveTextContent(
-      'You have earned 3 months in the last 12 months, the most for now.',
+      'You have earned 6 months in the last 12 months, the most for now.',
     );
   });
 });
