@@ -2,6 +2,41 @@ import type { PoolClient } from 'pg';
 import pool, { query } from '../db';
 import { isInviteRequired } from './invite-code.service';
 import { isAlwaysPremiumName } from '../lib/always-premium';
+import { europeLondonYmd, startOfEuropeLondonDay } from './promo.service';
+
+/** Add calendar months to a YYYY-MM-DD (day overflow rolls forward, never short). */
+function addMonthsYmd(ymd: string, months: number): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1 + months, d)).toISOString().slice(0, 10);
+}
+
+function addDaysYmd(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/**
+ * New Premium end after adding N earned months, on the London day rule
+ * (as #366/#374): the window runs from the start of a London day to London
+ * midnight N calendar months later, minus 1 ms.
+ * - Current end in the future: the months start the instant after it. If that
+ *   instant is not a London midnight, they start the next London day, so the
+ *   member never gets less than N full months on top.
+ * - No end date, or it has passed: the months start today (London).
+ */
+export function referralExtendedEnd(currentUntil: Date | null, months: number, now = new Date()): Date {
+  let startYmd: string;
+  if (currentUntil && currentUntil.getTime() > now.getTime()) {
+    const next = new Date(currentUntil.getTime() + 1);
+    startYmd = europeLondonYmd(next);
+    if (startOfEuropeLondonDay(startYmd).getTime() !== next.getTime()) {
+      startYmd = addDaysYmd(startYmd, 1);
+    }
+  } else {
+    startYmd = europeLondonYmd(now);
+  }
+  return new Date(startOfEuropeLondonDay(addMonthsYmd(startYmd, months)).getTime() - 1);
+}
 
 type Queryable = PoolClient | typeof pool;
 
@@ -196,16 +231,18 @@ export const premiumService = {
   },
 
   /**
-   * Entitlement grant from 3 verified referrals → 1 month Premium.
-   * Never strips always-Premium accounts (BOA90, Bigbear25, HantsBear).
-   * Extends finite windows; leaves open-ended (null until) alone.
+   * Referral unlock: add N months of Premium (London day rule, see
+   * referralExtendedEnd). Never strips always-Premium accounts (BOA90,
+   * Bigbear25, HantsBear): open-ended Premium is left alone (skippedLifetime).
    */
   async grantReferralMonth(
     userId: string,
     months = 1,
     now = new Date(),
+    client?: PoolClient,
   ): Promise<{ premiumUntil: Date | null; skippedLifetime: boolean }> {
-    const row = await query(
+    const db: Queryable = client ?? pool;
+    const row = await db.query(
       `SELECT name, is_premium, premium_until, premium_starts_at
          FROM users WHERE id = $1`,
       [userId],
@@ -221,11 +258,9 @@ export const premiumService = {
       return { premiumUntil: null, skippedLifetime: true };
     }
 
-    const base =
-      currentUntil && currentUntil.getTime() > now.getTime() ? currentUntil : now;
-    const premiumUntil = new Date(base.getTime() + months * 30 * 24 * 60 * 60 * 1000);
+    const premiumUntil = referralExtendedEnd(currentUntil, months, now);
 
-    await query(
+    await db.query(
       `UPDATE users
        SET is_premium = TRUE,
            premium_tier = 'premium',

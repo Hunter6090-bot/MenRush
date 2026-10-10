@@ -1,5 +1,20 @@
 /**
- * Referral system — signup attribution, verified unlock, pending payouts.
+ * Referral system: signup attribution and the "invite 3 members, get 1 month
+ * Premium free" unlock. A paid upgrade is still recorded on the referral row
+ * (backend record only; commission is parked and never shown to members).
+ *
+ * Qualifying rule (one place: QUALIFIES_SQL below). A referral counts toward
+ * the unlock once ALL of these hold:
+ *   1. the referred member registered with the referrer's code (referrals row);
+ *   2. the referred member has confirmed their email (users.email_confirmed);
+ *   3. the referred member is not the referrer (self referral);
+ *   4. the referred email is not the referrer's email, compared lowercased and
+ *      ignoring a "+tag" in the local part (same email).
+ * ID verification is optional and is NOT required. There is no device signal
+ * on signup, so none is used (we do not invent one).
+ *
+ * Every 3 qualifying referrals grant 1 month Premium, repeating at 6, 9, ...
+ * Each milestone is granted once (referral_premium_grants unique per milestone).
  *
  * Does NOT: send money, call external payment rails, invent device fingerprinting, or gate signup.
  */
@@ -20,6 +35,20 @@ export const REFERRAL_PAYOUT_RATE = 0.2;
 
 const CODE_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 
+/** Email normalised for the same email check: trimmed, lowercased, "+tag" dropped. */
+const NORM_EMAIL_SQL = (col: string) =>
+  `lower(regexp_replace(btrim(${col}), '\\+[^@]*@', '@'))`;
+
+/**
+ * The qualifying rule as SQL. Expects aliases: r = referrals,
+ * ru = referred user, rr = referrer user.
+ */
+const QUALIFIES_SQL = `
+  COALESCE(ru.email_confirmed, FALSE) = TRUE
+  AND r.referred_user_id <> r.referrer_id
+  AND ${NORM_EMAIL_SQL('ru.email')} <> ${NORM_EMAIL_SQL('rr.email')}
+`;
+
 export type ReferralStatus = 'pending' | 'verified' | 'credited';
 export type PayoutStatus = 'none' | 'pending' | 'paid';
 
@@ -31,13 +60,12 @@ export type ReferralSummary = {
   unlock_every: number;
   progress_to_unlock: number;
   unlocks_earned: number;
-  pending_payout_total: number;
   referrals: Array<{
     referred_user_id: string;
     name: string | null;
+    /** true once this referral meets the qualifying rule. */
+    qualified: boolean;
     status: ReferralStatus;
-    payout_amount: number;
-    payout_status: PayoutStatus;
     created_at: string;
     verified_at: string | null;
     credited_at: string | null;
@@ -176,62 +204,110 @@ export const referralService = {
   },
 
   /**
-   * Called when a user becomes account-verified (is_verified + status verified).
-   * Marks their referral verified and may grant the referrer 1 month Premium.
+   * Re-check one referred member against the qualifying rule (call after
+   * signup and after email confirmation). Marks their referral qualified
+   * (status 'verified', kept for the existing CHECK constraint) and may grant
+   * the referrer their month.
    */
-  async onUserVerified(userId: string): Promise<{ unlocked: boolean } | null> {
+  async onReferralMaybeQualified(referredUserId: string): Promise<{ unlocked: boolean } | null> {
     const updated = await query(
-      `UPDATE referrals
+      `UPDATE referrals r
           SET status = 'verified',
-              verified_at = COALESCE(verified_at, NOW())
-        WHERE referred_user_id = $1
-          AND status = 'pending'
-        RETURNING id, referrer_id`,
-      [userId],
+              verified_at = COALESCE(r.verified_at, NOW())
+         FROM users ru, users rr
+        WHERE r.referred_user_id = $1
+          AND r.status = 'pending'
+          AND ru.id = r.referred_user_id
+          AND rr.id = r.referrer_id
+          AND ${QUALIFIES_SQL}
+        RETURNING r.referrer_id`,
+      [referredUserId],
     );
     const row = updated.rows[0];
-    if (!row) {
-      // Already verified/credited, or no referral — no-op.
-      return null;
-    }
-
+    if (!row) return null;
     const unlocked = await this.maybeGrantUnlock(row.referrer_id as string);
     return { unlocked };
   },
 
-  async countVerified(referrerId: string): Promise<number> {
-    const result = await query(
+  /**
+   * Kept for existing callers (Veriff, admin verify). ID verification is not
+   * part of the rule any more; this just re-checks the rule.
+   */
+  async onUserVerified(userId: string): Promise<{ unlocked: boolean } | null> {
+    return this.onReferralMaybeQualified(userId);
+  },
+
+  /** Mark every pending referral of this referrer that now meets the rule. */
+  async qualifyPendingForReferrer(referrerId: string): Promise<number> {
+    const updated = await query(
+      `UPDATE referrals r
+          SET status = 'verified',
+              verified_at = COALESCE(r.verified_at, NOW())
+         FROM users ru, users rr
+        WHERE r.referrer_id = $1
+          AND r.status = 'pending'
+          AND ru.id = r.referred_user_id
+          AND rr.id = r.referrer_id
+          AND ${QUALIFIES_SQL}
+        RETURNING r.id`,
+      [referrerId],
+    );
+    return updated.rowCount ?? 0;
+  },
+
+  /** Referrals that meet the qualifying rule right now. */
+  async countQualified(referrerId: string, db: Queryable = pool): Promise<number> {
+    const result = await db.query(
       `SELECT COUNT(*)::int AS count
-         FROM referrals
-        WHERE referrer_id = $1
-          AND status IN ('verified', 'credited')`,
+         FROM referrals r
+         JOIN users ru ON ru.id = r.referred_user_id
+         JOIN users rr ON rr.id = r.referrer_id
+        WHERE r.referrer_id = $1
+          AND r.status IN ('verified', 'credited')
+          AND ${QUALIFIES_SQL}`,
       [referrerId],
     );
     return result.rows[0]?.count ?? 0;
   },
 
+  /** @deprecated use countQualified. */
+  async countVerified(referrerId: string): Promise<number> {
+    return this.countQualified(referrerId);
+  },
+
   /**
-   * Every 3 verified referrals → grant 1 month Premium (idempotent per milestone).
+   * Every 3 qualifying referrals grant 1 month Premium. Each milestone is
+   * granted once, in one transaction with its Premium extension, and the
+   * referrer row is locked so concurrent calls cannot double grant.
    */
   async maybeGrantUnlock(referrerId: string): Promise<boolean> {
-    const verifiedCount = await this.countVerified(referrerId);
-    const milestone = Math.floor(verifiedCount / REFERRAL_UNLOCK_EVERY);
-    if (milestone < 1) return false;
-
-    // Grant any missing milestones up to current (usually just one).
+    await this.qualifyPendingForReferrer(referrerId);
+    const client = await pool.connect();
     let grantedAny = false;
-    for (let m = 1; m <= milestone; m++) {
-      const inserted = await query(
-        `INSERT INTO referral_premium_grants (user_id, milestone, verified_count_at_grant, months_granted)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (user_id, milestone) DO NOTHING
-         RETURNING id`,
-        [referrerId, m, verifiedCount, REFERRAL_UNLOCK_MONTHS],
-      );
-      if (inserted.rows[0]) {
-        await premiumService.grantReferralMonth(referrerId, REFERRAL_UNLOCK_MONTHS);
-        grantedAny = true;
+    try {
+      await client.query('BEGIN');
+      await client.query(`SELECT id FROM users WHERE id = $1 FOR UPDATE`, [referrerId]);
+      const qualified = await this.countQualified(referrerId, client);
+      const milestone = Math.floor(qualified / REFERRAL_UNLOCK_EVERY);
+      for (let m = 1; m <= milestone; m++) {
+        const inserted = await client.query(
+          `INSERT INTO referral_premium_grants (user_id, milestone, verified_count_at_grant, months_granted)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (user_id, milestone) DO NOTHING
+           RETURNING id`,
+          [referrerId, m, qualified, REFERRAL_UNLOCK_MONTHS],
+        );
+        if (inserted.rows[0]) {
+          await premiumService.grantReferralMonth(referrerId, REFERRAL_UNLOCK_MONTHS, new Date(), client);
+          grantedAny = true;
+        }
       }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
     }
     return grantedAny;
   },
@@ -279,28 +355,33 @@ export const referralService = {
   async getSummary(userId: string): Promise<ReferralSummary> {
     const code = await this.ensureReferralCode(userId);
 
+    // Self heal: grant any month already earned under the rule before reporting.
+    try {
+      await this.maybeGrantUnlock(userId);
+    } catch (err) {
+      console.error('[referral] summary unlock sync failed', err);
+    }
+
+    const qualifiedCount = await this.countQualified(userId);
     const counts = await query(
-      `SELECT
-         COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_count,
-         COUNT(*) FILTER (WHERE status IN ('verified', 'credited'))::int AS verified_count,
-         COUNT(*) FILTER (WHERE status = 'credited')::int AS credited_count,
-         COALESCE(SUM(payout_amount) FILTER (WHERE payout_status = 'pending'), 0)::float AS pending_payout_total
-       FROM referrals
-       WHERE referrer_id = $1`,
+      `SELECT COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE status = 'credited')::int AS credited_count
+         FROM referrals
+        WHERE referrer_id = $1`,
       [userId],
     );
     const c = counts.rows[0] || {};
-    const verifiedCount = c.verified_count ?? 0;
     const unlocks = await query(
       `SELECT COUNT(*)::int AS n FROM referral_premium_grants WHERE user_id = $1`,
       [userId],
     );
 
     const list = await query(
-      `SELECT r.referred_user_id, u.name, r.status, r.payout_amount, r.payout_status,
-              r.created_at, r.verified_at, r.credited_at
+      `SELECT r.referred_user_id, ru.name, r.status, r.created_at, r.verified_at, r.credited_at,
+              (r.status IN ('verified', 'credited') AND ${QUALIFIES_SQL}) AS qualified
          FROM referrals r
-         LEFT JOIN users u ON u.id = r.referred_user_id
+         JOIN users ru ON ru.id = r.referred_user_id
+         JOIN users rr ON rr.id = r.referrer_id
         WHERE r.referrer_id = $1
         ORDER BY r.created_at DESC
         LIMIT 100`,
@@ -309,19 +390,17 @@ export const referralService = {
 
     return {
       referral_code: code,
-      verified_count: verifiedCount,
-      pending_count: c.pending_count ?? 0,
+      verified_count: qualifiedCount,
+      pending_count: Math.max(0, (c.total ?? 0) - qualifiedCount),
       credited_count: c.credited_count ?? 0,
       unlock_every: REFERRAL_UNLOCK_EVERY,
-      progress_to_unlock: verifiedCount % REFERRAL_UNLOCK_EVERY,
+      progress_to_unlock: qualifiedCount % REFERRAL_UNLOCK_EVERY,
       unlocks_earned: unlocks.rows[0]?.n ?? 0,
-      pending_payout_total: Number(c.pending_payout_total ?? 0),
       referrals: list.rows.map((row) => ({
         referred_user_id: row.referred_user_id,
         name: row.name ?? null,
+        qualified: Boolean(row.qualified),
         status: row.status as ReferralStatus,
-        payout_amount: Number(row.payout_amount ?? 0),
-        payout_status: row.payout_status as PayoutStatus,
         created_at: new Date(row.created_at).toISOString(),
         verified_at: row.verified_at ? new Date(row.verified_at).toISOString() : null,
         credited_at: row.credited_at ? new Date(row.credited_at).toISOString() : null,

@@ -133,4 +133,65 @@ describe('referral code carried through sign up into register', () => {
     renderApp('/register?REF=pete1');
     expect(screen.getByTestId('register-referral-input')).toHaveValue('PETE1');
   });
+
+  it('/invite says codes are single-use with a free sign up link', () => {
+    renderApp('/invite');
+    expect(screen.getByText(/Codes are single-use\. No code\?/).textContent).toBe(
+      'Codes are single-use. No code? Sign up free.',
+    );
+  });
+
+  it('home Sign in keeps ref and utm on the way to /login', () => {
+    renderApp('/?ref=MRK7N2P9QX&utm_source=x');
+    fireEvent.click(screen.getByRole('link', { name: 'Sign in' }));
+    expect(screen.getByTestId('where').textContent).toBe('/login?ref=MRK7N2P9QX&utm_source=x');
+  });
+
+  it('an unknown or invalid ref does not block sign up: retried without it, soft note shown', async () => {
+    const invalid = Object.assign(new Error('Request failed with status code 400'), {
+      response: { status: 400, data: { error: 'This referral code is not valid.' } },
+    });
+    mocks.register.mockReset();
+    mocks.register
+      .mockRejectedValueOnce(invalid)
+      .mockResolvedValueOnce({ data: { token: 't', user: { id: 'u1', name: 'AlexLondon', email: 'alex@example.com' } } });
+    renderApp('/register?ref=NOPE123');
+    await waitFor(() => expect(mocks.adultAssuranceRequired).toHaveBeenCalled());
+    fillForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Create Account' }));
+    await waitFor(() => expect(mocks.register).toHaveBeenCalledTimes(2));
+    expect(mocks.register.mock.calls[0][0].referral_code).toBe('NOPE123');
+    expect(mocks.register.mock.calls[1][0]).not.toHaveProperty('referral_code');
+    expect(mocks.register.mock.calls[1][0].email).toBe('alex@example.com');
+    expect(mocks.setAuth).toHaveBeenCalled();
+    expect(screen.queryByTestId('register-error')).toBeNull();
+  });
+
+  it('shows the soft note (not an error) if the retry fails for another reason', async () => {
+    const invalid = { response: { status: 400, data: { error: 'This referral code is not valid.' } } };
+    const other = { response: { status: 400, data: { error: 'Email already exists' } } };
+    mocks.register.mockReset();
+    mocks.register.mockRejectedValueOnce(invalid).mockRejectedValueOnce(other);
+    renderApp('/register?ref=NOPE123');
+    await waitFor(() => expect(mocks.adultAssuranceRequired).toHaveBeenCalled());
+    fillForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Create Account' }));
+    expect(await screen.findByTestId('register-referral-ignored')).toHaveTextContent(
+      "That referral link didn't work, but you can still join free.",
+    );
+    expect(screen.getByTestId('register-error').textContent).not.toMatch(/referral/i);
+    expect(screen.getByTestId('register-referral-input')).toHaveValue('');
+  });
+
+  it('other register errors are not retried', async () => {
+    mocks.register.mockReset();
+    mocks.register.mockRejectedValueOnce({ response: { status: 400, data: { error: 'Email already exists' } } });
+    renderApp('/register?ref=MRK7N2P9QX');
+    await waitFor(() => expect(mocks.adultAssuranceRequired).toHaveBeenCalled());
+    fillForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Create Account' }));
+    await screen.findByTestId('register-error');
+    expect(mocks.register).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('register-referral-ignored')).toBeNull();
+  });
 });

@@ -68,8 +68,8 @@ export function ReferralCard() {
   }
 
   const unlockEvery = summary.unlock_every || 3;
-  const progress = summary.progress_to_unlock;
-  const verified = summary.verified_count;
+  const joined = summary.progress_to_unlock;
+  const earned = summary.unlocks_earned;
 
   return (
     <div
@@ -80,8 +80,8 @@ export function ReferralCard() {
         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
           Referrals
         </p>
-        <p className="mt-1 text-sm text-[var(--cream-soft)]">
-          Share your code. Friends unlock Premium for you after they verify.
+        <p className="mt-1 text-sm font-semibold text-[var(--cream)]" data-testid="referral-offer">
+          Invite {unlockEvery} members and get 1 month Premium free
         </p>
       </div>
 
@@ -102,35 +102,24 @@ export function ReferralCard() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 text-sm">
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--cream-muted)]">
-            Verified
-          </p>
-          <p className="mt-0.5 text-lg font-semibold text-[var(--cream)]" data-testid="referral-verified-count">
-            {verified}
-          </p>
-        </div>
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--cream-muted)]">
-            To next unlock
-          </p>
-          <p className="mt-0.5 text-lg font-semibold text-[var(--cream)]" data-testid="referral-progress">
-            {progress}/{unlockEvery}
-          </p>
-        </div>
-      </div>
-
-      <p className="text-xs text-[var(--cream-muted)]">
-        {unlockEvery} verified referrals unlock 1 month of Premium
-        {summary.unlocks_earned > 0 ? ` · ${summary.unlocks_earned} unlocked` : ''}.
-      </p>
-
-      {summary.pending_payout_total > 0 ? (
-        <p className="text-sm text-[#E0A14A]" data-testid="referral-pending-payout">
-          Pending payout: £{summary.pending_payout_total.toFixed(2)}
+      <div className="space-y-1.5 text-sm">
+        <p className="text-lg font-semibold text-[var(--cream)]" data-testid="referral-progress">
+          {joined} of {unlockEvery} joined
         </p>
-      ) : null}
+        <p className="text-xs text-[var(--cream-muted)]" data-testid="referral-rule">
+          A member counts once they sign up with your code and confirm their email. It repeats for
+          every {unlockEvery} members.
+        </p>
+        <p className="text-xs text-[var(--cream-muted)]" data-testid="referral-when">
+          Each month you earn is added after your current Premium end date. If you have no current end date,
+          it starts the day you earn it.
+        </p>
+        {earned > 0 ? (
+          <p className="text-xs text-[var(--cream-soft)]" data-testid="referral-earned">
+            {earned === 1 ? '1 month of Premium earned so far.' : `${earned} months of Premium earned so far.`}
+          </p>
+        ) : null}
+      </div>
 
       {summary.referrals.length > 0 ? (
         <div className="space-y-2" data-testid="referral-list">
@@ -145,8 +134,7 @@ export function ReferralCard() {
               >
                 <span className="truncate text-[var(--cream-soft)]">{r.name || 'Member'}</span>
                 <span className="shrink-0 text-[11px] uppercase tracking-wide text-[var(--cream-muted)]">
-                  {r.status}
-                  {r.payout_amount > 0 ? ` · £${r.payout_amount.toFixed(2)}` : ''}
+                  {r.qualified ? 'Joined' : 'Not counted yet'}
                 </span>
               </li>
             ))}

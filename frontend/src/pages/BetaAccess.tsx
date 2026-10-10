@@ -122,7 +122,7 @@ export const BetaAccess = () => {
           {error ? <p className={publicErrorClass}>{error}</p> : null}
 
           <p className="m-0 text-sm leading-[1.55] text-[var(--cream-muted)]">
-            Codes are single-use and tied to selected waitlist members. No code?{' '}
+            Codes are single-use. No code?{' '}
             <Link to={registerTo} className={publicLinkClass}>
               Sign up free
             </Link>

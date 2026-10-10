@@ -172,6 +172,10 @@ jobs:
         run: npm run test:hot-spot-live-sort-integration
       - name: Pride code holders can register (real PG)
         run: npm run test:pride-invite-register-integration
+      - name: Referrals grant 1 month Premium every 3 (real PG)
+        run: npm run test:referral-grant-integration
+      - name: Referral checks (real PG)
+        run: npm run test:referrals
       # --if-present: these scripts arrive with their own PRs (#333, #327,
       # #328, Community Ghost). The step is a no-op until the script exists.
       - name: Radius on the fuzzed pin (oracle)
