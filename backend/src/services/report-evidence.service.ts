@@ -96,12 +96,18 @@ const VIDEO_TYPES: Record<string, string> = {
   '.mp4': 'video/mp4',
   '.webm': 'video/webm',
 };
+const AUDIO_TYPES: Record<string, string> = {
+  '.ogg': 'audio/ogg',
+  '.mp3': 'audio/mpeg',
+  '.m4a': 'audio/mp4',
+};
 
-/** Image or video only — refuse anything that could run as script. */
+/** Image, video, or voice-note audio — refuse anything that could run as script. */
 export function evidenceServeType(mediaType: string | null | undefined, storageKey: string): string | null {
   const ext = path.extname(storageKey).toLowerCase();
   if (IMAGE_TYPES[ext]) return IMAGE_TYPES[ext];
   if (VIDEO_TYPES[ext]) return VIDEO_TYPES[ext];
+  if (AUDIO_TYPES[ext]) return AUDIO_TYPES[ext];
   // .html / .js / .svg / any other extension must not ride the team session.
   if (ext) return null;
   const kind = (mediaType ?? '').trim().toLowerCase();

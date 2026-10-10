@@ -417,12 +417,11 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     });
     expect(createSpy).toHaveBeenCalled();
     expect(revokeSpy).not.toHaveBeenCalled();
+    expect(popup.addEventListener).not.toHaveBeenCalled();
     expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 60_000);
-    const loadHandler = popup.addEventListener.mock.calls.find((call) => call[0] === 'load')?.[1] as
-      | (() => void)
-      | undefined;
-    expect(loadHandler).toEqual(expect.any(Function));
-    loadHandler?.();
+    const revokeLater = timeoutSpy.mock.calls.find((call) => call[1] === 60_000)?.[0] as (() => void) | undefined;
+    expect(revokeLater).toEqual(expect.any(Function));
+    revokeLater?.();
     expect(revokeSpy).toHaveBeenCalledWith('blob:evidence-1');
 
     openSpy.mockRestore();

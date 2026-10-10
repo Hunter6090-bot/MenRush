@@ -469,7 +469,6 @@ export const Settings = () => {
         return;
       }
       const revoke = () => URL.revokeObjectURL(url);
-      popup.addEventListener?.('load', revoke, { once: true });
       window.setTimeout(revoke, 60_000);
       popup.location.href = url;
     } catch {

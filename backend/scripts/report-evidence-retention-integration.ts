@@ -54,6 +54,9 @@ async function main() {
   assert.equal(evidenceServeType('image', 're-a.html'), null, 'html is not served as image');
   assert.equal(evidenceServeType('image', 're-a.js'), null, 'js is not served as image');
   assert.equal(evidenceServeType('video', 're-a.mp4'), 'video/mp4');
+  assert.equal(evidenceServeType('audio', 're-a.ogg'), 'audio/ogg');
+  assert.equal(evidenceServeType('audio', 're-a.mp3'), 'audio/mpeg');
+  assert.equal(evidenceServeType('audio', 're-a.m4a'), 'audio/mp4');
 
   // Local DBs that already applied 084 before from_reported existed.
   await query(
@@ -330,6 +333,36 @@ async function main() {
       headers: { Authorization: `Bearer ${moderator.token}` },
     });
     assert.equal(htmlRes.status, 404, 'non-image evidence is not served');
+    for (const voice of [
+      { ext: 'ogg', type: 'audio/ogg', bytes: 'ogg-voice-note' },
+      { ext: 'mp3', type: 'audio/mpeg', bytes: 'mp3-voice-note' },
+      { ext: 'm4a', type: 'audio/mp4', bytes: 'm4a-voice-note' },
+    ]) {
+      const key = `re-${randomUUID()}.${voice.ext}`;
+      const filePath = path.join(evidenceDir, key);
+      fs.writeFileSync(filePath, Buffer.from(voice.bytes));
+      tempFiles.push(filePath);
+      const voiceId = (
+        await query(
+          `INSERT INTO report_evidence (report_id, kind, body, media_type, media_ref, from_reported)
+           VALUES ($1, 'message', $2, 'audio', $3, TRUE)
+           RETURNING id`,
+          [created.id, `voice ${voice.ext}`, key],
+        )
+      ).rows[0].id as string;
+      const voiceRes = await fetch(`${base}/api/users/reports/${created.id}/evidence/${voiceId}/media`, {
+        headers: { Authorization: `Bearer ${moderator.token}` },
+      });
+      assert.equal(voiceRes.status, 200, `${voice.ext} voice note opens for the team`);
+      assert.equal(voiceRes.headers.get('content-type'), voice.type);
+      assert.ok(
+        (voiceRes.headers.get('content-disposition') ?? '').toLowerCase().includes('inline'),
+        `${voice.ext} is inline`,
+      );
+      assert.equal(voiceRes.headers.get('x-content-type-options'), 'nosniff');
+      assert.ok((voiceRes.headers.get('cache-control') ?? '').includes('no-store'), `${voice.ext} is no-store`);
+      assert.ok(Buffer.from(await voiceRes.arrayBuffer()).equals(Buffer.from(voice.bytes)));
+    }
     const mediaAsMember = await fetch(`${base}/api/users/reports/${created.id}/evidence/${evidenceId}/media`, {
       headers: { Authorization: `Bearer ${other.token}` },
     });
