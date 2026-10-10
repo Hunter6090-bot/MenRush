@@ -41,7 +41,7 @@ export ADMIN_TOKEN=…              # read-only X-Admin-Token
 export SOCIAL_API_URL=https://…   # MenRush API origin
 ```
 
-If those are unset or unreachable, the studio loads the local pack from `src/drafts/oct1-2026.json` (sourced from `docs/social-oct1-2026.md` / campaign `oct1-2026`).
+If those are unset or unreachable, the studio loads the local pack from `src/drafts/launch-pack.json` (sourced from `docs/social-launch-pack.md` / campaign `oct1-2026`).
 
 ## Connections
 

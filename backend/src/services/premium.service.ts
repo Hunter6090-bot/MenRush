@@ -2,6 +2,7 @@ import type { PoolClient } from 'pg';
 import pool, { query } from '../db';
 import { isInviteRequired } from './invite-code.service';
 import { isAlwaysPremiumName } from '../lib/always-premium';
+import { registerTravelPremiumIncluded } from '../lib/travel';
 
 type Queryable = PoolClient | typeof pool;
 
@@ -54,7 +55,8 @@ export type PremiumFeature =
   | 'video_intro'
   | 'incognito'
   | 'advanced_filters'
-  | 'premium_rooms';
+  | 'premium_rooms'
+  | 'travel';
 
 export const FREE_LIMITS = {
   likesPerDay: 20,
@@ -430,6 +432,11 @@ export const premiumService = {
     );
 
     await syncUserEntitlements(event.userId, 'free', false, null);
+    // Travel: a lapsed member's trip ends now (queries already stop showing it).
+    await query(
+      `UPDATE travel_trips SET ended_at = NOW() WHERE user_id = $1 AND ended_at IS NULL`,
+      [event.userId],
+    );
     return { ok: true, userId: event.userId };
   },
 
@@ -490,3 +497,6 @@ export const premiumService = {
     return { ok: true, ignored: true, eventType: event.eventType };
   },
 };
+
+// Travel queries ask this at build time (lib/travel has no service imports).
+registerTravelPremiumIncluded(() => premiumService.isBetaPremiumFree());
