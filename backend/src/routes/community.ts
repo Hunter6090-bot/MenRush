@@ -26,14 +26,14 @@ const createLimiter = rateLimit({
 });
 
 /**
- * GET /api/community/posts?lat=&lng=&radiusKm=
+ * GET /api/community/posts?radiusKm=
  * Nearby text-only Community feed. Free for all verified members.
  */
 router.get('/posts', async (req: AuthRequest, res: Response) => {
   try {
     // Query point is the viewer's stored location (kept fresh by the live
-    // location publisher). Client lat/lng is ignored so it cannot be moved
-    // around to triangulate someone.
+    // location publisher). Coordinates never travel in the URL; any lat/lng
+    // in the query string is stripped upstream and never read.
     const origin = await viewerStoredLocation(req.userId!);
     if (!origin) return res.json({ posts: [] });
     const radiusKm = req.query.radiusKm != null ? parseFloat(String(req.query.radiusKm)) : 10;
