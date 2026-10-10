@@ -102,6 +102,8 @@ describe('ReferralCard', () => {
 
   it('cap copy says 6 months and never 3 months (Pete, 10 Oct)', async () => {
     render(<ReferralCard />);
+    expect(await screen.findByTestId('referral-progress')).toHaveTextContent('1 of 3 towards your next month');
+    expect(screen.queryByTestId('referral-cap')).toBeNull();
     const card = await screen.findByTestId('referral-card');
     expect(card.textContent).toMatch(/Invite 3 members/);
     expect(card.textContent).not.toMatch(/up to 3 months|earned 3 months/);
@@ -118,6 +120,9 @@ describe('ReferralCard', () => {
     expect(screen.getByTestId('referral-cap')).toHaveTextContent(
       'You have earned 6 months in the last 12 months, the most for now.',
     );
+    // P2: no "x of 3 towards your next month" while the cap is reached.
+    expect(screen.queryByTestId('referral-progress')).toBeNull();
+    expect(screen.getByTestId('referral-card').textContent).not.toMatch(/towards your next month/);
   });
 });
 

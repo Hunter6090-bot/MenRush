@@ -120,9 +120,12 @@ export function ReferralCard() {
       </div>
 
       <div className="space-y-1.5">
-        <p className="text-lg font-semibold text-[var(--cream)]" data-testid="referral-progress">
-          {joined} of {unlockEvery} towards your next month
-        </p>
+        {/* At the cap the next month cannot be earned yet, so no progress line. */}
+        {summary.at_cap ? null : (
+          <p className="text-lg font-semibold text-[var(--cream)]" data-testid="referral-progress">
+            {joined} of {unlockEvery} towards your next month
+          </p>
+        )}
         <p className={BODY} data-testid="referral-rule">
           A member counts once they sign up with your code and confirm their email. You can earn up to{' '}
           {monthWord(cap)} in any 12 months.
