@@ -75,6 +75,10 @@ jobs:
         run: npm run test:veriff
       - name: Hot-spot counts stay rounded for Free (no exact number)
         run: npm run test:hot-spot-free-counts
+      - name: Travel (dates, coarse centre, one place at a time)
+        run: npm run test:travel
+      - name: Travel GETs keep 'private, no-store'
+        run: npm run test:travel-cache-headers
       - name: No coordinates in URLs (ignored and stripped, reads use the stored location)
         run: npm run test:no-query-coordinates
       - name: Welcome emails use the official mark (no typed wordmark)
@@ -202,6 +206,10 @@ jobs:
         run: npm run --if-present test:hide-location-integration
       - name: Community leaves out Ghost and hidden members
         run: npm run --if-present test:community-ghost-hidden
+      - name: Travel (Look around and Plan a trip)
+        run: npm run --if-present test:travel-integration
+      - name: Account deletion erases Travel trips, all-or-nothing (real PG)
+        run: npm run test:travel-account-deletion-integration
       - name: Reports survive when the reported member deletes their account (real PG)
         run: npm run test:reports-survive-deletion-integration
       # Keep last: its fake 2027 clock clears every live location and strips

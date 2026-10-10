@@ -2,6 +2,7 @@ import { query } from '../db';
 import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
 import { isPublicHotSpotVisibilitySql } from './hot-spots.service';
 import { notLocationHiddenFromViewerSql } from '../lib/locationHiddenSql';
+import { liveTripExistsSql } from '../lib/travel';
 import { PIN_PREFILTER_BUFFER_M, publicPinSql } from '../lib/mapPinSql';
 import { MAP_PIN_FUZZ_DEFAULT_M } from '../lib/mapPinFuzz';
 import { coarseMilesFromMeters, memberDistanceFields } from '../lib/memberDistance';
@@ -298,6 +299,9 @@ export const communityService = {
        AND ${authorVisibleToViewerSql('cp.user_id', '$4')}
        -- Hide my location from: a post in this radius would show the author is near.
        AND ${notLocationHiddenFromViewerSql('cp.user_id', '$4')}
+       -- Travel: an author on a live trip is not at home. Their posts here would
+       -- show a distance to their home pin, so leave them out (same as Nearby).
+       AND (cp.user_id = $4 OR NOT ${liveTripExistsSql('cp.user_id')})
        ORDER BY cp.created_at DESC
        LIMIT $5`,
       [params.lat, params.lng, radiusM, params.viewerId, limit],
