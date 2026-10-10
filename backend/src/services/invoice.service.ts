@@ -12,7 +12,9 @@ import { IMMEDIATE_START_CONSENT_TEXT } from '../types/validation';
 import {
   PREMIUM_PRICE_LIST,
   paidPremiumStartsAt,
+  cancellationPeriodEnd,
 } from '../lib/premiumPriceList';
+import { endAfterPaidStops } from './referral-earned-months';
 
 export interface PremiumInvoiceRow {
   id: string;
@@ -30,6 +32,11 @@ export interface PremiumInvoiceRow {
   confirmed_by_admin_id: string | null;
   cancelled_at: string | null;
   immediate_start_consent_at: string | null;
+  refund_amount_pence?: number | null;
+  refund_days_had?: number | null;
+  cancelled_by?: string | null;
+  refund_paid_at?: string | null;
+  refund_paid_by?: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -199,6 +206,16 @@ export function buildPremiumOnEmail(params: {
   ].join('\n');
 
   return { subject, html, text };
+}
+
+export class InvoiceActionError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+  ) {
+    super(code);
+    this.name = 'InvoiceActionError';
+  }
 }
 
 export const invoiceService = {
@@ -488,6 +505,145 @@ export const invoiceService = {
     } finally {
       client.release();
     }
+  },
+
+  /**
+   * Admin only. Cancel a PAID invoice within the 14-day cancellation period (Terms 7.6A)
+   * and work out the refund:
+   *   Premium not started yet -> full amount;
+   *   started -> amount paid less the days of Premium had, pro rata on the price
+   *   for the invoice's days (699p / 30 days on the price list).
+   * Puts back what the member had before (promo, gift, earned and referral months),
+   * never shortening it. The refund itself is paid by hand by bank transfer; record
+   * that with markRefundPaid.
+   */
+  async cancelPaidInvoiceWithRefund(
+    invoiceIdOrNumber: string,
+    adminActor: string,
+    now = new Date(),
+  ): Promise<{
+    invoice: PremiumInvoiceRow;
+    refundPence: number;
+    daysHad: number;
+    premiumUntil: Date | null;
+  }> {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const inv = await client.query(
+        `SELECT * FROM premium_invoices WHERE id::text = $1 OR invoice_number = $1 FOR UPDATE`,
+        [invoiceIdOrNumber],
+      );
+      const invoice: PremiumInvoiceRow | undefined = inv.rows[0];
+      if (!invoice) throw new InvoiceActionError(404, 'invoice_not_found');
+      if (invoice.status !== 'paid') throw new InvoiceActionError(409, 'invoice_not_paid');
+      if (now.getTime() > cancellationPeriodEnd(new Date(invoice.created_at)).getTime()) {
+        throw new InvoiceActionError(409, 'cancellation_period_over');
+      }
+
+      const subRes = await client.query(
+        `SELECT * FROM subscriptions
+          WHERE user_id = $1 AND processor = 'manual_invoice' AND processor_subscription_id = $2
+          ORDER BY created_at DESC LIMIT 1`,
+        [invoice.user_id, invoice.invoice_number],
+      );
+      const sub = subRes.rows[0];
+      if (!sub || sub.status !== 'active') {
+        // Superseded by a later invoice, or a lifetime account: sort by hand.
+        throw new InvoiceActionError(409, 'not_latest_paid_invoice');
+      }
+      const latest = await client.query(
+        `SELECT id FROM subscriptions WHERE user_id = $1 AND status = 'active' ORDER BY created_at DESC LIMIT 1`,
+        [invoice.user_id],
+      );
+      if (latest.rows[0]?.id !== sub.id) throw new InvoiceActionError(409, 'not_latest_paid_invoice');
+
+      const DAY = 24 * 60 * 60 * 1000;
+      const paidStart = new Date(sub.current_period_start);
+      const started = paidStart.getTime() <= now.getTime();
+      const daysHad = started
+        ? Math.min(invoice.plan_days, Math.max(1, Math.ceil((now.getTime() - paidStart.getTime()) / DAY)))
+        : 0;
+      const refundPence = Math.max(
+        0,
+        invoice.amount_pence - Math.round((invoice.amount_pence * daysHad) / invoice.plan_days),
+      );
+
+      // Put back what the member had before this invoice, never shortening it.
+      const meta = (sub.metadata ?? {}) as { prior_premium_until?: string | null; prior_premium_starts_at?: string | null };
+      const priorUntil = meta.prior_premium_until ? new Date(meta.prior_premium_until) : null;
+      const priorRunning = Boolean(priorUntil && priorUntil.getTime() > now.getTime());
+      // Earned months stacked on this paid period: the period is void, so they run
+      // on from the end of the earlier Premium, or from now.
+      const earnedUntil = await endAfterPaidStops(client, invoice.user_id, priorRunning ? priorUntil! : now, now);
+      const candidates = [earnedUntil, priorRunning ? priorUntil : null].filter(Boolean) as Date[];
+      const premiumUntil = candidates.length
+        ? new Date(Math.max(...candidates.map((d) => d.getTime())))
+        : null;
+
+      if (premiumUntil) {
+        const priorStarts = meta.prior_premium_starts_at ? new Date(meta.prior_premium_starts_at) : null;
+        await client.query(
+          `UPDATE users SET is_premium = TRUE, premium_until = $2,
+                  premium_starts_at = $3, updated_at = NOW()
+            WHERE id = $1`,
+          [invoice.user_id, premiumUntil, priorRunning && priorStarts ? priorStarts : now],
+        );
+      } else {
+        await client.query(
+          `UPDATE users SET is_premium = FALSE, premium_tier = 'free', premium_until = $2,
+                  premium_starts_at = NULL, updated_at = NOW()
+            WHERE id = $1`,
+          [invoice.user_id, now],
+        );
+      }
+
+      await client.query(
+        `UPDATE subscriptions SET status = 'canceled', canceled_at = $2, updated_at = NOW(),
+                metadata = metadata || $3::jsonb
+          WHERE id = $1`,
+        [sub.id, now, JSON.stringify({ cancelled_under: '7.6A', refund_pence: refundPence })],
+      );
+      const upd = await client.query(
+        `UPDATE premium_invoices
+            SET status = 'refunded', cancelled_at = $2, cancelled_by = $3,
+                refund_amount_pence = $4, refund_days_had = $5, updated_at = NOW()
+          WHERE id = $1
+          RETURNING *`,
+        [invoice.id, now, adminActor, refundPence, daysHad],
+      );
+      await client.query('COMMIT');
+
+      // Invoice id, actor, amounts and time only: no member data.
+      console.log(
+        `[invoice] cancel-refund invoice=${invoice.id} admin=${adminActor} paid_pence=${invoice.amount_pence} ` +
+          `refund_pence=${refundPence} days_had=${daysHad} at=${now.toISOString()}`,
+      );
+      return { invoice: upd.rows[0], refundPence, daysHad, premiumUntil };
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+  },
+
+  /** Admin only: record that ops paid the refund by bank transfer, by hand. */
+  async markRefundPaid(invoiceIdOrNumber: string, adminActor: string, now = new Date()): Promise<PremiumInvoiceRow> {
+    const res = await query(
+      `UPDATE premium_invoices
+          SET refund_paid_at = $2, refund_paid_by = $3, updated_at = NOW(),
+              metadata = metadata || '{"refund_method":"bank_transfer_by_hand"}'::jsonb
+        WHERE (id::text = $1 OR invoice_number = $1) AND status = 'refunded' AND refund_paid_at IS NULL
+        RETURNING *`,
+      [invoiceIdOrNumber, now, adminActor],
+    );
+    const row: PremiumInvoiceRow | undefined = res.rows[0];
+    if (!row) throw new InvoiceActionError(409, 'refund_not_due');
+    console.log(
+      `[invoice] refund-paid invoice=${row.id} admin=${adminActor} refund_pence=${row.refund_amount_pence} at=${now.toISOString()}`,
+    );
+    return row;
   },
 
   async cancelInvoice(invoiceIdOrNumber: string, reason?: string): Promise<PremiumInvoiceRow> {

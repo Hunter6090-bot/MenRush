@@ -95,7 +95,43 @@ export async function monthsEarnedLast12(db: Queryable, userId: string, now = ne
   return r.rows[0]?.n ?? 0;
 }
 
-async function activePaidPeriodEnd(db: Queryable, userId: string): Promise<Date | null> {
+/**
+ * Close manual invoice subscriptions whose paid period has ended (nothing else
+ * expires them). Earned months stacked on the period carry on from its end and
+ * are marked applied, so the member is no longer treated as "paid" and a month
+ * earned afterwards starts from now, not from the old end date.
+ */
+export async function closeEndedManualInvoiceSubscriptions(
+  db: Queryable,
+  userId: string,
+  now = new Date(),
+): Promise<number> {
+  const ended = await db.query(
+    `SELECT id, current_period_end FROM subscriptions
+      WHERE user_id = $1 AND status = 'active' AND processor = 'manual_invoice'
+        AND current_period_end IS NOT NULL AND current_period_end <= $2
+      ORDER BY current_period_end DESC`,
+    [userId, now],
+  );
+  if (ended.rows.length === 0) return 0;
+  const periodEnd = new Date(ended.rows[0].current_period_end);
+  const until = await endAfterPaidStops(db, userId, periodEnd, now);
+  if (until) {
+    await db.query(
+      `UPDATE users SET premium_until = GREATEST(COALESCE(premium_until, $2), $2), updated_at = NOW() WHERE id = $1`,
+      [userId, until],
+    );
+  }
+  await db.query(
+    `UPDATE subscriptions SET status = 'expired', updated_at = NOW()
+      WHERE id = ANY($1::uuid[])`,
+    [ended.rows.map((r: { id: string }) => r.id)],
+  );
+  return ended.rows.length;
+}
+
+export async function activePaidPeriodEnd(db: Queryable, userId: string): Promise<Date | null> {
+  await closeEndedManualInvoiceSubscriptions(db, userId);
   const r = await db.query(
     `SELECT current_period_end FROM subscriptions
       WHERE user_id = $1 AND status = 'active' AND current_period_end IS NOT NULL

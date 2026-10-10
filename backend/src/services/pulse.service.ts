@@ -1,3 +1,4 @@
+import { premiumTruthFromRow } from './premium.service';
 import { query } from '../db';
 
 // Pulse v1 — see specs/pulse-spec.md
@@ -26,10 +27,9 @@ async function isPremiumUser(userId: string): Promise<boolean> {
     [userId],
   );
   const row = result.rows[0];
-  if (!row?.is_premium) return false;
-  if (row.premium_starts_at && new Date(row.premium_starts_at) > new Date()) return false;
-  if (row.premium_until && new Date(row.premium_until) <= new Date()) return false;
-  return true;
+  if (!row) return false;
+  // Single Premium rule (delayed start, expiry). Pulse has never been free in beta.
+  return premiumTruthFromRow(row, { betaFree: false }).is_premium;
 }
 
 export const pulseService = {

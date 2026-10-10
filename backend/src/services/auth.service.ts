@@ -44,7 +44,7 @@ import {
 } from './promo.service';
 import { assertPrideInviteEmailMatch } from './prideInvite.service';
 import { ageFromDateOfBirth } from '../lib/age';
-import { premiumService } from './premium.service';
+import { premiumService, premiumTruthFromRow } from './premium.service';
 import { referralService } from './referral.service';
 import {
   adultAssuranceService,
@@ -485,7 +485,10 @@ export const authService = {
           [user!.id],
         );
         if (refreshed.rows[0]) {
-          Object.assign(user!, refreshed.rows[0]);
+          Object.assign(user!, refreshed.rows[0], {
+            // Single Premium rule, from this transaction's row (respects a delayed start).
+            ...premiumTruthFromRow(refreshed.rows[0], { betaFree: premiumService.isBetaPremiumFree() }),
+          });
         }
       }
 
@@ -645,7 +648,8 @@ export const authService = {
               COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified,
               u.verification_status,
               COALESCE(u.is_premium, FALSE) AS is_premium,
-              COALESCE(u.premium_tier, 'free') AS premium_tier
+              COALESCE(u.premium_tier, 'free') AS premium_tier,
+              u.premium_until, u.premium_starts_at
          FROM email_confirm_tokens t
          JOIN users u ON u.id = t.user_id
         WHERE t.token_hash = $1`,
@@ -708,8 +712,8 @@ export const authService = {
       photo_url: row.photo_url ?? undefined,
       is_verified: row.is_verified,
       verification_status: row.verification_status,
-      is_premium: row.is_premium ?? false,
-      premium_tier: row.premium_tier ?? 'free',
+      // Single Premium rule (respects the delayed 14-day start and expiry).
+      ...premiumTruthFromRow(row, { betaFree: premiumService.isBetaPremiumFree() }),
     };
 
     return {
@@ -757,6 +761,7 @@ export const authService = {
       `SELECT id, email, password_hash, name, photo_url, COALESCE(is_verified AND verification_provider = 'veriff', FALSE) AS is_verified, verification_status,
               COALESCE(is_premium, FALSE) AS is_premium,
               COALESCE(premium_tier, 'free') AS premium_tier,
+              premium_until, premium_starts_at,
               COALESCE(totp_enabled, FALSE) AS totp_enabled,
               COALESCE(email_confirmed, TRUE) AS email_confirmed
          FROM users WHERE LOWER(email) = $1`,
@@ -793,8 +798,8 @@ export const authService = {
       photo_url: user.photo_url ?? undefined,
       is_verified: user.is_verified,
       verification_status: user.verification_status,
-      is_premium: user.is_premium ?? false,
-      premium_tier: user.premium_tier ?? 'free',
+      // Single Premium rule (respects the delayed 14-day start and expiry).
+      ...premiumTruthFromRow(user, { betaFree: premiumService.isBetaPremiumFree() }),
     };
 
     if (user.totp_enabled) {
@@ -908,7 +913,8 @@ export const authService = {
     const result = await query(
       `SELECT id, email, name, photo_url, COALESCE(is_verified AND verification_provider = 'veriff', FALSE) AS is_verified, verification_status,
               COALESCE(is_premium, FALSE) AS is_premium,
-              COALESCE(premium_tier, 'free') AS premium_tier
+              COALESCE(premium_tier, 'free') AS premium_tier,
+              premium_until, premium_starts_at
          FROM users WHERE id = $1`,
       [userId],
     );
@@ -932,8 +938,8 @@ export const authService = {
         photo_url: user.photo_url ?? undefined,
         is_verified: user.is_verified,
         verification_status: user.verification_status,
-        is_premium: user.is_premium ?? false,
-        premium_tier: user.premium_tier ?? 'free',
+        // Single Premium rule (respects the delayed 14-day start and expiry).
+        ...premiumTruthFromRow(user, { betaFree: premiumService.isBetaPremiumFree() }),
       },
       token: signToken(user.id),
       ...(deviceTrustToken ? { deviceTrustToken } : {}),

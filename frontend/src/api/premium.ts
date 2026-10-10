@@ -70,8 +70,8 @@ export const premiumAPI = {
   // The server sets the amount and days from its price list; sending them is refused (400).
   createInvoice: (data: {
     plan_tier?: 'premium';
-    /** Required: the member ticked "Start my Premium as soon as my payment is confirmed". */
-    immediate_start_consent: true;
+    /** Optional (default false): true only if the member ticked "Start my Premium as soon as my payment is confirmed". */
+    immediate_start_consent: boolean;
   }) =>
     apiClient.post<{
       invoice: PremiumInvoice;
