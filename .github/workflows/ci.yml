@@ -119,6 +119,8 @@ jobs:
         run: npm ci
       - name: Edge secret middleware (no IP no secret, override list, forged copies deleted)
         run: npm run test:edge-proxy-secret
+      - name: No coordinates in /api GET URLs (fix only in the POST body)
+        run: npm run test:no-coords-in-urls
       # vercel build, then import and call the exact built middleware.js under
       # plain Node ESM from an isolated copy (catches ERR_MODULE_NOT_FOUND /
       # MIDDLEWARE_INVOCATION_FAILED that vitest and tsc cannot see). No
