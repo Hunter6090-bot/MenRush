@@ -2,7 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      # PR synchronize webhooks have been dropping on this draft; run CI on
+      # the tip so Quality Check can see GitHub Actions, not only Vercel.
+      - cursor/email-notifications-draft-ee59
   pull_request:
     branches:
       - main
