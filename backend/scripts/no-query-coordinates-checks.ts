@@ -1,7 +1,12 @@
 /**
  * Coordinates never travel in a URL (no DB required).
- * - hasQueryCoordinates spots lat / lng / lon / latitude / longitude (any case).
- * - Every /api GET with a coordinate in the query string gets 400 coordinates_in_url.
+ * - hasQueryCoordinates spots lat / lng / lon / latitude / longitude / ll /
+ *   coords (any case), also lat[], lat[0] and filter[lat].
+ * - Default: URL coordinates are stripped from req.query, req.url and
+ *   req.originalUrl and ignored (200, stored location). A counter records how
+ *   often (per route, count only).
+ * - STRICT_NO_URL_COORDINATES=true: 400 coordinates_in_url.
+ * - POST /users/location refused by the jump gate does not return success:true.
  * - The reads (nearby, profile/:id, hot-spots, events/nearby, rooms, map feed,
  *   community) work with no query coordinates and use the stored location.
  * - server.ts mounts the guard on /api before any route.
@@ -16,7 +21,9 @@ import * as db from '../src/db';
 import {
   hasQueryCoordinates,
   noQueryCoordinates,
+  resetUrlCoordinateCounts,
   stripCoordinatesFromUrl,
+  urlCoordinateCounts,
 } from '../src/middleware/noQueryCoordinates';
 
 const STORED = { lat: 53.4808, lng: -2.2426 };
@@ -37,6 +44,12 @@ async function main() {
   assert.strictEqual(hasQueryCoordinates({ lon: '1' }), true);
   assert.strictEqual(hasQueryCoordinates({ longitude: '1' }), true);
   assert.strictEqual(hasQueryCoordinates({ radius: '5', limit: '20', q: 'lat' }), false);
+  assert.strictEqual(hasQueryCoordinates({ lat: ['1', '2'] }), true, 'lat[] (array)');
+  assert.strictEqual(hasQueryCoordinates({ filter: { lat: '1' } }), true, 'filter[lat] (nested)');
+  assert.strictEqual(hasQueryCoordinates({ ll: '1,2' }), true, 'll');
+  assert.strictEqual(hasQueryCoordinates({ coords: '1,2' }), true, 'coords');
+  assert.strictEqual(hasQueryCoordinates({ 'lat[]': '1' }), true, 'raw lat[] key');
+  assert.strictEqual(hasQueryCoordinates({ limit: '1', all: '1', latest: '1' }), false, 'no false positives');
   assert.strictEqual(hasQueryCoordinates({}), false);
   assert.strictEqual(hasQueryCoordinates(undefined), false);
   console.log('✓ hasQueryCoordinates');
@@ -46,6 +59,11 @@ async function main() {
   assert.strictEqual(stripCoordinatesFromUrl('/x?%6Cat=1&q=lat'), '/x?q=lat');
   assert.strictEqual(stripCoordinatesFromUrl('/x?radius=5'), '/x?radius=5');
   assert.strictEqual(stripCoordinatesFromUrl('/x'), '/x');
+  assert.strictEqual(
+    stripCoordinatesFromUrl('/x?lat[]=1&lat%5B0%5D=2&filter[lat]=3&filter%5Blng%5D=4&ll=1,2&coords=1&COORDS[]=2&radius=5'),
+    '/x?radius=5',
+    'array, indexed, nested, ll and coords forms stripped',
+  );
   console.log('✓ stripCoordinatesFromUrl');
 
   // ── server.ts wiring ───────────────────────────────────────────────────────
@@ -171,20 +189,54 @@ async function main() {
       const probe = express();
       let sawQuery: Record<string, unknown> = {};
       let sawUrl = '';
+      let sawOriginal = '';
       probe.use('/api', noQueryCoordinates);
       probe.get('/api/probe', (req, res) => {
         sawQuery = { ...(req.query as Record<string, unknown>) };
         sawUrl = req.url;
+        sawOriginal = req.originalUrl;
         res.json({ ok: true });
       });
       const ps = probe.listen(0, '127.0.0.1');
       await new Promise((r) => ps.once('listening', r));
       const pb = `http://127.0.0.1:${(ps.address() as AddressInfo).port}`;
+      resetUrlCoordinateCounts();
       await fetch(`${pb}/api/probe?lat=1&lng=2&Latitude=3&lon=4&radius=5`);
-      ps.close();
       assert.deepStrictEqual(sawQuery, { radius: '5' }, 'req.query keeps only non-coordinate keys');
       assert.strictEqual(sawUrl, '/api/probe?radius=5', 'req.url has the coordinate keys removed');
-      console.log('✓ no route can read URL coordinates (req.query and req.url stripped)');
+      assert.strictEqual(sawOriginal, '/api/probe?radius=5', 'req.originalUrl has the coordinate keys removed');
+      await fetch(`${pb}/api/probe?lat[]=51.1&filter[lat]=51.2&filter[q]=x&ll=51.3,-0.1&coords=51.4&radius=5`);
+      assert.deepStrictEqual(sawQuery, { filter: { q: 'x' }, radius: '5' }, 'array, nested, ll, coords stripped from req.query');
+      assert.strictEqual(sawOriginal, '/api/probe?filter[q]=x&radius=5', 'and from req.originalUrl');
+      assert.ok(!/51\./.test(sawUrl + sawOriginal + JSON.stringify(sawQuery)), 'no value survives');
+      await fetch(`${pb}/api/probe?radius=5`);
+      ps.close();
+      // Counter: two requests carried URL coordinates, the clean one did not.
+      const counts = urlCoordinateCounts();
+      assert.deepStrictEqual(counts, { '/api/probe': 2 }, 'counter: count per route only');
+      assert.ok(!/51|lat|lng/.test(JSON.stringify(counts)), 'counter holds no values or keys');
+      console.log('✓ no route can read URL coordinates (req.query, req.url, req.originalUrl; all forms); counter counts only');
+    }
+
+    // POST /users/location: a fix the jump gate refuses is not reported as success.
+    {
+      const post = (body: unknown) =>
+        fetch(base + '/api/users/location', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer test', 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      u.updateLocation = async () => false;
+      let res = await post({ lat: 53.48, lng: -2.24 });
+      let body = (await res.json()) as { success?: boolean; code?: string };
+      assert.strictEqual(res.status, 200, 'refused fix: 200 (old builds treat it as a skipped update)');
+      assert.strictEqual(body.success, false, 'refused fix: success is not true');
+      assert.strictEqual(body.code, 'location_not_accepted');
+      u.updateLocation = async () => true;
+      res = await post({ lat: 53.48, lng: -2.24 });
+      body = (await res.json()) as { success?: boolean };
+      assert.strictEqual(body.success, true, 'accepted fix: success true');
+      console.log('✓ POST /users/location: refused fix returns success:false, accepted returns success:true');
     }
 
     // Strict (flag, for the later PR): 400 coordinates_in_url, service not called.

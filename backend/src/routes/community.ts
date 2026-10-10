@@ -33,7 +33,7 @@ router.get('/posts', async (req: AuthRequest, res: Response) => {
   try {
     // Query point is the viewer's stored location (kept fresh by the live
     // location publisher). Coordinates never travel in the URL; any lat/lng
-    // in the query string is rejected upstream.
+    // in the query string is stripped upstream and never read.
     const origin = await viewerStoredLocation(req.userId!);
     if (!origin) return res.json({ posts: [] });
     const radiusKm = req.query.radiusKm != null ? parseFloat(String(req.query.radiusKm)) : 10;

@@ -233,7 +233,7 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
     };
 
     // Origin is the stored location only (POST /api/users/location sets it,
-    // through the jump gate). Coordinates in the URL are rejected upstream.
+    // through the jump gate). Coordinates in the URL are stripped upstream and never read.
     const pageNum = page ? Math.max(1, Number.parseInt(String(page), 10) || 1) : 1;
     const limitNum = limit
       ? Math.min(Math.max(1, Number.parseInt(String(limit), 10) || 60), 200)
@@ -408,9 +408,14 @@ router.get('/likes/sent', verifiedMiddleware, async (req: AuthRequest, res: Resp
 router.post('/location', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const data = LocationSchema.parse(req.body);
-    await userService.updateLocation(req.userId!, data.lat, data.lng);
+    const accepted = await userService.updateLocation(req.userId!, data.lat, data.lng);
     // Privacy: location updates power Nearby distance only.
     // Do not fan out continuous live pins to matches — chat uses one-shot location messages.
+    if (!accepted) {
+      // Jump gate refused the fix: nothing stored, the last location stands.
+      // 200 so old app builds treat it like a skipped update, not an error.
+      return res.json({ success: false, code: 'location_not_accepted' });
+    }
     res.json({ success: true });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
