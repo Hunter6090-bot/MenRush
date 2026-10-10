@@ -77,6 +77,8 @@ jobs:
         run: npm run test:veriff
       - name: Hot-spot counts stay rounded for Free (no exact number)
         run: npm run test:hot-spot-free-counts
+      - name: No coordinates in URLs (ignored and stripped, reads use the stored location)
+        run: npm run test:no-query-coordinates
       - name: Welcome emails use the official mark (no typed wordmark)
         run: npm run test:welcome-email-brand
 
@@ -170,6 +172,8 @@ jobs:
         run: npm run db:migrate
       - name: Map feed leaves out blocked and Ghost members
         run: npm run test:map-feed-blocks
+      - name: Reads work with no coordinates in the URL (real PG)
+        run: npm run test:no-query-coordinates-integration
       - name: Map feed respects Hide my location from (before LIMIT)
         run: npm run test:map-feed-hide-location
       - name: Hot-spot list on real PG (Free rounded sort, Premium exact)
@@ -178,6 +182,8 @@ jobs:
         run: npm run test:pride-personal-expiry-integration
       - name: Pride code holders can register (real PG)
         run: npm run test:pride-invite-register-integration
+      - name: Ghost or hidden first event check-in creates no public spot (real PG)
+        run: npm run test:events-ghost-first-checkin
       # --if-present: these scripts arrive with their own PRs (#333, #327,
       # #328, Community Ghost). The step is a no-op until the script exists.
       - name: Radius on the fuzzed pin (oracle)
