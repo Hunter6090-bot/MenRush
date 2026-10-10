@@ -9,6 +9,8 @@
  *
  * `settled` is false while the banner is still deciding (async push check).
  * Map chrome stays hidden until then so pills never paint at y70 and jump.
+ * A short timeout (or an error) always releases them so a hung check cannot
+ * hide Radius / Filters / Pulse for good.
  */
 import { useLayoutEffect, useState, useSyncExternalStore, type RefObject } from 'react';
 
@@ -17,11 +19,34 @@ export type TopPromptSnapshot = {
   settled: boolean;
 };
 
+/** Give up waiting for the push-setup check and show map chrome. */
+export const TOP_PROMPT_SETTLE_TIMEOUT_MS = 800;
+
 let snapshot: TopPromptSnapshot = { bottom: null, settled: true };
 const listeners = new Set<() => void>();
+let settleTimer: ReturnType<typeof setTimeout> | null = null;
+/** True after the timeout released chrome; do not hide again for the same wait. */
+let pendingGaveUp = false;
 
 function emit(): void {
   for (const listener of listeners) listener();
+}
+
+function clearSettleTimer(): void {
+  if (settleTimer == null) return;
+  clearTimeout(settleTimer);
+  settleTimer = null;
+}
+
+function armSettleTimer(): void {
+  if (settleTimer != null) return;
+  settleTimer = setTimeout(() => {
+    settleTimer = null;
+    if (snapshot.settled) return;
+    pendingGaveUp = true;
+    snapshot = { bottom: null, settled: true };
+    emit();
+  }, TOP_PROMPT_SETTLE_TIMEOUT_MS);
 }
 
 export function getTopPromptSnapshot(): TopPromptSnapshot {
@@ -34,14 +59,18 @@ export function getTopPromptBottom(): number | null {
 
 /** Banner is still checking. Map pills must not paint at the un-offset y. */
 export function markTopPromptPending(): void {
+  if (pendingGaveUp) return;
   if (!snapshot.settled && snapshot.bottom == null) return;
   snapshot = { bottom: null, settled: false };
+  armSettleTimer();
   emit();
 }
 
 export function setTopPromptBottom(next: number | null): void {
   const value = next == null ? null : Math.round(next);
   if (snapshot.settled && value === snapshot.bottom) return;
+  pendingGaveUp = false;
+  clearSettleTimer();
   snapshot = { bottom: value, settled: true };
   emit();
 }
@@ -63,6 +92,8 @@ export function useTopPromptSnapshot(): TopPromptSnapshot {
 
 /** Test-only: restore the idle snapshot between cases. */
 export function resetTopPromptOverlayForTests(): void {
+  clearSettleTimer();
+  pendingGaveUp = false;
   snapshot = { bottom: null, settled: true };
   emit();
 }

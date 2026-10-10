@@ -58,7 +58,10 @@ export function PushAlertBanner() {
         if (getPushSupport() !== 'default') return decide(null);
         decide('alerts');
       } catch {
-        decide(null);
+        if (!cancelled) {
+          decide(null);
+          setTopPromptBottom(null);
+        }
       }
     })();
     return () => {
@@ -71,9 +74,6 @@ export function PushAlertBanner() {
   // On a new device also wait for the member's server prefs (or the short
   // timeout), so the banner never shows and then vanishes.
   const ready = install.ready && alerts.ready;
-  if (eligible === undefined || !ready) {
-    markTopPromptPending();
-  }
   const slotState = (kind: 'install' | 'alerts', hidden: boolean): PromptSlotState => {
     if (eligible === undefined || !ready) return kind === 'install' ? 'pending' : 'none';
     if (eligible !== kind) return 'none';

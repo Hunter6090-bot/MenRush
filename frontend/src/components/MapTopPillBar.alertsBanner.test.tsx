@@ -14,9 +14,11 @@ import { useAuthStore } from '../hooks/store';
 import { resetPromptPrefsSyncForTests } from '../lib/promptDismissal';
 import { resetPromptSlotsForTests } from '../lib/promptSlot';
 import {
+  MAP_OVERLAY_BOTTOM_CLEARANCE_CLASS,
   offsetBelowTopPrompt,
   resetTopPromptOverlayForTests,
   TOP_PROMPT_GAP_PX,
+  TOP_PROMPT_SETTLE_TIMEOUT_MS,
 } from '../lib/topPromptOverlay';
 import { useState } from 'react';
 
@@ -303,6 +305,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -489,18 +492,207 @@ function mockElementFromPoint() {
   });
 }
 
+const TW_SPACE: Record<string, number> = {
+  '0': 0,
+  '0.5': 2,
+  '1': 4,
+  '1.5': 6,
+  '2': 8,
+  '2.5': 10,
+  '3': 12,
+  '3.5': 14,
+  '4': 16,
+  '5': 20,
+  '6': 24,
+  '8': 32,
+  '11': 44,
+};
+
+function classSpace(cls: string, prefixes: string[]): number {
+  let n = 0;
+  for (const prefix of prefixes) {
+    const arb = cls.match(new RegExp(`${prefix}-\\[(\\d+)px\\]`));
+    if (arb) {
+      n += Number(arb[1]);
+      continue;
+    }
+    const tw = cls.match(new RegExp(`${prefix}-(\\d+(?:\\.\\d+)?)`));
+    if (tw && TW_SPACE[tw[1]] != null) n += TW_SPACE[tw[1]];
+  }
+  return n;
+}
+
+function overlayPadBottom(el: Element): number {
+  const cls = (el as HTMLElement).className || '';
+  if (cls.includes(MAP_OVERLAY_BOTTOM_CLEARANCE_CLASS) || cls.includes('pb-[calc(var(--fab-size')) {
+    return 64 + 16 + 28;
+  }
+  return classSpace(cls, ['pb', 'py']);
+}
+
+function estimateHeight(el: Element): number {
+  const cls = (el as HTMLElement).className || '';
+  if (el.getAttribute('data-testid') === 'map-widen-radius' || cls.includes('min-h-[44px]')) {
+    return Math.max(44, classSpace(cls, ['pt', 'pb', 'py']) + 20);
+  }
+  const padY = classSpace(cls, ['pt', 'pb', 'py']);
+  const kids = [...el.children];
+  if (kids.length === 0) {
+    const text = el.textContent?.trim();
+    const textPx = Number((cls.match(/text-\[(\d+)px\]/) || [])[1] || 0);
+    return padY + (text ? (textPx || 20) + 4 : 0);
+  }
+  let h = padY;
+  for (const child of kids) {
+    h += estimateHeight(child) + classSpace((child as HTMLElement).className || '', ['mt', 'mb', 'my']);
+  }
+  return h;
+}
+
+function parseStylePx(style: CSSStyleDeclaration, key: 'width' | 'height' | 'top' | 'left' | 'bottom' | 'right'): number | null {
+  const raw = style[key];
+  if (!raw) return null;
+  const n = Number.parseFloat(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function viewportBox(): DOMRect {
+  return boxFor(window.innerWidth, 0, window.innerHeight);
+}
+
+/**
+ * Boxes come from the rendered tree: inline chrome geometry plus the overlay
+ * column's real classes (inset-0, bottom clearance, pinned shrink-0). Not a
+ * parallel invented y table.
+ */
+function installRenderedLayoutRects() {
+  const memo = new WeakMap<Element, DOMRect>();
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    return measureRendered(this, memo);
+  });
+}
+
+function measureRendered(el: Element, memo: WeakMap<Element, DOMRect>): DOMRect {
+  const cached = memo.get(el);
+  if (cached) return cached;
+
+  const html = el as HTMLElement;
+  const id = html.getAttribute('data-testid');
+  const cls = html.className || '';
+  const style = html.style;
+  const pos = style.position;
+
+  const parent = html.parentElement;
+  const containing =
+    pos === 'fixed'
+      ? viewportBox()
+      : parent
+        ? measureRendered(parent, memo)
+        : viewportBox();
+
+  const width = parseStylePx(style, 'width');
+  const height = parseStylePx(style, 'height');
+  const top = parseStylePx(style, 'top');
+  const left = parseStylePx(style, 'left');
+  const bottom = parseStylePx(style, 'bottom');
+  const right = parseStylePx(style, 'right');
+
+  if (width != null || height != null || top != null || bottom != null || left != null || right != null) {
+    const w = width ?? containing.width;
+    let t = top;
+    let h = height;
+    let l = left ?? containing.left;
+    if (t == null && bottom != null && h != null) t = containing.top + containing.height - bottom - h;
+    if (t == null && bottom != null) {
+      t = containing.top + (top ?? 0);
+      h = containing.height - bottom - (top ?? 0);
+    }
+    if (left == null && right != null) l = containing.left + containing.width - right - w;
+    if (t == null) t = containing.top;
+    if (h == null) h = 0;
+    const box = boxFor(w, t, h, l);
+    memo.set(el, box);
+    return box;
+  }
+
+  if (id === 'map-overlay-column' || (cls.includes('absolute') && cls.includes('inset-0'))) {
+    memo.set(el, containing);
+    return containing;
+  }
+
+  if (id === 'map-overlay-pinned') {
+    const col = html.parentElement ?? html;
+    const colBox = measureRendered(col, memo);
+    const pad = overlayPadBottom(col);
+    const h = estimateHeight(html);
+    const box = boxFor(colBox.width, colBox.bottom - pad - h, h, colBox.left);
+    memo.set(el, box);
+    return box;
+  }
+
+  if (id === 'map-overlay-top') {
+    const col = html.parentElement ?? html;
+    const colBox = measureRendered(col, memo);
+    const pinned = col.querySelector('[data-testid="map-overlay-pinned"]');
+    const pinnedBottom = pinned ? measureRendered(pinned, memo).top : colBox.bottom - overlayPadBottom(col);
+    const box = boxFor(colBox.width, colBox.top, Math.max(0, pinnedBottom - colBox.top), colBox.left);
+    memo.set(el, box);
+    return box;
+  }
+
+  if (id === 'map-empty-radius' || id === 'map-widen-radius' || id === 'map-privacy-note') {
+    const pinned = html.closest('[data-testid="map-overlay-pinned"]');
+    if (pinned) {
+      const p = measureRendered(pinned, memo);
+      if (id === 'map-privacy-note') {
+        const box = boxFor(Math.max(0, p.width - 48), p.top, estimateHeight(html), p.left + 24);
+        memo.set(el, box);
+        return box;
+      }
+      if (id === 'map-empty-radius') {
+        const note = pinned.querySelector('[data-testid="map-privacy-note"]');
+        const noteH = note ? measureRendered(note, memo).height : 0;
+        const box = boxFor(Math.max(0, p.width - 32), p.top + noteH, Math.max(44, p.height - noteH), p.left + 16);
+        memo.set(el, box);
+        return box;
+      }
+      const box = boxFor(Math.max(0, p.width - 32), p.bottom - 8 - 44, 44, p.left + 16);
+      memo.set(el, box);
+      return box;
+    }
+  }
+
+  const box = realRect.call(html);
+  memo.set(el, box);
+  return box;
+}
+
 function InteractiveQuietMap({
   theme,
   pulse = true,
+  width = 360,
+  height = 780,
 }: {
   theme: 'light' | 'dark';
   pulse?: boolean;
+  width?: number;
+  height?: number;
 }) {
   const [radius, setRadius] = useState(5);
+  const header = 56;
+  const tabHeight = 71;
   return (
-    <div data-theme={theme} data-testid="theme-root">
+    <div
+      data-theme={theme}
+      data-testid="theme-root"
+      style={{ position: 'relative', width, height, overflow: 'hidden' }}
+    >
       <PushAlertBanner />
-      <div className="relative" data-testid="discover-map-panel">
+      <div
+        className="relative overflow-hidden"
+        data-testid="discover-map-panel"
+        style={{ position: 'absolute', top: header, left: 0, width, height: height - header - tabHeight }}
+      >
         <MapTopPillBar
           radiusKm={radius}
           onRadiusClick={vi.fn()}
@@ -514,19 +706,50 @@ function InteractiveQuietMap({
             />
           }
         />
+        <button
+          type="button"
+          data-testid="discover-chat-dock-toggle"
+          style={{ position: 'absolute', bottom: 48, left: 12, width: 44, height: 44 }}
+        >
+          Chat
+        </button>
+        <button
+          type="button"
+          data-testid="mapbox-locate"
+          style={{ position: 'absolute', bottom: 56, right: 12, width: 40, height: 40 }}
+        >
+          Locate
+        </button>
       </div>
-      <BottomChrome />
+      <nav
+        data-testid="mobile-tab-bar"
+        style={{ position: 'absolute', left: 0, bottom: 0, width, height: tabHeight }}
+      />
+      <button
+        type="button"
+        data-testid="pulse-fab"
+        style={{ position: 'fixed', right: 16, bottom: 104, width: 64, height: 64 }}
+      >
+        Pulse
+      </button>
     </div>
   );
+}
+
+function phoneFrame(width: number): { width: number; height: number } {
+  return { width, height: width === 360 ? 780 : 844 };
 }
 
 describe.each(['dark', 'light'] as const)('pinned Widen is tappable (%s)', (theme) => {
   describe.each(phones)('$width px', (p) => {
     it('keeps Widen fully above the tab bar, FAB and dock, and a tap changes the radius', async () => {
-      mockLayout({ ...p, pulse: true, banner: true, mapHeight: DEFAULT_MAP_HEIGHT });
+      const frame = phoneFrame(p.width);
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: frame.width });
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: frame.height });
+      installRenderedLayoutRects();
       mockElementFromPoint();
       const user = userEvent.setup();
-      render(<InteractiveQuietMap theme={theme} />);
+      render(<InteractiveQuietMap theme={theme} width={frame.width} height={frame.height} />);
       expect(await screen.findByTestId('push-alert-banner')).toBeInTheDocument();
 
       const widen = screen.getByTestId('map-widen-radius');
@@ -534,6 +757,7 @@ describe.each(['dark', 'light'] as const)('pinned Widen is tappable (%s)', (them
       const tab = screen.getByTestId('mobile-tab-bar').getBoundingClientRect();
       const fab = screen.getByTestId('pulse-fab').getBoundingClientRect();
       const dock = screen.getByTestId('discover-chat-dock-toggle').getBoundingClientRect();
+      expect(box.height).toBeGreaterThanOrEqual(44);
       expect(box.bottom).toBeLessThanOrEqual(tab.top);
       expect(box.bottom).toBeLessThanOrEqual(fab.top);
       expect(box.bottom).toBeLessThanOrEqual(dock.top);
@@ -583,6 +807,44 @@ describe('landscape overlay clearance (844x390)', () => {
 });
 
 describe('pills wait for the banner to settle', () => {
+  it('shows pills after the short timeout when the push check never returns', async () => {
+    const p = phones[0];
+    mockLayout({ ...p, pulse: true, banner: true, mapHeight: DEFAULT_MAP_HEIGHT });
+    vi.useFakeTimers();
+    const { isPushConfigured } = await import('../lib/push');
+    vi.mocked(isPushConfigured).mockReturnValue(new Promise<boolean>(() => {}));
+    renderNearby({ pulse: true });
+    expect(screen.getByTestId('map-overlay-column').getAttribute('data-overlay-ready')).toBe('false');
+    expect(screen.getByTestId('map-overlay-top').style.visibility).toBe('hidden');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(TOP_PROMPT_SETTLE_TIMEOUT_MS);
+    });
+    expect(screen.getByTestId('map-overlay-column').getAttribute('data-overlay-ready')).toBe('true');
+    expect(screen.getByTestId('map-overlay-top').style.visibility).toBe('visible');
+    expect(screen.getByTestId('map-pill-radius')).toBeVisible();
+    expect(screen.getByTestId('map-pill-filters')).toBeVisible();
+    expect(screen.getByTestId('pulse-nudge')).toBeVisible();
+  });
+
+  it('shows pills right away when the push check fails', async () => {
+    const p = phones[0];
+    mockLayout({ ...p, pulse: true, banner: true, mapHeight: DEFAULT_MAP_HEIGHT });
+    const { isPushConfigured } = await import('../lib/push');
+    vi.mocked(isPushConfigured).mockRejectedValue(new Error('push setup failed'));
+    renderNearby({ pulse: true });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('push-alert-banner')).toBeNull();
+    expect(screen.getByTestId('map-overlay-column').getAttribute('data-overlay-ready')).toBe('true');
+    expect(screen.getByTestId('map-overlay-top').style.visibility).toBe('visible');
+    expect(screen.getByTestId('map-pill-radius')).toBeVisible();
+    expect(screen.getByTestId('map-pill-filters')).toBeVisible();
+    expect(screen.getByTestId('pulse-nudge')).toBeVisible();
+  });
+
   it('does not paint pills at the un-offset y while the banner is still deciding', async () => {
     const p = phones[0];
     mockLayout({ ...p, pulse: true, banner: true, mapHeight: DEFAULT_MAP_HEIGHT });
