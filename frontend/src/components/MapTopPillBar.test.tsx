@@ -3,6 +3,11 @@ import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MapTopPillBar } from './MapTopPillBar';
+import { MapEmptyRadius } from './MapEmptyRadius';
+import { loadThemeTokens, tokenContrast, type Theme } from '../test/themeContrast';
+
+const css = readFileSync(resolve(__dirname, '../styles/menrush-tokens.css'), 'utf8');
+loadThemeTokens(css);
 
 describe('MapTopPillBar stacking', () => {
   it('keeps pills on one nowrap row and stacks layer chrome below (360–430 safe)', () => {
@@ -58,5 +63,16 @@ describe('Discover quiet-map Pulse card', () => {
     expect(card).toContain('data-testid="pulse-nudge-actions"');
     expect(card).not.toMatch(/justify-between/);
     expect(card).not.toMatch(/flex-1/);
+  });
+});
+
+describe.each(['dark', 'light'] as Theme[])('Widen uses the theme accent (%s)', (theme) => {
+  it('fills with --copper and keeps 4.5:1 text on the accent', () => {
+    render(<MapEmptyRadius nextRadiusKm={10} onWiden={vi.fn()} />);
+    const widen = screen.getByTestId('map-widen-radius');
+    expect(widen.className).toMatch(/bg-\[var\(--copper\)\]/);
+    expect(widen.className).toMatch(/text-\[var\(--nn-on-copper\)\]/);
+    expect(widen.className).not.toMatch(/#C4832A|#1A0E03/);
+    expect(tokenContrast('var(--nn-on-copper)', 'var(--copper)', theme)).toBeGreaterThanOrEqual(4.5);
   });
 });

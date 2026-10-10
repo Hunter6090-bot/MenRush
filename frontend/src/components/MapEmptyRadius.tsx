@@ -23,7 +23,7 @@ export function MapEmptyRadius({
           type="button"
           data-testid="map-widen-radius"
           onClick={onWiden}
-          className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-[#C4832A] px-5 py-2.5 text-[15px] font-extrabold text-[#1A0E03] transition-opacity hover:opacity-90"
+          className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-[var(--copper)] px-5 py-2.5 text-[15px] font-extrabold text-[var(--nn-on-copper)] transition-opacity hover:opacity-90"
         >
           Widen to {label}
         </button>
