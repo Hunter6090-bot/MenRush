@@ -98,7 +98,7 @@ export const Terms = () => {
           >
             <header>
               <span className="inline-block rounded-full border border-[#c8861c]/30 bg-[#c8861c]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#c8861c]">
-                Last updated: 06 May 2026
+                Last updated: 10 October 2026
               </span>
               <h1 className="mr-page-heading mt-4">
                 Terms and Conditions
@@ -401,11 +401,9 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>7.3</Strong> After any free trial period, paid Premium subscriptions
-                  will be billed on a recurring basis through our designated payment processor once
-                  live payment processing is activated (under merchant review). In the interim,
-                  in-app card checkout is not live, and subscriptions or upgrades are processed via
-                  manual invoice by contacting support@menrush.com.
+                  <Strong>7.3</Strong> Card payments are not available yet. Before card payment opens,
+                  we will update these Terms and tell you who processes card payments. For now, you
+                  can buy Premium by manual invoice from the Premium page.
                 </>,
               )}
               {para(

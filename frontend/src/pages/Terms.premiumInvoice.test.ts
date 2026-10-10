@@ -13,7 +13,21 @@ const S74 =
 const S76A =
   '7.6A</Strong> You can cancel your Premium purchase within 14 days of buying it. When you buy, we ask whether you want Premium to start as soon as your payment is confirmed. If you choose that and then cancel within the 14 days, we refund what you paid less an amount for the days of Premium you have had. To cancel, email support@menrush.com with your invoice reference. We refund you within 14 days of you telling us, to the account you paid from.';
 
+const S73 =
+  '7.3</Strong> Card payments are not available yet. Before card payment opens, we will update these Terms and tell you who processes card payments. For now, you can buy Premium by manual invoice from the Premium page.';
+
 describe('Terms section 7 manual invoice wording', () => {
+  it('7.3 is Legal wording exactly, with no recurring billing or merchant review', () => {
+    expect(terms).toContain(S73);
+    const i73 = terms.indexOf('<Strong>7.3</Strong>');
+    const s73 = terms.slice(i73, terms.indexOf('</>', i73));
+    expect(s73).not.toMatch(/recurring|merchant review|processor/i);
+  });
+
+  it('Terms Last updated is 10 October 2026', () => {
+    expect(terms).toMatch(/Last updated: 10 October 2026/);
+  });
+
   it('7.4 is Legal wording exactly, with no recurring billing sentence', () => {
     expect(terms).toContain(S74);
     expect(terms).not.toMatch(/recurring billing/i);
