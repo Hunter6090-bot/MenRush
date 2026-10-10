@@ -8,8 +8,6 @@ on:
       - main
       # Land rate-limit / age-gate fixes into open #97 without retargeting to main.
       - cursor/adult-assurance-enforcement-fac3
-      # Stacked #400 targets #398's branch; drop this line before #400 merges.
-      - totp-key-rotation
   workflow_dispatch:
 
 permissions:

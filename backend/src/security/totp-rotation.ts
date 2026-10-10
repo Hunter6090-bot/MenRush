@@ -24,8 +24,10 @@ import {
   decryptTotpSecretDetailed,
   decryptTotpSecretWith,
   encryptTotpSecretWith,
+  totpKeyProblem,
   totpVersionOf,
   totpWriteFormat,
+  type TotpKeyProblem,
   type TotpVersion,
 } from './totp-crypto';
 
@@ -46,7 +48,14 @@ export interface RotationReport {
   /** The format this run writes or verifies (TOTP_WRITE_FORMAT, default v2). */
   format: TotpVersion;
   /** Why a run refused before reading any row (counts are then zero). */
-  refused?: 'reverse-needs-write-format-v1' | 'apply-needs-write-format-v2' | 'no-current-key';
+  refused?: 'reverse-needs-write-format-v1' | 'apply-needs-write-format-v2' | 'no-current-key' | 'current-key-not-strong';
+  /**
+   * The boot rule (totpKeyProblem) applied to the CURRENT key, the one production starts with.
+   * During a rotation the current key is the new key. null = passes. Checked on dry run, verify
+   * and apply, so no gate can pass with a key production would refuse. Not checked on reverse:
+   * that is a code rollback to code without the rule (revert #400 first, see the runbook).
+   */
+  keyProblem: TotpKeyProblem | null;
   ok: boolean;
 }
 
@@ -82,7 +91,7 @@ function emptyReport(mode: RotationMode): RotationReport {
   return {
     mode, total: 0, enabled: 0, pending: 0, v1: 0, v2: 0,
     readableWithCurrent: 0, readableOnlyWithPrevious: 0, unreadable: 0,
-    written: 0, committed: false, format: totpWriteFormat(), ok: false,
+    written: 0, committed: false, format: totpWriteFormat(), keyProblem: null, ok: false,
   };
 }
 
@@ -113,6 +122,13 @@ export async function runTotpRotation(
   }
   if ((mode === 'apply' || mode === 'reverse' || mode === 'verify') && !current) {
     report.refused = 'no-current-key';
+    report.keyProblem = 'unset';
+    return report;
+  }
+  if (mode !== 'reverse') report.keyProblem = totpKeyProblem(current);
+  // Never write rows under a key production would refuse to start with.
+  if (mode === 'apply' && report.keyProblem) {
+    report.refused = 'current-key-not-strong';
     return report;
   }
   const client = await pool.connect();
@@ -160,12 +176,12 @@ export async function runTotpRotation(
 
     if (mode === 'verify') {
       const wrongFormat = format === 'v2' ? report.v1 : report.v2;
-      report.ok = report.unreadable === 0 && wrongFormat === 0;
+      report.ok = report.unreadable === 0 && wrongFormat === 0 && !report.keyProblem;
       await client.query('ROLLBACK');
       return report;
     }
     if (!writes) {
-      report.ok = report.unreadable === 0;
+      report.ok = report.unreadable === 0 && !report.keyProblem;
       await client.query('ROLLBACK');
       return report;
     }
@@ -201,6 +217,10 @@ export function formatRotationReport(r: RotationReport): string {
       ? `readable_with_new_key_alone=${r.readableWithCurrent} unreadable=${r.unreadable}`
       : `readable current=${r.readableWithCurrent} previous_only=${r.readableOnlyWithPrevious} unreadable=${r.unreadable}`,
   ];
+  if (r.mode !== 'reverse') {
+    // Same rule as the production boot check. Names the problem only, never the key.
+    lines.push(r.keyProblem ? `key_check=FAIL problem=${r.keyProblem}` : 'key_check=OK');
+  }
   if (r.refused) lines.push(`refused=${r.refused}`);
   if (r.mode === 'apply' || r.mode === 'reverse') {
     lines.push(`written=${r.written} committed=${r.committed}`);

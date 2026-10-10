@@ -20,7 +20,8 @@ if (!process.env.DATABASE_URL) {
   process.exit(0);
 }
 
-const OLD_KEY = `test-old-${crypto.randomBytes(16).toString('hex')}`; // passphrase style, like today
+// Both keys meet the production boot rule (#400): the key gate below covers keys that do not.
+const OLD_KEY = crypto.randomBytes(32).toString('hex'); // hex: v1 and v2 both derive it with SHA-256
 const NEW_KEY = crypto.randomBytes(32).toString('base64'); // what Al will generate
 process.env.JWT_SECRET = process.env.JWT_SECRET || `test-jwt-${crypto.randomBytes(16).toString('hex')}`;
 
@@ -238,6 +239,49 @@ async function main() {
     }
     useKeys(NEW_KEY);
 
+    // ── Key gate: dry run, verify and apply apply the boot rule to the CURRENT key ──
+    // A key production would refuse to start with can never give result=OK, and apply never
+    // writes under it. Rows stay readable (through the previous key) so only the rule fails.
+    const weakKeys: Array<[string, string]> = [
+      [`weak-passphrase-${crypto.randomBytes(8).toString('hex')}`, 'not-encoded'],
+      [crypto.randomBytes(16).toString('base64'), 'too-short'],
+      ['ab'.repeat(32), 'low-variety'],
+    ];
+    for (const [weak, problem] of weakKeys) {
+      useKeys(weak, NEW_KEY);
+      const d = await runTotpRotation(pool, 'dry-run', fleetScope);
+      assert.deepEqual([d.unreadable, d.keyProblem, d.ok], [0, problem, false], `dry run fails on a ${problem} key`);
+      const before = await Promise.all(fleetIds.map(stored));
+      const a = await runTotpRotation(pool, 'apply', fleetScope);
+      assert.deepEqual([a.refused, a.keyProblem, a.written, a.committed, a.ok], ['current-key-not-strong', problem, 0, false, false]);
+      assert.deepEqual(await Promise.all(fleetIds.map(stored)), before, `apply wrote nothing under a ${problem} key`);
+    }
+    // Verify: every row readable with the weak key alone and in the write format, still FAIL.
+    const weakOnly = randomUUID();
+    all.push(weakOnly);
+    const weakKey = weakKeys[0][0];
+    secrets[weakOnly] = authenticator.generateSecret();
+    await query(
+      `INSERT INTO users (id, email, password_hash, name, age, is_verified, verification_status, photo_url,
+                          totp_secret_encrypted, totp_enabled)
+       VALUES ($1, $2, 'x', 'TOTP weak', 30, TRUE, 'verified', '/uploads/test.jpg', $3, TRUE)`,
+      [weakOnly, `totp-${weakOnly.slice(0, 8)}@test.menrush.local`, crypt.encryptTotpSecretWith(secrets[weakOnly], weakKey, 'v2')],
+    );
+    useKeys(weakKey);
+    const wv = await runTotpRotation(pool, 'verify', { onlyUserIds: [weakOnly] });
+    assert.deepEqual([wv.v2, wv.readableWithCurrent, wv.unreadable, wv.keyProblem, wv.ok], [1, 1, 0, 'not-encoded', false],
+      'verify fails on the key rule even when every row reads');
+    const weakCli = spawnSync('npx', ['ts-node', '--transpile-only', path.join(__dirname, 'rotate-totp-key.ts'), '--verify'], {
+      env: { ...process.env, NODE_ENV: 'test', TOTP_ENCRYPTION_KEY: weakKey, TOTP_ENCRYPTION_KEY_PREVIOUS: '', TOTP_WRITE_FORMAT: '' },
+      encoding: 'utf8',
+    });
+    const weakOut = `${weakCli.stdout}${weakCli.stderr}`;
+    assert.match(weakOut, /key_check=FAIL problem=not-encoded/);
+    assert.match(weakOut, /result=NOT OK/);
+    assert.equal(weakCli.status, 1, 'CLI --verify exits 1 on a key production would refuse');
+    assert.ok(!weakOut.includes(weakKey), 'the key is never printed');
+    useKeys(NEW_KEY);
+
     // The CLI prints counts only: no ids, no ciphertext, no key.
     // (Rows written with the new key are unreadable under the old key alone, so exit 1 here.)
     const cli = spawnSync('npx', ['ts-node', '--transpile-only', path.join(__dirname, 'rotate-totp-key.ts')], {
@@ -246,6 +290,7 @@ async function main() {
     });
     const out = `${cli.stdout}${cli.stderr}`;
     assert.match(out, /mode=dry-run/);
+    assert.match(out, /key_check=OK/, 'a strong current key passes the rule');
     assert.match(out, /result=NOT OK/);
     assert.equal(cli.status, 1, 'non-zero exit when any row is unreadable');
     for (const id of all) assert.ok(!out.includes(id), 'no user id in output');

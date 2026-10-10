@@ -21,6 +21,13 @@ refused unless `NODE_ENV=production`. On production, `--apply` and `--reverse` r
 running app cannot write v2 again behind it, and `--apply` refuses while `TOTP_WRITE_FORMAT=v1`
 is set. Unknown flags are refused. Exit code is 0 only on `result=OK`.
 
+Key check (#400): dry run, verify and apply also test the **current** key (`TOTP_ENCRYPTION_KEY`,
+which is the new key during a rotation) with the same rule production checks at startup: at
+least 32 random bytes written as hex or base64, not low-variety. A key that fails prints
+`key_check=FAIL problem=<unset|not-encoded|too-short|low-variety>` (never the key), the run ends
+`result=NOT OK` with exit code 1, and apply refuses before writing anything. Reverse is not
+checked, because it prepares a code rollback to code without that rule.
+
 ```
 railway link                     # once: project MenRush, environment production
 cd backend && npm ci

@@ -148,16 +148,67 @@ const tests: [string, () => void][] = [
   }],
 ];
 
-let failures = 0;
-for (const [name, run] of tests) {
-  try {
-    run();
-    console.log(`PASS ${name}`);
-  } catch (err) {
-    failures += 1;
-    console.error(`FAIL ${name}`);
-    console.error(err);
+/**
+ * The rotate gate uses the same rule as boot. No DB here: apply must refuse before connecting,
+ * and the report lines must show the rule result. (Real-PG coverage: test:totp-rotation-integration.)
+ */
+const asyncTests: [string, () => Promise<void>][] = [
+  ['rotate gate: apply refuses a key production would refuse, before touching the DB', async () => {
+    const { runTotpRotation, formatRotationReport } = await import('../src/security/totp-rotation');
+    const noDb = { connect: async () => { throw new Error('must not connect'); } } as unknown as import('pg').Pool;
+    const saved = { k: process.env.TOTP_ENCRYPTION_KEY, p: process.env.TOTP_ENCRYPTION_KEY_PREVIOUS, f: process.env.TOTP_WRITE_FORMAT };
+    try {
+      delete process.env.TOTP_ENCRYPTION_KEY_PREVIOUS;
+      delete process.env.TOTP_WRITE_FORMAT;
+      for (const [key, problem] of [
+        ['a passphrase that is long enough to pass a length check', 'not-encoded'],
+        [crypto.randomBytes(24).toString('base64'), 'too-short'],
+        ['ab'.repeat(32), 'low-variety'],
+      ] as const) {
+        process.env.TOTP_ENCRYPTION_KEY = key;
+        const r = await runTotpRotation(noDb, 'apply');
+        assert.deepEqual([r.refused, r.keyProblem, r.written, r.ok], ['current-key-not-strong', problem, 0, false]);
+        const out = formatRotationReport(r);
+        assert.match(out, new RegExp(`key_check=FAIL problem=${problem}`));
+        assert.match(out, /result=NOT OK/);
+        assert.ok(!out.includes(key), 'the key is never printed');
+      }
+      process.env.TOTP_ENCRYPTION_KEY = crypto.randomBytes(32).toString('hex');
+      const verifyNoKey = await runTotpRotation(noDb, 'verify').catch((e) => e as Error);
+      assert.ok(verifyNoKey instanceof Error && /must not connect/.test(verifyNoKey.message), 'a strong key goes on to read rows');
+      const rev = formatRotationReport({ ...(await runTotpRotation(noDb, 'reverse')), mode: 'reverse' });
+      assert.ok(!/key_check/.test(rev), 'reverse (code rollback) does not apply the rule');
+    } finally {
+      for (const [k, v] of [['TOTP_ENCRYPTION_KEY', saved.k], ['TOTP_ENCRYPTION_KEY_PREVIOUS', saved.p], ['TOTP_WRITE_FORMAT', saved.f]] as const) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  }],
+];
+
+(async () => {
+  let failures = 0;
+  for (const [name, run] of tests) {
+    try {
+      run();
+      console.log(`PASS ${name}`);
+    } catch (err) {
+      failures += 1;
+      console.error(`FAIL ${name}`);
+      console.error(err);
+    }
   }
-}
-if (failures) process.exit(1);
-console.log(`TOTP startup checks passed (${tests.length}).`);
+  for (const [name, run] of asyncTests) {
+    try {
+      await run();
+      console.log(`PASS ${name}`);
+    } catch (err) {
+      failures += 1;
+      console.error(`FAIL ${name}`);
+      console.error(err);
+    }
+  }
+  if (failures) process.exit(1);
+  console.log(`TOTP startup checks passed (${tests.length + asyncTests.length}).`);
+})();
