@@ -60,11 +60,17 @@ async function main() {
   );
   const premium = async () =>
     (await query(`SELECT is_premium, premium_until FROM users WHERE id = $1`, [id])).rows[0];
+  const sent: Record<string, string> = {};
   const send = async (p: Record<string, string>, signed = true) => {
     const sp = new URLSearchParams(p);
     if (signed) sp.set('signature', sign(p));
-    return get(port, sp.toString());
+    const qs = sp.toString();
+    if (signed) sent[`${p.event}:${p.transactionID || p.nextChargeOn || p.expiresOn || ''}`] = qs;
+    return get(port, qs);
   };
+  const replay = (key: string) => get(port, sent[key]);
+  const subRows = async () =>
+    Number((await query(`SELECT COUNT(*)::int AS n FROM subscriptions WHERE user_id = $1`, [id])).rows[0].n);
 
   try {
     const base = { shopID: '123', saleID: '777', custom1: id, type: 'subscription' };
@@ -86,6 +92,11 @@ async function main() {
     );
     ok('signed initial grants Premium to nextChargeOn, subscription recorded as verotel');
 
+    // Replay: the exact same signed URL again does nothing.
+    assert.strictEqual(await replay('initial:2026-11-10'), 200, 'replay still answers OK');
+    assert.strictEqual(await subRows(), 1, 'replayed initial adds no subscription row');
+    ok('replayed initial is ignored (one subscription row)');
+
     assert.strictEqual(await send({ ...base, event: 'expiry' }, false), 400);
     assert.strictEqual((await premium()).is_premium, true);
     ok('unsigned expiry does not remove Premium');
@@ -99,14 +110,45 @@ async function main() {
     assert.strictEqual(new Date(row.premium_until).toISOString(), '2026-12-10T23:59:59.000Z');
     ok('signed rebill extends Premium');
 
+    // Replayed rebill does not move the period or record another payment.
+    await query(`UPDATE users SET premium_until = '2026-12-01T00:00:00Z' WHERE id = $1`, [id]);
+    assert.strictEqual(await replay('rebill:2026-12-10'), 200);
+    assert.strictEqual(new Date((await premium()).premium_until).toISOString(), '2026-12-01T00:00:00.000Z');
+    await query(`UPDATE users SET premium_until = '2026-12-10T23:59:59Z' WHERE id = $1`, [id]);
+    // A real next rebill (new transaction) still applies.
+    assert.strictEqual(
+      await send({ ...base, event: 'rebill', transactionID: 't-2', amount: '6.99', currency: 'GBP', nextChargeOn: '2027-01-10' }),
+      200,
+    );
+    assert.strictEqual(new Date((await premium()).premium_until).toISOString(), '2027-01-10T23:59:59.000Z');
+    ok('replayed rebill is ignored; a new rebill transaction applies');
+
     assert.strictEqual(await send({ ...base, event: 'expiry' }), 200);
     assert.strictEqual((await premium()).is_premium, false);
     ok('signed expiry ends Premium');
+
+    // A captured initial or rebill URL replayed after expiry cannot re-grant Premium.
+    assert.strictEqual(await replay('initial:2026-11-10'), 200);
+    assert.strictEqual(await replay('rebill:t-2'), 200);
+    assert.strictEqual((await premium()).is_premium, false);
+    assert.strictEqual(await subRows(), 1);
+    ok('replayed initial / rebill after expiry do not bring Premium back');
+
+    // Two copies of the same postback at once: applied exactly once.
+    const sale2 = { shopID: '123', saleID: '778', custom1: id, type: 'subscription', event: 'initial', priceAmount: '6.99', priceCurrency: 'GBP', nextChargeOn: '2026-11-11' };
+    const qs2 = new URLSearchParams({ ...sale2, signature: sign(sale2) }).toString();
+    const codes = await Promise.all([get(port, qs2), get(port, qs2), get(port, qs2)]);
+    assert.deepStrictEqual(codes, [200, 200, 200]);
+    const claimed = await query(`SELECT COUNT(*)::int AS n FROM billing_postback_events WHERE sale_id = '778'`);
+    assert.strictEqual(claimed.rows[0].n, 1);
+    assert.strictEqual(await subRows(), 2, 'one new subscription for sale 778');
+    ok('concurrent duplicate postbacks apply once');
 
     console.log(`premium-webhook-integration: ${passed} passed`);
   } finally {
     await query(`DELETE FROM referral_commissions WHERE referee_id = $1`, [id]).catch(() => undefined);
     await query(`DELETE FROM subscriptions WHERE user_id = $1`, [id]).catch(() => undefined);
+    await query(`DELETE FROM billing_postback_events WHERE sale_id IN ('777', '778')`).catch(() => undefined);
     await query(`DELETE FROM users WHERE id = $1`, [id]).catch(() => undefined);
     await new Promise<void>((r) => server.close(() => r()));
     await pool.end();

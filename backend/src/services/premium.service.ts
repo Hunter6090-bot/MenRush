@@ -485,6 +485,31 @@ export const premiumService = {
       raw: { ...raw },
     };
 
+    // Replay guard: a captured postback URL replayed later does nothing.
+    // One row per (processor, saleID, event, transaction); claimed before any
+    // write and released again if applying fails, so Verotel's retry still works.
+    const saleId = String(raw.saleID || '').trim();
+    if (!saleId) return { ok: false, reason: 'missing_sale_id' };
+    const transactionKey = String(raw.transactionID || raw.nextChargeOn || raw.expiresOn || '').trim();
+    const claim = await query(
+      `INSERT INTO billing_postback_events (processor, sale_id, event, transaction_key)
+       VALUES ('verotel', $1, $2, $3)
+       ON CONFLICT ON CONSTRAINT billing_postback_events_once DO NOTHING
+       RETURNING id`,
+      [saleId, eventName || 'unknown', transactionKey],
+    );
+    if (claim.rows.length === 0) {
+      return { ok: true, duplicate: true, eventType: event.eventType };
+    }
+    try {
+      return await this.applyVerotelEventOnce(eventName, event);
+    } catch (err) {
+      await query(`DELETE FROM billing_postback_events WHERE id = $1`, [claim.rows[0].id]).catch(() => undefined);
+      throw err;
+    }
+  },
+
+  async applyVerotelEventOnce(eventName: string, event: PaymentWebhookEvent) {
     switch (eventName) {
       case 'initial':
         return this.activateFromWebhook(event);
