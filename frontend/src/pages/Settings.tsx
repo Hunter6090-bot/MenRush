@@ -408,16 +408,31 @@ export const Settings = () => {
     return () => window.clearTimeout(id);
   }, [unblockNotice]);
 
-  // Deep links from the top-right Menu: #account, #two-factor, #notifications, #blocked, #delete-account.
+  // Deep links from the top-right Menu: #account, #two-factor, #notifications,
+  // #email-notifications, #blocked, #delete-account. Email ticks load after
+  // GET /email-notifications, so retry that hash until the sub-heading exists.
   useEffect(() => {
     const id = location.hash.replace(/^#/, '');
     if (!SETTINGS_ANCHORS.includes(id)) return;
     if (id === 'blocked' && blockedLoading) return;
-    const el = document.getElementById(id);
-    if (!el) return;
-    window.requestAnimationFrame(() => {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+    let cancelled = false;
+    const tryScroll = (attempt = 0) => {
+      if (cancelled) return;
+      const el = document.getElementById(id);
+      if (el) {
+        window.requestAnimationFrame(() => {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        return;
+      }
+      if (id === 'email-notifications' && attempt < 25) {
+        window.setTimeout(() => tryScroll(attempt + 1), 40);
+      }
+    };
+    tryScroll();
+    return () => {
+      cancelled = true;
+    };
   }, [location.hash, blockedLoading, blocked.length]);
 
   useEffect(() => {

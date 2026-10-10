@@ -198,7 +198,12 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     expect(screen.getByTestId('email-notify-messages')).toBeInTheDocument();
     expect(screen.getByTestId('email-notify-matches')).toBeInTheDocument();
     expect(screen.queryByTestId('email-notify-jerks')).not.toBeInTheDocument();
-    expect(screen.queryByText('Email notifications')).not.toBeInTheDocument();
+    const emailHeading = screen.getByTestId('email-notifications-heading');
+    expect(emailHeading).toHaveAttribute('id', 'email-notifications');
+    expect(screen.getByText('Email notifications')).toBeInTheDocument();
+    expect(screen.getByText('Email me about')).toBeInTheDocument();
+    expect(screen.getByText('Email notifications').className).toMatch(/text-\[15px\]/);
+    expect(screen.getByText('Email notifications').className).not.toMatch(/text-\[11px\]/);
 
     // Section 7: Safety (Safety centre + Blocked people)
     expect(screen.getByText('Safety centre')).toBeInTheDocument();
@@ -224,6 +229,21 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     expect(screen.getByTestId('settings-sign-out')).toBeInTheDocument();
   });
 
+  it('scrolls #email-notifications to the Email notifications sub-heading', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    render(
+      <MemoryRouter initialEntries={['/settings#email-notifications']}>
+        <Settings />
+      </MemoryRouter>,
+    );
+    const heading = await screen.findByTestId('email-notifications-heading');
+    expect(heading).toHaveAttribute('id', 'email-notifications');
+    expect(heading).toHaveTextContent('Email notifications');
+    expect(heading).toHaveTextContent('Email me about');
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+  });
+
   it('hides email ticks when GET /email-notifications reports enabled false', async () => {
     mocks.getEmailNotify.mockResolvedValue({
       data: { enabled: false, jerkEnabled: false, messages: true, matches: true, jerks: true },
@@ -235,6 +255,8 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     );
     await waitFor(() => expect(mocks.getEmailNotify).toHaveBeenCalled());
     expect(screen.queryByTestId('email-notification-settings')).not.toBeInTheDocument();
+    expect(screen.queryByText('Email notifications')).not.toBeInTheDocument();
+    expect(screen.queryByText('Email me about')).not.toBeInTheDocument();
     expect(screen.getByTestId('notification-settings')).toBeInTheDocument();
   });
 

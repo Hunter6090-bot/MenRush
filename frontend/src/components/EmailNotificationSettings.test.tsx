@@ -38,6 +38,12 @@ describe('Email notifications settings', () => {
     expect(screen.getByTestId('email-notify-matches')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByTestId('email-notify-jerks')).not.toBeInTheDocument();
     expect(screen.queryByTestId('email-notify-jerks-soon')).not.toBeInTheDocument();
+    const heading = screen.getByTestId('email-notifications-heading');
+    expect(heading).toHaveAttribute('id', 'email-notifications');
+    expect(heading).toHaveTextContent('Email notifications');
+    expect(heading).toHaveTextContent('Email me about');
+    expect(screen.getByText('Email notifications').className).toMatch(/text-\[15px\]/);
+    expect(screen.getByText('Email me about').className).toMatch(/text-\[15px\]/);
     fireEvent.click(messages);
     await waitFor(() => expect(api.update).toHaveBeenCalledWith({ messages: false }));
   });
@@ -69,9 +75,11 @@ describe.each<Theme>(['light', 'dark'])('Email notifications contrast (%s)', (th
     render(<EmailNotificationSettings />);
     const root = await screen.findByTestId('email-notification-settings');
     expect(hardcodedColourClasses(root)).toEqual([]);
-    for (const label of ['Messages', 'Matches']) {
+    for (const label of ['Email notifications', 'Email me about', 'Messages', 'Matches']) {
       expect(contrast(screen.getByText(label), theme), `${label} (${theme})`).toBeGreaterThanOrEqual(4.5);
     }
+    expect(screen.getByText('Email notifications').className).toMatch(/text-\[15px\]/);
+    expect(screen.getByText('Email me about').className).toMatch(/text-\[15px\]/);
     for (const id of ['messages', 'matches']) {
       const row = screen.getByTestId(`email-notify-${id}`);
       expect(row.className).toMatch(/min-h-\[44px\]/);

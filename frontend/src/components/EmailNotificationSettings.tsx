@@ -78,20 +78,31 @@ export function EmailNotificationSettings({ flush = false }: EmailNotificationSe
     }
   };
 
+  if (enabled === null) {
+    return <div id="email-notifications" className="scroll-mt-24" data-testid="email-notifications-anchor" />;
+  }
+
   if (!enabled) return null;
 
   const rows = ROWS.filter((row) => !row.needsJerkFlag || jerkEnabled);
 
   return (
     <div
-      id="email-notifications"
       className={
         flush
-          ? 'scroll-mt-24 divide-y divide-[var(--border-default)]/60'
-          : 'scroll-mt-24 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] divide-y divide-[var(--border-default)]/60 shadow-card'
+          ? 'divide-y divide-[var(--border-default)]/60'
+          : 'overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] divide-y divide-[var(--border-default)]/60 shadow-card'
       }
       data-testid="email-notification-settings"
     >
+      <div
+        id="email-notifications"
+        data-testid="email-notifications-heading"
+        className="scroll-mt-24 px-4 pb-2 pt-4 sm:px-5"
+      >
+        <p className="text-[15px] font-bold text-[var(--cream)]">Email notifications</p>
+        <p className="mt-0.5 text-[15px] text-[var(--cream-muted)]">Email me about</p>
+      </div>
       {rows.map((row) => {
         const on = prefs[row.key];
         return (
