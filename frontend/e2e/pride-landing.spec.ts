@@ -30,7 +30,7 @@ test.describe('Pride promotion landing', () => {
     await expect(page.getByTestId('pride-closed-note')).toHaveText('New Pride codes are no longer available.');
     const redeem = page.getByTestId('pride-redeem-note');
     await expect(redeem).toHaveText(
-      'Already have a Pride code from your email? Enter it at register with that same email.',
+      'Already have a Pride code from your email? Enter it at register with that same email by 31 October.',
     );
     await expect(redeem).toHaveCSS('font-size', '15px');
     const cta = page.getByTestId('pride-register-cta');

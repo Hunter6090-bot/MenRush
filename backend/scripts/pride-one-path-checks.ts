@@ -8,7 +8,9 @@ import assert from 'assert';
 import { readFileSync } from 'fs';
 import path from 'path';
 import {
+  isPrideCodeRedeemOpen,
   isPrideInviteIssueOpen,
+  PRIDE_CODES_REDEEM_ENDS,
   isSharedPrideCode,
   PRIDE_INVITE_ISSUE_CLOSES,
   PRIDE_INVITE_ISSUE_OPENS,
@@ -70,7 +72,7 @@ test('Pride invite email is claim path only (no Path 2 / public code promotion)'
   assert.doesNotMatch(mail.text, /Path 1|Path 2/);
   assert.doesNotMatch(mail.html, /Path 1|Path 2/);
   for (const body of [mail.text, mail.html]) {
-    assert.doesNotMatch(body, /before launch|from launch|at launch|launch slips|1(&nbsp;| )October|30-day/i);
+    assert.doesNotMatch(body, /before launch|from launch|at launch|launch slips|\b1(&nbsp;| )October|30-day/i);
   }
 });
 
@@ -85,6 +87,8 @@ test('Pride invite email: normal case, register step said once, no resend from /
     assert.doesNotMatch(body, /unlocks two things|access, plus/i);
     assert.doesNotMatch(body, /from the day you join/i);
     assert.match(body, /start the day you register/i);
+    assert.match(body, /Please register by 31 October, when all Pride codes end\./);
+    assert.match(body, /All the best,(<br>|\n)MenRush/);
     assert.ok(!body.includes('\u2014') && !body.includes('\u2013'), 'no em/en dashes');
   }
 });
@@ -99,15 +103,22 @@ test('/pride page says the offer closed, no claim form, holders told to enter co
   assert.doesNotMatch(src, /pride-invite-form|pride-claim-cta|Email my Pride code|Claim Pride code/);
   assert.doesNotMatch(src, /pride26_waitlist|\/signup/);
   assert.match(src, /New Pride codes are no longer available\./);
-  assert.match(src, /Already have a Pride code from your email\? Enter it at register with that same email\./);
+  assert.match(src, /Already have a Pride code from your email\? Enter it at register with that same email by 31 October\./);
+  assert.doesNotMatch(src, /no expiry/i);
   assert.match(src, /to="\/register"/);
 });
 
-test('existing Pride invite codes stay redeemable after the issue window (no expiry on mint)', () => {
+test('Pride invites stay redeemable after the issue window, then end with all Pride codes at 31 Oct', () => {
   const svc = readFileSync(path.resolve(__dirname, '../src/services/prideInvite.service.ts'), 'utf8');
+  // Rows keep expires_at NULL; the end date is the one shared cutoff in code.
   assert.match(svc, /VALUES \(\$1, \$2, 1, NULL, \$3, \$4, \$5\)/, 'Pride invites minted with expires_at NULL');
+  assert.match(svc, /if \(!isPrideCodeRedeemOpen\(\)\) \{\s*throw new Error\('pride_codes_ended'\)/, 'claim form refuses after the cutoff');
   const invite = readFileSync(path.resolve(__dirname, '../src/services/invite-code.service.ts'), 'utf8');
   assert.doesNotMatch(invite, /PRIDE_INVITE_ISSUE_CLOSES|isPrideInviteIssueOpen/, 'register redeem not gated on the issue window');
+  assert.match(invite, /pride_months_free != null && !isPrideCodeRedeemOpen\(\)/, 'Pride invites gated on the 31 Oct cutoff');
+  assert.strictEqual(PRIDE_CODES_REDEEM_ENDS.toISOString(), '2026-11-01T00:00:00.000Z');
+  assert.strictEqual(isPrideCodeRedeemOpen(new Date('2026-10-31T23:59:59.000Z')), true);
+  assert.strictEqual(isPrideCodeRedeemOpen(new Date('2026-11-01T00:00:00.000Z')), false);
 });
 
 test('Brighton personal codes are not the public code (grandfather path stays open)', () => {
