@@ -4,19 +4,19 @@ import { SiteFooter } from '../components/SiteFooter';
 const faqs = [
   {
     q: 'Who is MenRush for?',
-    a: 'Adult gay, bi, trans, discreet and curious men who want real-time local discovery and chat. Signup needs a Veriff selfie to confirm you are 18+ (age gate). Optional ID adds a Verified tick. MenRush does not keep copies of your ID.',
+    a: 'Adult gay, bi, trans, discreet and curious men who want live local discovery and chat. You must be 18 or over, and you give your date of birth when you register.',
   },
   {
     q: 'How do I get verified?',
-    a: 'Opt into ID during signup, or tap Get verified in You > Edit. Veriff checks your ID; MenRush does not keep copies of your ID. Verified means you opted into ID only. It is not the signup selfie age gate.',
+    a: 'It is optional and is not needed to join. Whenever you like, tap Get verified in You > Edit. Veriff carries out that check and MenRush does not keep copies of your ID document. Once Veriff approves it, you get the Verified badge.',
   },
   {
     q: 'What is the difference between age check and Verified?',
-    a: 'Age-passed means you completed the required Veriff selfie 18+ check. Verified means you also opted into an optional ID check. They are two different states. Not every member is ID-verified.',
+    a: 'Everyone tells us their date of birth when they register, and you must be 18 or over to join. Verified means a member also chose to complete an optional ID check with Veriff. Not every member is ID verified.',
   },
   {
     q: 'Why does location matter?',
-    a: 'Nearby discovery is the core product. We use location to show distance-bucketed results, not exact public coordinates.',
+    a: 'Nearby discovery is the core product. We show how far away other members are, rounded to the nearest mile, or as under 1 mile when they are closer than that. We do not show exact public coordinates.',
   },
   {
     q: 'What is Pulse?',

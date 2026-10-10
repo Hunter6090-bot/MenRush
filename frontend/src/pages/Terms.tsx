@@ -98,13 +98,13 @@ export const Terms = () => {
           >
             <header>
               <span className="inline-block rounded-full border border-[#c8861c]/30 bg-[#c8861c]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#c8861c]">
-                Last updated: 06 May 2026
+                Last updated: 10 October 2026
               </span>
               <h1 className="mr-page-heading mt-4">
                 Terms and Conditions
               </h1>
               <p className="mt-2 text-sm text-[#a89070]">
-                Effective: <Strong>June 2026</Strong> — at public launch.
+                Effective: <Strong>June 2026</Strong>, at public launch.
               </p>
             </header>
 
@@ -158,9 +158,9 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  By accessing or using the MenRush platform — including our website at{' '}
+                  By accessing or using the MenRush platform, including our website at{' '}
                   <A href="https://menrush.com">menrush.com</A> and any associated mobile
-                  application (collectively, the "<Strong>Platform</Strong>") — you confirm that
+                  application (collectively, the "<Strong>Platform</Strong>"), you confirm that
                   you have read, understood, and agree to be bound by these Terms. If you do not
                   agree, do not use the Platform.
                 </>,
@@ -192,15 +192,15 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>1.4</Strong> Signup includes a required 18+ check via a Veriff live
-                  selfie (liveness / age estimation). That check is an age gate only. If it shows
-                  you are under 18 or fails, no MenRush account is created. You may optionally
-                  complete an ID check in the same flow for a Verified tick. Veriff checks your
-                  ID; MenRush does not keep copies of your ID document. The optional Verified
-                  tick is separate from the age gate and does not mean every member is
-                  ID-checked. We may also request further age checks later and may suspend or
-                  terminate an account if we have reason to believe you do not meet the
-                  eligibility requirements.
+                  <Strong>1.4</Strong> You must be 18 or over to use MenRush. When you register, you
+                  give your date of birth, and we do not create an account if it shows you are under
+                  18. This is your own declaration and is not an ID check. You can choose to complete
+                  an optional ID check with our provider Veriff to get a Verified tick on your
+                  profile. Veriff carries out that check and MenRush does not keep copies of your ID
+                  document. A Verified tick shows only that a member chose to complete that check. It
+                  does not mean every member is ID checked. We may ask for further age checks at any
+                  time and may suspend or close an account if we have reason to believe you are under
+                  18 or do not meet these Terms.
                 </>,
               )}
             </section>
@@ -242,11 +242,11 @@ export const Terms = () => {
               {para(
                 <>
                   <Strong>3.1</Strong> The Verified badge is optional and free. Complete an ID check
-                  (during signup or later from Profile) with Veriff to receive the badge after
-                  approval. Veriff checks your ID; MenRush does not keep copies of your ID
-                  document. The badge is not the signup 18+ selfie age gate in section 1.4, and
-                  it does not mean every member is identity-checked or that MenRush pre-moderates
-                  all user content.
+                  with Veriff from Get verified on the Edit screen in the You tab to receive the
+                  badge after approval. Veriff carries out that check and MenRush does not keep
+                  copies of your ID document. The badge is separate from the date of birth and 18 or over
+                  confirmation in section 1.4, and it does not mean every member is identity
+                  checked or that MenRush checks all user content in advance.
                 </>,
               )}
               {para(
@@ -298,7 +298,7 @@ export const Terms = () => {
                 className="mt-6 rounded-r border-l-[3px] border-[#c8861c] bg-[#1e1208] p-4 text-[15px] leading-[1.7] text-[#f0e4cc]/90"
               >
                 <Strong>4.3</Strong> MenRush is a platform for consensual adult connection. Any
-                non-consensual behaviour — including sharing images of others without consent —
+                non-consensual behaviour, including sharing images of others without consent,
                 will result in immediate account termination and may be reported to law
                 enforcement.
               </aside>
@@ -693,7 +693,7 @@ export const Terms = () => {
                 </p>
                 {subHeading('Data Protection Officer')}
                 <address className="mt-2 not-italic leading-[1.8] text-[15px] text-[#a89070]">
-                  Office 9811, 321–323 High Road
+                  Office 9811, 321-323 High Road
                   <br />
                   Chadwell Heath, Essex, RM6 6AX
                   <br />
@@ -738,7 +738,7 @@ export const Terms = () => {
             </section>
 
             <p className="mt-12 text-center text-[11px] uppercase tracking-[0.3em] text-[#a89070]/70">
-              — End of Terms —
+              End of Terms
             </p>
           </article>
         </div>

@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "test:edge-proxy-secret": "vitest run src/lib/edgeProxySecret.test.ts",
     "test:no-coords-in-urls": "vitest run src/api/noCoordinatesInUrls.test.ts src/api/syncLocationSessionFix.test.tsx src/pages/Out.locationRetry.test.tsx src/pages/Out.cruisingSearch.test.tsx",
+    "test:terms-truth": "vitest run src/pages/adultAssuranceCopy.truth.test.ts src/pages/You.test.tsx",
     "test:middleware-artifact": "node scripts/check-middleware-artifact.mjs",
     "test:unit": "node --experimental-strip-types --test src/lib/notificationToasts.test.ts src/lib/profileLinks.test.ts src/lib/profileTileGrid.test.ts src/lib/nearbyGridFirst.test.ts src/lib/notifications.destination.test.ts src/lib/receiptTicks.test.ts src/lib/mentions.test.ts src/lib/mentionsAutocomplete.test.ts src/lib/communityExpiry.test.ts src/lib/mentionsCrud.test.ts",
     "test:e2e": "playwright test",
