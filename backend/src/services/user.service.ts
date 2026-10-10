@@ -1,4 +1,4 @@
-import { coarsenCoord } from '../config/locationRetention';
+import { storedHomeCoord } from '../config/locationRetention';
 import { query } from '../db';
 import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
 import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
@@ -546,8 +546,8 @@ export const userService = {
                 visitor_anchor_lng = NULL
           WHERE user_id = $1
             AND home_lat IS NULL`,
-        // Stored at about 1 km (2 dp): only compared at the 40 km home radius.
-        [userId, coarsenCoord(plan.homeLat), coarsenCoord(plan.homeLng)],
+        // About 1 km (2 dp) only when LOCATION_PURGE_ENABLED=true; precise otherwise.
+        [userId, storedHomeCoord(plan.homeLat), storedHomeCoord(plan.homeLng)],
       );
       return;
     }
@@ -573,7 +573,7 @@ export const userService = {
                 visitor_anchor_lat = $4,
                 visitor_anchor_lng = $5
           WHERE user_id = $1`,
-        [userId, plan.since, plan.expiresAt, coarsenCoord(plan.anchorLat), coarsenCoord(plan.anchorLng)],
+        [userId, plan.since, plan.expiresAt, storedHomeCoord(plan.anchorLat), storedHomeCoord(plan.anchorLng)],
       );
     }
   },

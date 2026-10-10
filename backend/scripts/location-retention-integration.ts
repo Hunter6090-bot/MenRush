@@ -1,10 +1,14 @@
 /**
  * Location retention purge on real Postgres/PostGIS, with a fake clock.
- * Covers: home and visit anchor rounded to about 1 km on write; migration 076
- * backfill; 30-day stale live clear; map feed and Community post coordinates
+ * Covers: nothing changes while every flag is off (migration 076 is schema
+ * only, write-time rounding off, worker off); with LOCATION_PURGE_ENABLED the
+ * home and visit anchor are rounded to about 1 km on write and by the gated
+ * backfill, which also fills location_updated_at; 30-day stale live clear; map feed and Community post coordinates
  * removed after expiry plus grace, held while a report is open; readers handle
  * a cleared location; account deletion removes map feed, Community, chat
- * location shares and room points, and works for a room creator.
+ * location shares and room points, and works for a room creator. Optional
+ * rules, each behind its own flag: chat location share coordinates cleared
+ * after 7 days, Hot Spot check-ins deleted 24 h after they end.
  * Never run against prod. Run: DATABASE_URL=... npm run test:location-retention-integration
  */
 import assert from 'assert';
@@ -21,6 +25,15 @@ async function main() {
   delete process.env.LOCATION_LIVE_STALE_DAYS;
   delete process.env.LOCATION_MAP_FEED_COORDS_GRACE_HOURS;
   delete process.env.LOCATION_COMMUNITY_COORDS_GRACE_HOURS;
+  for (const k of [
+    'LOCATION_PURGE_ENABLED',
+    'LOCATION_CHAT_SHARE_PURGE_ENABLED',
+    'LOCATION_CHAT_SHARE_DAYS',
+    'CHECKIN_PURGE_ENABLED',
+    'CHECKIN_PURGE_HOURS',
+  ]) {
+    delete process.env[k];
+  }
   const { default: pool, query } = await import('../src/db');
   const { userService } = await import('../src/services/user.service');
   const { authService } = await import('../src/services/auth.service');
@@ -66,20 +79,54 @@ async function main() {
     // ── Config ──────────────────────────────────────────────────────────────
     const cfg = locationRetentionConfig();
     assert.deepStrictEqual(
-      [cfg.enabled, cfg.liveStaleDays, cfg.mapFeedCoordsGraceHours, cfg.communityCoordsGraceHours, cfg.purgeIntervalMinutes],
-      [false, 30, 24, 24, 60],
-      'defaults: off, 30 days, 24 h, 24 h, hourly',
+      [
+        cfg.enabled,
+        cfg.liveStaleDays,
+        cfg.mapFeedCoordsGraceHours,
+        cfg.communityCoordsGraceHours,
+        cfg.purgeIntervalMinutes,
+        cfg.chatSharePurgeEnabled,
+        cfg.chatShareDays,
+        cfg.checkinPurgeEnabled,
+        cfg.checkinPurgeHours,
+      ],
+      [false, 30, 24, 24, 60, false, 7, false, 24],
+      'defaults: off, 30 days, 24 h, 24 h, hourly; chat share rule off (7 days); check-in rule off (24 h)',
     );
     assert.strictEqual(startLocationRetentionWorker(), null, 'worker does not start unless LOCATION_PURGE_ENABLED=true');
     assert.strictEqual(coarsenCoord(51.507412), 51.51);
     assert.strictEqual(coarsenCoord(-0.127758), -0.13);
     console.log('✓ config defaults; worker off by default');
 
+    // ── 0. Every flag off: no data change ────────────────────────────────────
+    resetLocationJumpGate();
+    const precise = await makeUser('LRP Precise', null);
+    await userService.updateLocation(precise, 51.507412, -0.127758);
+    let p = await profile(precise);
+    assert.deepStrictEqual(
+      [Number(p.home_lat), Number(p.home_lng)],
+      [51.507412, -0.127758],
+      'flag off: home stored as before (not rounded)',
+    );
+    const offLegacy = await makeUser('LRP Off legacy', { lat: LAT, lng: LNG });
+    await query(
+      `UPDATE profiles SET home_lat = 51.507412, home_lng = -0.127758, location_updated_at = NULL WHERE user_id = $1`,
+      [offLegacy],
+    );
+    const offResult = await locationRetentionService.runPurge(new Date('2030-01-01T00:00:00Z'));
+    assert.ok(Object.values(offResult).every((n) => n === 0), 'flags off: runPurge changes nothing');
+    p = await profile(offLegacy);
+    assert.deepStrictEqual([Number(p.home_lat), p.location_updated_at, Number(p.lat)], [51.507412, null, LAT], 'flags off: row untouched');
+    console.log('✓ every flag off: home not rounded on write, purge does nothing');
+
+    // From here on the main purge is on.
+    process.env.LOCATION_PURGE_ENABLED = 'true';
+
     // ── 1. Home and visit anchor rounded on write ─────────────────────────────
     resetLocationJumpGate();
     const walker = await makeUser('LRP Walker', null);
     await userService.updateLocation(walker, 51.507412, -0.127758); // London
-    let p = await profile(walker);
+    p = await profile(walker);
     assert.deepStrictEqual([Number(p.home_lat), Number(p.home_lng)], [51.51, -0.13], 'home rounded to 2 dp');
     assert.deepStrictEqual([Number(p.lat), Number(p.lng)], [51.507412, -0.127758], 'live location unchanged (precise, used for the fuzzed pin)');
     assert.ok(p.location_updated_at, 'location_updated_at set on write');
@@ -94,7 +141,7 @@ async function main() {
     assert.strictEqual(p.visitor_expires_at, null, 'return home still clears the visit');
     console.log('✓ home and visit anchor stored at about 1 km; visitor detection unchanged');
 
-    // ── 2. Migration 076 backfill ─────────────────────────────────────────────
+    // ── 2. Migration 076 is schema only; the gated job backfills ─────────────
     const legacy = await makeUser('LRP Legacy', { lat: LAT, lng: LNG });
     const legacySeen = new Date(Date.now() - 3 * DAY);
     await query(
@@ -110,11 +157,21 @@ async function main() {
     );
     await query(migration); // idempotent
     p = await profile(legacy);
+    assert.deepStrictEqual(
+      [Number(p.home_lat), Number(p.visitor_anchor_lat), p.location_updated_at],
+      [51.507412, 53.480759, null],
+      'migration 076 changes no data (no rounding, no backfill)',
+    );
+    assert.ok(!/\bUPDATE\b/i.test(migration.replace(/--.*$/gm, '')), 'migration 076 has no UPDATE');
+    await locationRetentionService.runPurge(new Date());
+    p = await profile(legacy);
     assert.deepStrictEqual([Number(p.home_lat), Number(p.home_lng)], [51.51, -0.13], 'backfill rounds home');
     assert.deepStrictEqual([Number(p.visitor_anchor_lat), Number(p.visitor_anchor_lng)], [53.48, -2.24], 'backfill rounds visit anchor');
     assert.strictEqual(new Date(p.location_updated_at).getTime(), legacySeen.getTime(), 'location_updated_at backfilled from last_seen');
     assert.strictEqual(Number(p.lat), LAT, 'backfill leaves live location alone');
-    console.log('✓ migration 076 backfill (re-runnable)');
+    await locationRetentionService.runPurge(new Date()); // re-runnable
+    assert.strictEqual(Number((await profile(legacy)).home_lat), 51.51, 'second run: unchanged');
+    console.log('✓ migration 076 schema only; rounding and backfill run in the gated job (re-runnable)');
 
     // ── 3. Stale live location cleared, fake clock ────────────────────────────
     const NOW = new Date('2027-01-15T12:00:00Z');
@@ -221,6 +278,105 @@ async function main() {
     const feed = await mapFeedService.listNearby(viewer);
     assert.ok(feed.some((m: any) => m.message === 'live'), 'map feed list works next to stripped rows');
     console.log('✓ map feed and Community coordinates removed after expiry + grace, held for open reports');
+
+    // ── 4b. Optional rule: chat location share coordinates after 7 days ──────
+    const sharer = await makeUser('LRP Sharer', { lat: LAT, lng: LNG });
+    const sharee = await makeUser('LRP Sharee', { lat: LAT, lng: LNG });
+    const shareReported = await makeUser('LRP Share reported', { lat: LAT, lng: LNG });
+    const COORDS = '{"lat":57.7631,"lng":-7.0154}';
+    async function share(sender: string, createdAt: Date, withdrawn = false) {
+      const id = randomUUID();
+      await query(
+        `INSERT INTO messages (id, sender_id, receiver_id, message, media_type, created_at, withdrawn_at)
+         VALUES ($1, $2, $3, $4, 'location', $5, $6)`,
+        [id, sender, sharee, withdrawn ? 'Location withdrawn' : COORDS, createdAt, withdrawn ? createdAt : null],
+      );
+      return id;
+    }
+    const msgRow = async (id: string) => (await query(`SELECT message, withdrawn_at FROM messages WHERE id = $1`, [id])).rows[0];
+    const shareOld = await share(sharer, new Date(NOW.getTime() - 7 * DAY - 60 * 1000));
+    const shareYoung = await share(sharer, new Date(NOW.getTime() - 6 * DAY));
+    const shareWithdrawn = await share(sharer, new Date(NOW.getTime() - 9 * DAY), true);
+    const shareHeld = await share(shareReported, new Date(NOW.getTime() - 9 * DAY));
+    const textId = randomUUID();
+    await query(
+      `INSERT INTO messages (id, sender_id, receiver_id, message, created_at) VALUES ($1, $2, $3, $4, $5)`,
+      [textId, sharer, sharee, COORDS, new Date(NOW.getTime() - 9 * DAY)],
+    );
+    const shareRep = await query(
+      `INSERT INTO reports (reporter_id, reported_id, reason, status) VALUES ($1, $2, 'spam', 'open') RETURNING id`,
+      [sharee, shareReported],
+    );
+    let r0 = await locationRetentionService.runPurge(NOW);
+    assert.strictEqual(r0.chatSharesCleared, 0, 'chat share rule off by default');
+    assert.strictEqual((await msgRow(shareOld)).message, COORDS, 'off: old share keeps its coordinates');
+    process.env.LOCATION_CHAT_SHARE_PURGE_ENABLED = 'true';
+    await locationRetentionService.runPurge(NOW);
+    const { CLEARED_CHAT_SHARE_PAYLOAD } = await import('../src/services/location-retention.service');
+    assert.strictEqual((await msgRow(shareOld)).message, CLEARED_CHAT_SHARE_PAYLOAD, 'on: share older than 7 days cleared');
+    assert.ok(!/lat|lng/.test((await msgRow(shareOld)).message), 'cleared share holds no coordinates');
+    assert.strictEqual((await msgRow(shareYoung)).message, COORDS, 'on: 6-day-old share kept');
+    assert.strictEqual((await msgRow(shareWithdrawn)).message, 'Location withdrawn', 'withdrawn share left as is');
+    assert.strictEqual((await msgRow(shareHeld)).message, COORDS, 'held while a report on the sender is open');
+    assert.strictEqual((await msgRow(textId)).message, COORDS, 'ordinary text messages never touched');
+    await query(`UPDATE reports SET status = 'actioned', resolved_at = NOW() WHERE id = $1`, [shareRep.rows[0].id]);
+    await locationRetentionService.runPurge(NOW);
+    assert.strictEqual((await msgRow(shareHeld)).message, CLEARED_CHAT_SHARE_PAYLOAD, 'released once moderation closes');
+    process.env.LOCATION_CHAT_SHARE_DAYS = '5';
+    await locationRetentionService.runPurge(NOW);
+    assert.strictEqual((await msgRow(shareYoung)).message, CLEARED_CHAT_SHARE_PAYLOAD, 'LOCATION_CHAT_SHARE_DAYS applies');
+    delete process.env.LOCATION_CHAT_SHARE_DAYS;
+    delete process.env.LOCATION_CHAT_SHARE_PURGE_ENABLED;
+    console.log('✓ optional: chat location share coordinates cleared 7 days after sending (own flag, off by default)');
+
+    // ── 4c. Optional rule: check-ins deleted 24 h after they end ─────────────
+    const cat = await query(`SELECT id FROM hot_spot_categories ORDER BY id LIMIT 1`);
+    const spot = await query(
+      `INSERT INTO hot_spots (category_id, name, latitude, longitude) VALUES ($1, 'LRP spot', $2, $3) RETURNING id`,
+      [cat.rows[0].id, LAT, LNG],
+    );
+    const spotId = spot.rows[0].id as string;
+    const checker = await makeUser('LRP Checker', { lat: LAT, lng: LNG });
+    async function checkin(inAt: Date, outAt: Date | null) {
+      const r = await query(
+        `INSERT INTO hot_spot_checkins (spot_id, user_id, checked_in_at, checked_out_at) VALUES ($1, $2, $3, $4) RETURNING id`,
+        [spotId, checker, inAt, outAt],
+      );
+      return r.rows[0].id as string;
+    }
+    const ciExists = async (id: string) =>
+      (await query(`SELECT 1 FROM hot_spot_checkins WHERE id = $1`, [id])).rows.length === 1;
+    // Checked out 25 h ago: deleted. Checked out 23 h ago: kept.
+    const ciOutOld = await checkin(new Date(NOW.getTime() - 27 * HOUR), new Date(NOW.getTime() - 25 * HOUR));
+    const ciOutYoung = await checkin(new Date(NOW.getTime() - 24 * HOUR), new Date(NOW.getTime() - 23 * HOUR));
+    // Never checked out: ends at check-in + 4 h (longest TTL).
+    const ciTtlOld = await checkin(new Date(NOW.getTime() - 29 * HOUR), null); // ended 25 h ago
+    const ciTtlYoung = await checkin(new Date(NOW.getTime() - 26 * HOUR), null); // ended 22 h ago
+    const ciActive = await checkin(new Date(NOW.getTime() - 1 * HOUR), null);
+    r0 = await locationRetentionService.runPurge(NOW);
+    assert.strictEqual(r0.checkinsDeleted, 0, 'check-in rule off by default');
+    assert.ok(await ciExists(ciOutOld), 'off: old check-in kept');
+    process.env.CHECKIN_PURGE_ENABLED = 'true';
+    await locationRetentionService.runPurge(NOW);
+    assert.ok(!(await ciExists(ciOutOld)), 'checked out 25 h ago: deleted');
+    assert.ok(await ciExists(ciOutYoung), 'checked out 23 h ago: kept');
+    assert.ok(!(await ciExists(ciTtlOld)), 'never checked out, TTL ended 25 h ago: deleted');
+    assert.ok(await ciExists(ciTtlYoung), 'never checked out, TTL ended 22 h ago: kept');
+    assert.ok(await ciExists(ciActive), 'active check-in kept');
+    process.env.CHECKIN_PURGE_HOURS = '0';
+    await locationRetentionService.runPurge(NOW);
+    assert.ok(!(await ciExists(ciOutYoung)) && (await ciExists(ciActive)), 'CHECKIN_PURGE_HOURS applies; active still kept');
+    delete process.env.CHECKIN_PURGE_HOURS;
+    // Only the optional rules on (main purge off): the worker still starts.
+    process.env.LOCATION_PURGE_ENABLED = 'false';
+    const { anyLocationPurgeEnabled } = await import('../src/config/locationRetention');
+    assert.strictEqual(anyLocationPurgeEnabled(), true, 'worker starts for an optional rule on its own');
+    const onlyCheckins = await locationRetentionService.runPurge(NOW);
+    assert.strictEqual(onlyCheckins.staleLiveCleared + onlyCheckins.homeRounded + onlyCheckins.mapFeedStripped, 0, 'main purge stays off');
+    delete process.env.CHECKIN_PURGE_ENABLED;
+    process.env.LOCATION_PURGE_ENABLED = 'true';
+    await query(`DELETE FROM hot_spots WHERE id = $1`, [spotId]);
+    console.log('✓ optional: check-ins deleted 24 h after they end (own flag, off by default)');
 
     // ── 5. Account deletion ───────────────────────────────────────────────────
     const leaver = await makeUser('LRP Leaver', { lat: LAT, lng: LNG });

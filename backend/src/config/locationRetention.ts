@@ -35,15 +35,36 @@ export type LocationRetentionConfig = {
   communityCoordsGraceHours: number;
   /** LOCATION_PURGE_INTERVAL_MINUTES (default 60): how often the worker runs. */
   purgeIntervalMinutes: number;
+  /** LOCATION_CHAT_SHARE_PURGE_ENABLED (default false, optional rule): clear chat location share coordinates. */
+  chatSharePurgeEnabled: boolean;
+  /** LOCATION_CHAT_SHARE_DAYS (default 7): clear chat location share coordinates this long after sending. */
+  chatShareDays: number;
+  /** CHECKIN_PURGE_ENABLED (default false, optional rule): delete ended Hot Spot check-ins. */
+  checkinPurgeEnabled: boolean;
+  /** CHECKIN_PURGE_HOURS (default 24): delete a check-in this long after it ended. */
+  checkinPurgeHours: number;
 };
+
+function boolEnv(name: string): boolean {
+  return String(process.env[name] || '').trim().toLowerCase() === 'true';
+}
+
+/** True when any purge job is switched on, so the worker should start. */
+export function anyLocationPurgeEnabled(cfg: LocationRetentionConfig = locationRetentionConfig()): boolean {
+  return cfg.enabled || cfg.chatSharePurgeEnabled || cfg.checkinPurgeEnabled;
+}
 
 export function locationRetentionConfig(): LocationRetentionConfig {
   return {
-    enabled: String(process.env.LOCATION_PURGE_ENABLED || '').toLowerCase() === 'true',
+    enabled: boolEnv('LOCATION_PURGE_ENABLED'),
     liveStaleDays: numEnv('LOCATION_LIVE_STALE_DAYS', 30, 1, 3650),
     mapFeedCoordsGraceHours: numEnv('LOCATION_MAP_FEED_COORDS_GRACE_HOURS', 24, 0, 24 * 365),
     communityCoordsGraceHours: numEnv('LOCATION_COMMUNITY_COORDS_GRACE_HOURS', 24, 0, 24 * 365),
     purgeIntervalMinutes: numEnv('LOCATION_PURGE_INTERVAL_MINUTES', 60, 5, 24 * 60),
+    chatSharePurgeEnabled: boolEnv('LOCATION_CHAT_SHARE_PURGE_ENABLED'),
+    chatShareDays: numEnv('LOCATION_CHAT_SHARE_DAYS', 7, 1, 3650),
+    checkinPurgeEnabled: boolEnv('CHECKIN_PURGE_ENABLED'),
+    checkinPurgeHours: numEnv('CHECKIN_PURGE_HOURS', 24, 0, 24 * 365),
   };
 }
 
@@ -51,4 +72,12 @@ export function locationRetentionConfig(): LocationRetentionConfig {
 export function coarsenCoord(value: number, decimals: number = LOCATION_HOME_DECIMALS): number {
   const f = 10 ** decimals;
   return Math.round(value * f) / f;
+}
+
+/**
+ * Home and visit anchor as stored on write: about 1 km only once
+ * LOCATION_PURGE_ENABLED=true, so nothing changes in prod before that.
+ */
+export function storedHomeCoord(value: number): number {
+  return locationRetentionConfig().enabled ? coarsenCoord(value) : value;
 }
