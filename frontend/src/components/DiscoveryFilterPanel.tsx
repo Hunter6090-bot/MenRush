@@ -234,7 +234,7 @@ export function DiscoveryFilterPanel({
                       className={ageInputClass}
                     />
                   </label>
-                  <span className="pb-2 text-[15px] text-[var(--cream-muted)]">–</span>
+                  <span className="pb-2 text-[15px] text-[var(--cream-muted)]">to</span>
                   <label className="flex flex-col gap-1 text-[15px] font-bold uppercase tracking-[0.08em] text-[var(--cream-muted)]">
                     Max
                     <input

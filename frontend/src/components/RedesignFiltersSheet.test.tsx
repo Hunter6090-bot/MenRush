@@ -16,15 +16,25 @@ function renderSheet(onChange = vi.fn(), onClose = vi.fn()) {
 }
 
 describe('Filters sheet matches board state 04', () => {
-  it('Visiting is Coming soon: no switch, tap shows a short line, no NEW filter applied', () => {
+  it('Visiting is a real switch for Travel status (#359), not Coming soon', () => {
     const { onChange } = renderSheet();
     const visiting = screen.getByTestId('filter-visiting');
-    expect(visiting).not.toHaveAttribute('role', 'switch');
-    expect(visiting).toHaveTextContent('Coming soon');
+    expect(visiting).toHaveAttribute('role', 'switch');
+    expect(visiting).toHaveAttribute('aria-checked', 'false');
+    expect(visiting).not.toHaveTextContent(/coming soon/i);
     fireEvent.click(visiting);
-    expect(screen.getByTestId('filter-visiting-note')).toHaveTextContent('coming soon');
+    expect(visiting).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(screen.getByTestId('filter-show'));
-    expect(onChange.mock.calls[0][0].status).not.toContain('new');
+    const status = onChange.mock.calls[0][0].status;
+    expect(status).toContain('visiting');
+    expect(status).not.toContain('new');
+  });
+
+  it('age range reads "18 to 99" with no dash', () => {
+    renderSheet();
+    const sheet = screen.getByTestId('redesign-filters-sheet');
+    expect(sheet.textContent).toMatch(/18 to 99/);
+    expect(sheet.textContent).not.toMatch(/[\u2013\u2014]/);
   });
 
   it('the NEW filter is not lost: New here toggles status new', () => {
@@ -44,12 +54,11 @@ describe('Filters sheet matches board state 04', () => {
   });
 });
 
-describe.each<Theme>(['light', 'dark'])('Coming soon tag contrast (%s)', (theme) => {
-  it('tag text >= 4.5:1 on the card and is not copper', () => {
+describe.each<Theme>(['light', 'dark'])('Filters sheet contrast (%s)', (theme) => {
+  it('Show label >= 4.5:1 on copper, theme tokens only', () => {
     renderSheet();
-    const tag = screen.getByTestId('coming-soon-tag');
-    expect(tag.className).not.toMatch(/copper|C4832A/i);
-    expect(tag.className).toContain('text-[15px]');
-    expect(contrast(tag, theme)).toBeGreaterThanOrEqual(4.5);
+    const show = screen.getByTestId('filter-show');
+    expect(show.className).not.toMatch(/#[0-9a-f]{3,6}/i);
+    expect(contrast(show, theme)).toBeGreaterThanOrEqual(4.5);
   });
 });

@@ -168,12 +168,12 @@ export const API_LOOKING_FOR_INTENTS = new Set<string>(INTENT_FILTERS.filter((v)
 
 export const AGE_PRESETS = [
   { id: 'any', label: 'Any age', min: undefined as number | undefined, max: undefined as number | undefined },
-  { id: '18-21', label: '18–21', min: 18, max: 21 },
-  { id: '22-29', label: '22–29', min: 22, max: 29 },
-  { id: '30-39', label: '30–39', min: 30, max: 39 },
-  { id: '40-49', label: '40–49', min: 40, max: 49 },
-  /** Once 60+ exists, 50+ means 50–59 (not 50–99). */
-  { id: '50+', label: '50–59', min: 50, max: 59 },
+  { id: '18-21', label: '18 to 21', min: 18, max: 21 },
+  { id: '22-29', label: '22 to 29', min: 22, max: 29 },
+  { id: '30-39', label: '30 to 39', min: 30, max: 39 },
+  { id: '40-49', label: '40 to 49', min: 40, max: 49 },
+  /** Once 60+ exists, 50+ means 50 to 59 (not 50 to 99). */
+  { id: '50+', label: '50 to 59', min: 50, max: 59 },
   { id: '60+', label: '60+', min: 60, max: 99 },
 ] as const;
 
@@ -190,6 +190,8 @@ export const STATUS_FILTER_OPTIONS = [
   { id: 'new', label: 'NEW' },
   { id: 'hasPhoto', label: 'Has photo' },
   { id: 'verified', label: 'Trust checked' },
+  /** Travel (#359): members visiting this area on a live trip. */
+  { id: 'visiting', label: 'Visiting' },
 ] as const;
 
 export type StatusFilterId = (typeof STATUS_FILTER_OPTIONS)[number]['id'];
@@ -278,7 +280,7 @@ export function withAgePreset(state: DiscoveryFilterState, agePreset: AgePresetI
   };
 }
 
-/** Setting custom age deselects presets (agePreset → any). Values are clamped 18–99. */
+/** Setting custom age deselects presets (agePreset → any). Values are clamped 18 to 99. */
 export function withCustomAge(
   state: DiscoveryFilterState,
   customAgeMin?: number,
@@ -323,6 +325,16 @@ export function buildNearbyApiFilters(state: DiscoveryFilterState) {
   };
 }
 
+/**
+ * Visiting filter (Travel, #359). Uses only the server's own `visiting` field,
+ * which the API attaches exactly when #359 allows it: the trip is live, the
+ * member is visible and not Ghost, distance_allowed is true and the viewer is
+ * not on their Hide my location list. Hidden members never reach the client.
+ */
+export function isVisitingMember(u: Pick<NearbyUser, 'visiting'>): boolean {
+  return typeof u.visiting?.city === 'string' && u.visiting.city.trim().length > 0;
+}
+
 export function applyDiscoveryClientFilters(users: NearbyUser[], state: DiscoveryFilterState): NearbyUser[] {
   let result = users;
 
@@ -349,6 +361,9 @@ export function applyDiscoveryClientFilters(users: NearbyUser[], state: Discover
   }
   if (state.status.includes('hasPhoto')) {
     result = result.filter((u) => !!u.photo_url);
+  }
+  if (state.status.includes('visiting')) {
+    result = result.filter((u) => isVisitingMember(u));
   }
   if (state.status.includes('verified')) {
     // One badge only — Veriff is_verified → Verified. No Authentic-person honor mark.

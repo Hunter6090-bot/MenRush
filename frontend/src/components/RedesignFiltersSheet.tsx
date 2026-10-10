@@ -1,12 +1,11 @@
 /**
  * Map Filters bottom sheet, matched to the Claude Design board (state 04):
  * Close, Age range, Visiting / Now / Photo only, Reset / Show.
- * Visiting is not built yet (Travel, #359), so it shows a muted Coming soon tag
- * and no toggle. The NEW filter it used to stand in for keeps its own honest row
- * ("New here") so nothing is lost. Full discovery filter state still drives results.
+ * Visiting is Travel's real status (#359): it shows members on a live trip here,
+ * using only what the server already lets this viewer see. "New here" keeps the
+ * NEW filter. Full discovery filter state still drives results.
  */
 import { useEffect, useState, type ReactNode } from 'react';
-import { ComingSoonTag } from './ComingSoonTag';
 import {
   AGE_CLAMP_MAX,
   AGE_CLAMP_MIN,
@@ -39,11 +38,11 @@ export function RedesignFiltersSheet({
   const ageMin = draft.customAgeMin ?? AGE_CLAMP_MIN;
   const ageMax = draft.customAgeMax ?? AGE_CLAMP_MAX;
   const newHere = draft.status.includes('new');
-  const [visitingNote, setVisitingNote] = useState(false);
+  const visiting = draft.status.includes('visiting');
   const now = draft.status.includes('online');
   const photoOnly = draft.status.includes('hasPhoto');
 
-  const toggleStatus = (id: 'new' | 'online' | 'hasPhoto', on: boolean) => {
+  const toggleStatus = (id: 'new' | 'online' | 'hasPhoto' | 'visiting', on: boolean) => {
     const set = new Set(draft.status);
     if (on) set.add(id);
     else set.delete(id);
@@ -104,24 +103,7 @@ export function RedesignFiltersSheet({
           />
         </div>
 
-        <button
-          type="button"
-          data-testid="filter-visiting"
-          aria-describedby={visitingNote ? 'filter-visiting-note' : undefined}
-          onClick={() => setVisitingNote((v) => !v)}
-          className="mb-2 flex min-h-[48px] w-full items-center justify-between gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)]/40 px-4 text-left"
-        >
-          <span className="flex items-center gap-2 text-[15px] font-bold text-[var(--cream)]">
-            <RowIcon><IconSuitcase /></RowIcon>
-            Visiting
-          </span>
-          <ComingSoonTag />
-        </button>
-        {visitingNote ? (
-          <p id="filter-visiting-note" role="status" className="mb-2 px-1 text-[15px] text-[var(--cream-muted)]" data-testid="filter-visiting-note">
-            This filter is coming soon.
-          </p>
-        ) : null}
+        <ToggleRow icon={<IconSuitcase />} label="Visiting" on={visiting} onChange={(v) => toggleStatus('visiting', v)} testId="filter-visiting" />
         <ToggleRow icon={<IconBolt />} label="Now" on={now} onChange={(v) => toggleStatus('online', v)} testId="filter-now" />
         <ToggleRow icon={<IconCamera />} label="Photo only" on={photoOnly} onChange={(v) => toggleStatus('hasPhoto', v)} testId="filter-photo-only" />
         <ToggleRow icon={<IconSpark />} label="New here" on={newHere} onChange={(v) => toggleStatus('new', v)} testId="filter-new" />
@@ -143,7 +125,7 @@ export function RedesignFiltersSheet({
               onChange(draft);
               onShow();
             }}
-            className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full bg-[#C4832A] px-4 text-[15px] font-extrabold text-[#1A0E03]"
+            className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full bg-[var(--copper)] px-4 text-[15px] font-extrabold text-[var(--nn-on-copper)]"
           >
             <IconPin />
             Show
