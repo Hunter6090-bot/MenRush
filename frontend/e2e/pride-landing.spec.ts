@@ -99,7 +99,7 @@ test.describe('Pride promotion landing', () => {
     expect(network.expectNoSideEffects()).toEqual([]);
   });
 
-  test('/terms holds Pride grant rules (Brighton only as the code name, no city list)', async ({ page }) => {
+  test('/terms holds Pride grant rules (Brighton only as the code name and in the sponsor line, no city list)', async ({ page }) => {
     const network = await guardAgainstSideEffects(page);
     await page.goto('/terms');
 
@@ -153,8 +153,16 @@ test.describe('Pride promotion landing', () => {
     await expect(body).not.toContainText(/pending Al/i);
     await expect(body).not.toContainText(/Al lock/i);
     await expect(body).not.toContainText(/\bAl\b/);
-    // 7.7 names the Brighton Pride promo codes; nothing else may mention Brighton.
-    expect((await body.innerText()).replace(/Brighton Pride personal promo codes/g, '')).not.toMatch(/Brighton/i);
+    // 7.7 names the Brighton Pride promo codes and says MenRush is not a sponsor of
+    // Brighton Pride; nothing else may mention Brighton.
+    await expect(body).toContainText(
+      'MenRush is not a sponsor of Brighton Pride, Southampton Pride or Manchester Village Pride.',
+    );
+    expect(
+      (await body.innerText())
+        .replace(/Brighton Pride personal promo codes/g, '')
+        .replace(/not a sponsor of Brighton Pride/g, ''),
+    ).not.toMatch(/Brighton/i);
     await expect(body).not.toContainText(/London · Manchester · Birmingham/i);
 
     expect(network.expectNoSideEffects()).toEqual([]);

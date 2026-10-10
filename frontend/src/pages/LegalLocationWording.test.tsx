@@ -122,6 +122,8 @@ describe('Legal location wording (Legal, Oct 2026)', () => {
       'All other Pride codes work at register up to and including 31 October 2026 (23:59:59 UK time) and are refused from 1 November 2026.',
     );
     expect(text).toContain('Brighton Pride personal promo codes sent by email, and MenRush Pride invites (MENRUSH codes)');
+    // 7.7 names the Brighton Pride codes, so the sponsor line must name Brighton Pride too.
+    expect(text).toContain('MenRush is not a sponsor of Brighton Pride, Southampton Pride or Manchester Village Pride.');
     expect(text).toContain('The claim form closes at the same time.');
     expect(text).toContain('So if you have an unused Pride code, register by 31 October 2026.');
     expect(text).not.toContain('A personal code from an earlier email');
