@@ -1,3 +1,4 @@
+import { storedHomeCoord } from '../config/locationRetention';
 import { query } from '../db';
 import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
 import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
@@ -499,12 +500,13 @@ export const userService = {
 
     // Upsert live pin + presence first.
     await query(
-      `INSERT INTO profiles (user_id, location, lat, lng, online, last_seen, share_live_location_with_matches)
-       VALUES ($1, ST_MakePoint($3, $2), $2, $3, true, NOW(), TRUE)
+      `INSERT INTO profiles (user_id, location, lat, lng, location_updated_at, online, last_seen, share_live_location_with_matches)
+       VALUES ($1, ST_MakePoint($3, $2), $2, $3, NOW(), true, NOW(), TRUE)
        ON CONFLICT (user_id) DO UPDATE SET
          location = ST_MakePoint($3, $2),
          lat = $2,
          lng = $3,
+         location_updated_at = NOW(),
          online = true,
          last_seen = NOW()`,
       [userId, lat, lng],
@@ -545,7 +547,8 @@ export const userService = {
                 visitor_anchor_lng = NULL
           WHERE user_id = $1
             AND home_lat IS NULL`,
-        [userId, plan.homeLat, plan.homeLng],
+        // About 1 km (2 dp) only when LOCATION_PURGE_ENABLED=true; precise otherwise.
+        [userId, storedHomeCoord(plan.homeLat), storedHomeCoord(plan.homeLng)],
       );
       return true;
     }
@@ -571,7 +574,7 @@ export const userService = {
                 visitor_anchor_lat = $4,
                 visitor_anchor_lng = $5
           WHERE user_id = $1`,
-        [userId, plan.since, plan.expiresAt, plan.anchorLat, plan.anchorLng],
+        [userId, plan.since, plan.expiresAt, storedHomeCoord(plan.anchorLat), storedHomeCoord(plan.anchorLng)],
       );
     }
     return true;
