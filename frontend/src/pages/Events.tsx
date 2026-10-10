@@ -255,7 +255,7 @@ export const Events = () => {
                                 setCheckInNotice(
                                   res.data.spot
                                     ? `Checked in at ${ev.venue_name || ev.name}. Pin stays on the map for ${CHECKIN_TTL_HOURS} hours.`
-                                    : `You're in Ghost or hidden, so no pin was added at ${ev.venue_name || ev.name}.`,
+                                    : `You're in Ghost or hidden, so you weren't checked in and no pin was added at ${ev.venue_name || ev.name}.`,
                                 );
                               })
                               .catch((err: { response?: { data?: { error?: string } } }) => {
