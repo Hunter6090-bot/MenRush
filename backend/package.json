@@ -59,6 +59,7 @@
     "test:community-mentions-http": "ts-node scripts/community-mentions-endpoint.test.ts",
     "test:community-expiry": "node --experimental-strip-types scripts/community-expiry-checks.ts",
     "test:community-ghost-hidden": "ts-node scripts/community-ghost-hidden-integration.ts",
+    "test:reports-survive-deletion-integration": "ts-node scripts/reports-survive-deletion-integration.ts",
     "test:room-temp-identity-privacy": "ts-node src/services/room-temp-identity.privacy.test.ts",
     "test:nightlife-checkin": "ts-node scripts/nightlife-checkin-checks.ts",
     "test:hot-spot-free-counts": "ts-node --transpile-only scripts/hot-spot-free-counts-checks.ts",
