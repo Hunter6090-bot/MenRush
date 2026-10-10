@@ -1,14 +1,14 @@
 {
   "campaign": "oct1-2026",
   "source": "docs/social-oct1-2026.md + seed-social-oct1-2026",
-  "note": "Local draft pack for Social Studio. Week 1 starts 21 Aug 2026 (Day 1 = today). TikTok omitted (not in Connections). Expand outlines before approve.",
+  "note": "Local draft pack for Social Studio. Slots start 21 Aug 2026. Copy is written open-now (MenRush is open in the UK, free to join). TikTok omitted (not in Connections). Expand outlines before approve.",
   "posts": [
     {
       "id": "2026-08-21:bluesky",
       "platform": "bluesky",
       "date": "2026-08-21",
       "timeUk": "13:00",
-      "body": "MenRush is being built for men who want less noise and more right-now signal.\n\nOpen now, UK first. Sign up free:\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "MenRush is for men who want less noise and more local signal.\n\nOpen in the UK and free to join:\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -17,7 +17,7 @@
       "platform": "instagram",
       "date": "2026-08-21",
       "timeUk": "19:30",
-      "body": "Built for men who know what they want.\n\nNo endless noise. No pretending. No waiting around for a maybe.\n\nMenRush. 1 October. UK first.\n\nSign up free at menrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "Built for men who know what they want.\n\nNo endless noise. No pretending. No waiting around for a maybe.\n\nMenRush is open, UK first.\n\nJoin free at menrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 1,
       "kind": "full"
     },
@@ -26,7 +26,7 @@
       "platform": "reddit",
       "date": "2026-08-21",
       "timeUk": "15:00",
-      "body": "Title: What would make an app for gay men feel faster and less exhausting?\n\nBody:\nI am working on MenRush, a new app built around a simple question: who nearby is actually worth your attention right now?\n\nThe idea is less noise, less wasted motion, and more local signal. We open 1 October (UK first).\n\nI would genuinely like to know what makes apps feel immediate instead of endless for you.\n\nIf anyone wants to follow the build, you can sign up free at https://menrush.com",
+      "body": "Title: What would make an app for gay men feel faster and less exhausting?\n\nBody:\nI work on MenRush, an app built around a simple question: who nearby is actually worth your attention?\n\nThe idea is less noise, less wasted motion, and more local signal. It is open in the UK.\n\nI would genuinely like to know what makes apps feel immediate instead of endless for you.\n\nIf you want to try it, it is free at https://menrush.com",
       "week": 1,
       "kind": "full"
     },
@@ -35,7 +35,7 @@
       "platform": "x",
       "date": "2026-08-21",
       "timeUk": "08:30",
-      "body": "Men are tired of apps that feel crowded, slow, and built for everyone except them.\n\nMenRush opens 1 October (UK first).\n\nBuilt for fast chemistry, local signal, and less noise.\n\nSign up free:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "Men are tired of apps that feel crowded, slow, and built for everyone except them.\n\nMenRush is open in the UK. Fast chemistry, local signal, less noise.\n\nSign up free:\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -44,7 +44,7 @@
       "platform": "x",
       "date": "2026-08-21",
       "timeUk": "19:30",
-      "body": "Built for men who know what they want.\n\nFast chemistry.\nNearby energy.\nNo wasted motion.\n\nOpens 1 October.\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "Built for men who know what they want.\n\nFast chemistry.\nNearby energy.\nNo wasted motion.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -53,7 +53,7 @@
       "platform": "bluesky",
       "date": "2026-08-22",
       "timeUk": "13:00",
-      "body": "Most apps optimize for time spent.\n\nMenRush is being built for momentum.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "Time spent is the wrong goal for an app like this. Momentum is the right one.\n\nThat is MenRush:\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -62,7 +62,7 @@
       "platform": "instagram",
       "date": "2026-08-22",
       "timeUk": "19:30",
-      "body": "Not more swiping.\n\nMore signal.\nMore intent.\nMore right-now energy.\n\nmenrush.com. 1 October\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "Not more swiping.\n\nMore signal.\nMore intent.\nMore men close by.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 1,
       "kind": "full"
     },
@@ -71,7 +71,7 @@
       "platform": "x",
       "date": "2026-08-22",
       "timeUk": "08:30",
-      "body": "Most apps optimize for time spent.\n\nMenRush is being built for momentum.\n\nSee who is nearby. Feel the signal faster. Move with intention.\n\nOpens 1 October:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "Most apps optimise for time spent.\n\nMenRush is built for momentum.\n\nSee who is nearby. Feel the signal faster. Move with intention.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -80,7 +80,7 @@
       "platform": "x",
       "date": "2026-08-22",
       "timeUk": "19:30",
-      "body": "You do not need more matches that go nowhere.\n\nYou need better timing.\nBetter local signal.\nLess noise.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "You do not need more matches that go nowhere.\n\nYou need better timing.\nBetter local signal.\nLess noise.\n\nTry MenRush free:\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -89,7 +89,7 @@
       "platform": "bluesky",
       "date": "2026-08-23",
       "timeUk": "13:00",
-      "body": "MenRush is open in the UK. Sign up free.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "Joining MenRush is free. One profile, one map, men close by.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -98,7 +98,7 @@
       "platform": "instagram",
       "date": "2026-08-23",
       "timeUk": "19:30",
-      "body": "Open now.\n\nMenRush is open in the UK.\n\nIf that sounds like your kind of app, sign up free.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "Free to join.\n\nMake a profile, share your location when you want to, and see who is close.\n\nIf that sounds like your kind of app: menrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 1,
       "kind": "full"
     },
@@ -107,7 +107,7 @@
       "platform": "x",
       "date": "2026-08-23",
       "timeUk": "08:30",
-      "body": "MenRush is open in the UK.\n\nSign up free and see who is nearby.\n\nJoin now:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "MenRush is open in the UK.\n\nMaking an account costs nothing. Open the map and see who is nearby.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -116,7 +116,7 @@
       "platform": "x",
       "date": "2026-08-23",
       "timeUk": "19:30",
-      "body": "MenRush is open in the UK. Sign up free.\n\nNo code hunting. No gimmick. Free to join.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "No code hunting. No gimmick.\n\nMake a free profile and see who is around you.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -125,7 +125,7 @@
       "platform": "bluesky",
       "date": "2026-08-24",
       "timeUk": "13:00",
-      "body": "We are building in public because launches need attention, not silence.\n\nSign up free:\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "We build MenRush in public, because quiet products stay quiet.\n\nTake a look:\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -134,7 +134,7 @@
       "platform": "instagram",
       "date": "2026-08-24",
       "timeUk": "19:30",
-      "body": "This is not vapor.\n\nWe are building MenRush in public, one sharp move at a time.\n\nSign up free:\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "This is not vapor.\n\nMenRush is open, and we keep improving it one sharp move at a time.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 1,
       "kind": "full"
     },
@@ -143,7 +143,7 @@
       "platform": "reddit",
       "date": "2026-08-24",
       "timeUk": "15:00",
-      "body": "Title: We are building a new app for men around speed, proximity, and intent\n\nBody:\nA lot of apps feel crowded, slow, and built to keep you scrolling.\n\nWe are trying something tighter with MenRush: more local context, faster chemistry, and less friction.\n\nStill early. we open 1 October (UK first). I would genuinely like to know what would make an app like that worth trying for you.\n\nSign up free:\nhttps://menrush.com",
+      "body": "Title: We built an app for men around speed, proximity, and intent\n\nBody:\nA lot of apps feel crowded, slow, and built to keep you scrolling.\n\nWe tried something tighter with MenRush: more local context, faster chemistry, and less friction. It is open in the UK.\n\nI would genuinely like to know what would make an app like that worth keeping for you.\n\nhttps://menrush.com",
       "week": 1,
       "kind": "full"
     },
@@ -152,7 +152,7 @@
       "platform": "x",
       "date": "2026-08-24",
       "timeUk": "08:30",
-      "body": "Built in public.\n\nReal product. Real pressure. Real launch clock. 1 October.\n\nIf you want in early:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "Built in public.\n\nReal product. Real fixes shipped every week.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -161,7 +161,7 @@
       "platform": "x",
       "date": "2026-08-24",
       "timeUk": "19:30",
-      "body": "No audience, no launch.\n\nSo we are saying it plainly:\n\nMenRush is coming for men who want less friction and more signal.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "We say it plainly:\n\nMenRush is for men who want less friction and more signal.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -170,7 +170,7 @@
       "platform": "bluesky",
       "date": "2026-08-25",
       "timeUk": "13:00",
-      "body": "MenRush is not trying to be everything.\n\nIt is trying to be sharp, local, and fast.\n\nJoin early:\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "MenRush is not trying to be everything.\n\nIt is trying to be sharp, local, and fast.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -188,7 +188,7 @@
       "platform": "x",
       "date": "2026-08-25",
       "timeUk": "08:30",
-      "body": "You do not need more matches that go nowhere.\n\nYou need better timing, better proximity, and less friction.\n\nMenRush is on the way.\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "You need better timing, better proximity, and less friction.\n\nMenRush is open.\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -197,7 +197,7 @@
       "platform": "x",
       "date": "2026-08-25",
       "timeUk": "19:30",
-      "body": "The first version should feel alive, not endless.\n\nThat is what we are building.\n\nOpen now. Sign up free:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "An app should feel alive, not endless.\n\nThat is what we built.\n\nSign up free:\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -206,7 +206,7 @@
       "platform": "bluesky",
       "date": "2026-08-26",
       "timeUk": "13:00",
-      "body": "The question behind MenRush:\n\nwho nearby is actually worth your attention right now?\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "The question behind MenRush:\n\nwho close by is actually worth your time tonight?\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -215,7 +215,7 @@
       "platform": "instagram",
       "date": "2026-08-26",
       "timeUk": "19:30",
-      "body": "Who is around.\nWho is available.\nWho is worth your attention right now.\n\nThat is the question.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "Who is around.\nWho is available.\nWho is worth your attention.\n\nThat is the question.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 1,
       "kind": "full"
     },
@@ -224,7 +224,7 @@
       "platform": "reddit",
       "date": "2026-08-26",
       "timeUk": "15:00",
-      "body": "Title: What would you need to trust a nearby-availability app?\n\nBody:\nIf an app is built around nearby availability, what would you need to trust it? Better verification, clearer distance controls, stronger privacy settings, or something else?\n\nMenRush opens 1 October (UK first). Sign up free: https://menrush.com",
+      "body": "Comment angle: Ask for feature feedback without over-selling.\n\nCopy:\nIf an app is built around nearby availability, what would you need to trust it? Better verification, clearer distance controls, stronger privacy settings, or something else?",
       "week": 1,
       "kind": "full"
     },
@@ -233,7 +233,7 @@
       "platform": "x",
       "date": "2026-08-26",
       "timeUk": "08:30",
-      "body": "MenRush is being designed around one question:\n\nWho is actually around, available, and worth your attention right now?\n\nSign up free:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "MenRush is designed around one question:\n\nWho is actually around, available, and worth your attention?\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -242,7 +242,7 @@
       "platform": "x",
       "date": "2026-08-26",
       "timeUk": "19:30",
-      "body": "The product question is simple:\n\nWho nearby is actually worth your attention right now?\n\nThat is the lane.\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "The question is simple:\n\nWho nearby is worth the message?\n\nThat is the lane.\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -251,7 +251,7 @@
       "platform": "bluesky",
       "date": "2026-08-27",
       "timeUk": "13:00",
-      "body": "No audience, no launch.\n\nMenRush is coming for men who want less friction, more signal, and a room that actually moves.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "MenRush is for men who want less friction, more signal, and a map that actually moves.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -260,7 +260,7 @@
       "platform": "instagram",
       "date": "2026-08-27",
       "timeUk": "19:30",
-      "body": "If this sounds like your kind of app, you are exactly who we want.\n\nOpen now. Sign up free.\n\nmenrush.com. UK first\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "If this sounds like your kind of app, you are exactly who it is for.\n\nmenrush.com. UK first\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 1,
       "kind": "full"
     },
@@ -269,7 +269,7 @@
       "platform": "x",
       "date": "2026-08-27",
       "timeUk": "08:30",
-      "body": "Launches do not happen because products exist.\n\nThey happen because people feel something and tell someone else.\n\nIf MenRush sounds like your kind of app, join early:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "Apps do not grow because they exist.\n\nThey grow because people feel something and tell someone else.\n\nIf MenRush sounds like your kind of app, try it:\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -278,7 +278,7 @@
       "platform": "x",
       "date": "2026-08-27",
       "timeUk": "19:30",
-      "body": "MenRush is for men who want the room to feel faster, closer, and more intentional.\n\nIf that is you, sign up free:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "MenRush is for men who want things faster, closer, and more intentional.\n\nIf that is you, sign up free:\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 1,
       "kind": "full"
     },
@@ -287,7 +287,7 @@
       "platform": "bluesky",
       "date": "2026-08-28",
       "timeUk": "13:00",
-      "body": "Proximity without the noise.\n\nMenRush opens 1 October (UK first).\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "Proximity without the noise. Open in the UK.\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -296,7 +296,7 @@
       "platform": "instagram",
       "date": "2026-08-28",
       "timeUk": "19:30",
-      "body": "Map-first energy.\n\nWho is nearby.\nWho is available.\nWho is worth your attention right now.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "Map-first energy.\n\nWho is nearby.\nWho is available.\nWho is worth the trip.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 2,
       "kind": "full"
     },
@@ -305,7 +305,7 @@
       "platform": "reddit",
       "date": "2026-08-28",
       "timeUk": "15:00",
-      "body": "Title: What does \"nearby now\" need to feel useful (not creepy) in an app for gay men?\n\nBody:\nBuilding MenRush around live proximity for men. Curious what distance, privacy, and intent controls would make you actually turn location on.\n\nSign up free if you want to try it: https://menrush.com",
+      "body": "Title: What does \"nearby\" need to feel useful (not creepy) in an app for gay men?\n\nBody:\nMenRush is built around live proximity for men. Curious what distance, privacy, and intent controls would make you actually turn location on.\n\nIt is free if you want to try it: https://menrush.com",
       "week": 2,
       "kind": "full"
     },
@@ -314,7 +314,7 @@
       "platform": "x",
       "date": "2026-08-28",
       "timeUk": "08:30",
-      "body": "See who is near you right now.\n\nThat is the product truth MenRush is built around.\n\nMap-first. Local. Immediate.\n\nOpen now. Sign up free:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "See who is near you.\n\nThat is the idea MenRush is built around.\n\nMap-first. Local. Immediate.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -323,7 +323,7 @@
       "platform": "x",
       "date": "2026-08-28",
       "timeUk": "19:30",
-      "body": "Not another endless grid.\n\nA clearer read on who is actually around. when it matters.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "Not another endless grid.\n\nA clearer read on who is actually around when it matters.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -332,7 +332,7 @@
       "platform": "bluesky",
       "date": "2026-08-29",
       "timeUk": "13:00",
-      "body": "Less chat-for-weeks. More local signal.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "Less chat-for-weeks. More meeting the man down the road.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -341,7 +341,7 @@
       "platform": "instagram",
       "date": "2026-08-29",
       "timeUk": "19:30",
-      "body": "Less chat-for-weeks. More local energy.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "Less chat that goes nowhere.\n\nMore men who are actually nearby.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 2,
       "kind": "full"
     },
@@ -350,7 +350,7 @@
       "platform": "x",
       "date": "2026-08-29",
       "timeUk": "08:30",
-      "body": "Tired of chatting for weeks and never meeting?\n\nMenRush is built around local signal, not endless delay.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "Tired of chatting for weeks and never meeting?\n\nSee who is actually near you.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -359,7 +359,7 @@
       "platform": "x",
       "date": "2026-08-29",
       "timeUk": "19:30",
-      "body": "Less chat-for-weeks.\nMore local signal.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "Less chat-for-weeks.\nMore local signal.\nMore intent.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -368,7 +368,7 @@
       "platform": "bluesky",
       "date": "2026-08-30",
       "timeUk": "13:00",
-      "body": "Rooms ship with the product. We'll say when they're open.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "If a spot is quiet, MenRush shows it as quiet. No padding.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -377,7 +377,7 @@
       "platform": "instagram",
       "date": "2026-08-30",
       "timeUk": "19:30",
-      "body": "Intentional rooms. Coming at launch. No fake inventory.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "Nearby energy.\nHonest counts.\n\nIf a spot is quiet, it says so.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 2,
       "kind": "full"
     },
@@ -386,7 +386,7 @@
       "platform": "x",
       "date": "2026-08-30",
       "timeUk": "08:30",
-      "body": "Rooms are coming with the product. intentional spaces, not a fake live catalog.\n\nSign up free:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "We do not invent activity to make the map look busy.\n\nWhat you see on MenRush is who is really there.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -395,7 +395,7 @@
       "platform": "x",
       "date": "2026-08-30",
       "timeUk": "19:30",
-      "body": "Atmosphere first. Inventory when it's real.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "Presence first.\nNo invented numbers.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -404,7 +404,7 @@
       "platform": "bluesky",
       "date": "2026-08-31",
       "timeUk": "13:00",
-      "body": "Weekend proximity without the noise.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "Local Friday energy, minus the noise.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -413,7 +413,7 @@
       "platform": "instagram",
       "date": "2026-08-31",
       "timeUk": "19:30",
-      "body": "Night energy. Local presence.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "Weekend proximity.\nLess noise.\nMore signal.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 2,
       "kind": "full"
     },
@@ -422,7 +422,7 @@
       "platform": "x",
       "date": "2026-08-31",
       "timeUk": "08:30",
-      "body": "Night energy. Weekend proximity. Who's actually around.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "Friday energy should feel local.\n\nWho is around. Who is free. Who is worth the message.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -431,7 +431,7 @@
       "platform": "x",
       "date": "2026-08-31",
       "timeUk": "19:30",
-      "body": "The weekend should feel closer, not louder.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "Night proximity without the spam.\n\nBuilt for men who know what they want.\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -440,7 +440,7 @@
       "platform": "bluesky",
       "date": "2026-09-01",
       "timeUk": "13:00",
-      "body": "Nearby without oversharing.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "Discretion and presence can live in the same app. That is the balance we built for.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -449,7 +449,7 @@
       "platform": "instagram",
       "date": "2026-09-01",
       "timeUk": "19:30",
-      "body": "Presence with discretion.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "Discretion with presence.\n\nSee who is near you, on your terms.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 2,
       "kind": "full"
     },
@@ -458,7 +458,7 @@
       "platform": "reddit",
       "date": "2026-09-01",
       "timeUk": "15:00",
-      "body": "Title: Privacy vs proximity. what trade-offs would you accept?\n\nBody:\nCurious how men weigh live location vs discretion. MenRush opens 1 Oct. https://menrush.com",
+      "body": "Title: How do you balance discretion with actually meeting people nearby?\n\nBody:\nMenRush is built for men who want local signal without oversharing. What privacy defaults would you need before turning location on?\n\nhttps://menrush.com",
       "week": 2,
       "kind": "full"
     },
@@ -467,7 +467,7 @@
       "platform": "x",
       "date": "2026-09-01",
       "timeUk": "08:30",
-      "body": "Discretion + presence. Know who's around without broadcasting everything.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "Discreet does not mean invisible.\n\nIt means you control how you show up and still find who is nearby.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -476,7 +476,7 @@
       "platform": "x",
       "date": "2026-09-01",
       "timeUk": "19:30",
-      "body": "Adult. Discreet. Nearby.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "Adult. Direct.\n\nMenRush is built for men who want presence without the circus.\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -485,7 +485,7 @@
       "platform": "bluesky",
       "date": "2026-09-02",
       "timeUk": "13:00",
-      "body": "What nearby feature would you use first?\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "Which nearby feature do you reach for first?\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -494,7 +494,7 @@
       "platform": "instagram",
       "date": "2026-09-02",
       "timeUk": "19:30",
-      "body": "What nearby feature would you use first?\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "What do you open first?\n\nMap. Filters. Out.\n\nTell us in the comments.\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 2,
       "kind": "full"
     },
@@ -503,7 +503,7 @@
       "platform": "x",
       "date": "2026-09-02",
       "timeUk": "08:30",
-      "body": "Soft ask: what nearby feature would you use first?\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "Soft ask:\n\nWhen you open MenRush, what do you use first: the map, filters, or the Out tab?\n\nTell us:\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -512,7 +512,7 @@
       "platform": "x",
       "date": "2026-09-02",
       "timeUk": "19:30",
-      "body": "Map, rooms, or who liked you nearby. what matters first?\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "We are listening.\n\nWhat would make nearby more useful for you?\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -521,7 +521,7 @@
       "platform": "bluesky",
       "date": "2026-09-03",
       "timeUk": "13:00",
-      "body": "MenRush is open in the UK. Sign up free.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "Signing up costs nothing. Then the map is yours.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -530,7 +530,7 @@
       "platform": "instagram",
       "date": "2026-09-03",
       "timeUk": "19:30",
-      "body": "Open now. Free to join.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "No code needed.\n\nSign up, set your distance, and see who is around.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 2,
       "kind": "full"
     },
@@ -539,7 +539,7 @@
       "platform": "x",
       "date": "2026-09-03",
       "timeUk": "08:30",
-      "body": "Open now in the UK. Sign up free.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "Free to join, free to look around.\n\nMake a profile tonight and see who is close.\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -548,7 +548,7 @@
       "platform": "x",
       "date": "2026-09-03",
       "timeUk": "19:30",
-      "body": "MenRush is open in the UK. Sign up free.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "MenRush is open.\n\nCome and see who is nearby.\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 2,
       "kind": "full"
     },
@@ -557,7 +557,7 @@
       "platform": "bluesky",
       "date": "2026-09-04",
       "timeUk": "13:00",
-      "body": "[OUTLINE · week 3]\n\nOpen now: MenRush is free to join. No gimmick.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "[OUTLINE · week 3]\n\nA free profile is all it takes to see men nearby.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 3,
       "kind": "outline"
     },
@@ -566,7 +566,7 @@
       "platform": "instagram",
       "date": "2026-09-04",
       "timeUk": "19:30",
-      "body": "[OUTLINE · week 3]\n\nOpen now: MenRush is free to join. No gimmick.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "[OUTLINE · week 3]\n\nJoining costs nothing. Set your distance and look around.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 3,
       "kind": "outline"
     },
@@ -575,7 +575,7 @@
       "platform": "x",
       "date": "2026-09-04",
       "timeUk": "08:30",
-      "body": "[OUTLINE · week 3]\n\nOpen now: MenRush is free to join. No gimmick.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "[OUTLINE · week 3]\n\nFree to join. Make a profile and see who is close.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 3,
       "kind": "outline"
     },
@@ -584,7 +584,7 @@
       "platform": "x",
       "date": "2026-09-04",
       "timeUk": "19:30",
-      "body": "[OUTLINE · week 3]\n\nOpen now: MenRush is free to join. No gimmick.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "[OUTLINE · week 3]\n\nNo code, no catch. Sign up and open the map.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 3,
       "kind": "outline"
     },
@@ -593,7 +593,7 @@
       "platform": "bluesky",
       "date": "2026-09-11",
       "timeUk": "13:00",
-      "body": "[OUTLINE · week 4]\n\nFounder / build-in-public. Real notes. Real launch clock.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "[OUTLINE · week 4]\n\nFounder / build in public. A plain note on what we are working on next.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 4,
       "kind": "outline"
     },
@@ -602,7 +602,7 @@
       "platform": "instagram",
       "date": "2026-09-11",
       "timeUk": "19:30",
-      "body": "[OUTLINE · week 4]\n\nFounder / build-in-public. Real notes. Real launch clock.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "[OUTLINE · week 4]\n\nFounder / build in public. Behind the scenes of a live app, real notes only.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 4,
       "kind": "outline"
     },
@@ -611,7 +611,7 @@
       "platform": "x",
       "date": "2026-09-11",
       "timeUk": "08:30",
-      "body": "[OUTLINE · week 4]\n\nFounder / build-in-public. Real notes. Real launch clock.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "[OUTLINE · week 4]\n\nFounder / build in public. One real fix we shipped this week.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 4,
       "kind": "outline"
     },
@@ -620,7 +620,7 @@
       "platform": "x",
       "date": "2026-09-11",
       "timeUk": "19:30",
-      "body": "[OUTLINE · week 4]\n\nFounder / build-in-public. Real notes. Real launch clock.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "[OUTLINE · week 4]\n\nFounder / build in public. What members asked for, and what changed.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 4,
       "kind": "outline"
     },
@@ -629,7 +629,7 @@
       "platform": "bluesky",
       "date": "2026-09-18",
       "timeUk": "13:00",
-      "body": "[OUTLINE · week 5]\n\nTrust / discretion. Free verification. Obfuscated discovery. Adult & intentional.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "[OUTLINE · week 5]\n\nTrust / discretion. Discreet does not have to mean invisible.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 5,
       "kind": "outline"
     },
@@ -638,7 +638,7 @@
       "platform": "instagram",
       "date": "2026-09-18",
       "timeUk": "19:30",
-      "body": "[OUTLINE · week 5]\n\nTrust / discretion. Free verification. Obfuscated discovery. Adult & intentional.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "[OUTLINE · week 5]\n\nTrust / discretion. Privacy controls that respect how you show up.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 5,
       "kind": "outline"
     },
@@ -647,7 +647,7 @@
       "platform": "x",
       "date": "2026-09-18",
       "timeUk": "08:30",
-      "body": "[OUTLINE · week 5]\n\nTrust / discretion. Free verification. Obfuscated discovery. Adult & intentional.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "[OUTLINE · week 5]\n\nTrust / discretion. You choose how you show up on the map.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 5,
       "kind": "outline"
     },
@@ -656,7 +656,7 @@
       "platform": "x",
       "date": "2026-09-18",
       "timeUk": "19:30",
-      "body": "[OUTLINE · week 5]\n\nTrust / discretion. Free verification. Obfuscated discovery. Adult & intentional.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "[OUTLINE · week 5]\n\nTrust / discretion. Adult and intentional, without oversharing.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 5,
       "kind": "outline"
     },
@@ -665,7 +665,7 @@
       "platform": "bluesky",
       "date": "2026-09-25",
       "timeUk": "13:00",
-      "body": "[OUTLINE · week 6]\n\nCountdown. Opens 1 October 2026, UK first. Keep cadence, do not spam.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "[OUTLINE · week 6]\n\nNearby beats endless. Open in the UK and free to join.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 6,
       "kind": "outline"
     },
@@ -674,7 +674,7 @@
       "platform": "instagram",
       "date": "2026-09-25",
       "timeUk": "19:30",
-      "body": "[OUTLINE · week 6]\n\nCountdown. Opens 1 October 2026, UK first. Keep cadence, do not spam.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "[OUTLINE · week 6]\n\nWeekend energy, close to home. Open in the UK.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 6,
       "kind": "outline"
     },
@@ -683,7 +683,7 @@
       "platform": "x",
       "date": "2026-09-25",
       "timeUk": "08:30",
-      "body": "[OUTLINE · week 6]\n\nCountdown. Opens 1 October 2026, UK first. Keep cadence, do not spam.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "[OUTLINE · week 6]\n\nOpen in the UK. Who is near you this weekend?\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 6,
       "kind": "outline"
     },
@@ -692,7 +692,7 @@
       "platform": "x",
       "date": "2026-09-25",
       "timeUk": "19:30",
-      "body": "[OUTLINE · week 6]\n\nCountdown. Opens 1 October 2026, UK first. Keep cadence, do not spam.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "[OUTLINE · week 6]\n\nLocal, nearby, free to join. Keep cadence, do not spam.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 6,
       "kind": "outline"
     },
@@ -701,7 +701,7 @@
       "platform": "bluesky",
       "date": "2026-09-29",
       "timeUk": "13:00",
-      "body": "[OUTLINE · week 7]\n\nOpen now. Sign up free.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "[OUTLINE · week 7]\n\nMenRush is open and free to join. Come and look around.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 7,
       "kind": "outline"
     },
@@ -710,7 +710,7 @@
       "platform": "instagram",
       "date": "2026-09-29",
       "timeUk": "19:30",
-      "body": "[OUTLINE · week 7]\n\nOpen now. Sign up free.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "[OUTLINE · week 7]\n\nBuilt for men who know what they want. Open in the UK.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 7,
       "kind": "outline"
     },
@@ -719,7 +719,7 @@
       "platform": "x",
       "date": "2026-09-29",
       "timeUk": "08:30",
-      "body": "[OUTLINE · week 7]\n\nOpen now. Sign up free.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "[OUTLINE · week 7]\n\nOpen now, UK first. Sign up free.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 7,
       "kind": "outline"
     },
@@ -728,7 +728,7 @@
       "platform": "x",
       "date": "2026-09-29",
       "timeUk": "19:30",
-      "body": "[OUTLINE · week 7]\n\nOpen now. Sign up free.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "[OUTLINE · week 7]\n\nYour city, your map. Make a free profile tonight.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 7,
       "kind": "outline"
     },
@@ -737,7 +737,7 @@
       "platform": "bluesky",
       "date": "2026-09-30",
       "timeUk": "13:00",
-      "body": "[OUTLINE · week 7]\n\nCalm confidence. Reply bank active.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "[OUTLINE · week 7]\n\nCalm confidence. Thank people who reply, point them to the site.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 7,
       "kind": "outline"
     },
@@ -746,7 +746,7 @@
       "platform": "instagram",
       "date": "2026-09-30",
       "timeUk": "19:30",
-      "body": "[OUTLINE · week 7]\n\nCalm confidence. Reply bank active.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "[OUTLINE · week 7]\n\nCalm confidence. One clean visual, one line, the link.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 7,
       "kind": "outline"
     },
@@ -764,7 +764,7 @@
       "platform": "x",
       "date": "2026-09-30",
       "timeUk": "19:30",
-      "body": "[OUTLINE · week 7]\n\nCalm confidence. Reply bank active.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "[OUTLINE · week 7]\n\nCalm confidence. Answer questions, no hard sell.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 7,
       "kind": "outline"
     },
@@ -773,7 +773,7 @@
       "platform": "bluesky",
       "date": "2026-10-01",
       "timeUk": "13:00",
-      "body": "[OUTLINE · week 7]\n\nMenRush is open.\n\nUK first.\nBuilt for men who know what they want.\n\nSee who's near you right now.\nhttps://menrush.com\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "body": "[OUTLINE · week 7]\n\nMenRush is open in the UK.\n\nLess noise, more local signal.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
       "week": 7,
       "kind": "outline"
     },
@@ -782,7 +782,7 @@
       "platform": "instagram",
       "date": "2026-10-01",
       "timeUk": "19:30",
-      "body": "[OUTLINE · week 7]\n\nMenRush is open.\n\nUK first.\nBuilt for men who know what they want.\n\nSee who's near you right now.\nhttps://menrush.com\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "body": "[OUTLINE · week 7]\n\nMenRush is open, UK first.\n\nMen nearby, on your terms.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
       "week": 7,
       "kind": "outline"
     },
@@ -791,7 +791,7 @@
       "platform": "x",
       "date": "2026-10-01",
       "timeUk": "08:30",
-      "body": "[OUTLINE · week 7]\n\nMenRush is open.\n\nUK first.\nBuilt for men who know what they want.\n\nSee who's near you right now.\nhttps://menrush.com\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "[OUTLINE · week 7]\n\nMenRush is open.\n\nUK first.\nBuilt for men who know what they want.\n\nSee who is near you.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 7,
       "kind": "outline"
     },
@@ -800,7 +800,7 @@
       "platform": "x",
       "date": "2026-10-01",
       "timeUk": "19:30",
-      "body": "[OUTLINE · week 7]\n\nMenRush is open.\n\nUK first.\nBuilt for men who know what they want.\n\nSee who's near you right now.\nhttps://menrush.com\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "body": "[OUTLINE · week 7]\n\nOpen in the UK tonight. Free to join, map first.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
       "week": 7,
       "kind": "outline"
     }
