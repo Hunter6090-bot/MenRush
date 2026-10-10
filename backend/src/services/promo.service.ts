@@ -274,45 +274,32 @@ export function formatPromoExpiryDate(d: Date): string {
 export const promoClock = { now: (): Date => new Date() };
 
 /**
- * Midnight at the start of a Europe/London calendar day, as a UTC instant.
- * Uses the zone's own rules (BST or GMT for that date), no fixed offset.
+ * ALL Pride codes (Pete, 10 Oct 2026) can be redeemed up to and including
+ * 31 October 2026 23:59:59 Europe/London:
+ * - personal promo codes (brightonpride26, sent by email), and
+ * - Pride-flagged MENRUSH invites from the /pride claim form
+ *   (beta_invite_codes with pride_months_free set, expires_at NULL).
+ * This is the first instant they are closed: midnight starting 1 November
+ * London time (GMT then, so 2026-11-01T00:00:00Z). Exclusive. One helper,
+ * startOfEuropeLondonDay, so the cutoff follows BST and GMT.
  */
-export function europeLondonMidnightUtc(ymd: string): Date {
-  const [y, m, d] = ymd.split('-').map(Number);
-  const guess = Date.UTC(y, m - 1, d, 0, 0, 0);
-  const offsetAt = (t: number): number => {
-    const parts = new Intl.DateTimeFormat('en-GB', {
-      timeZone: EUROPE_LONDON,
-      hourCycle: 'h23',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    }).formatToParts(new Date(t));
-    const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
-    const wall = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
-    return wall - t;
-  };
-  let t = guess - offsetAt(guess);
-  t = guess - offsetAt(t);
-  return new Date(t);
-}
-
-/**
- * Personal Pride codes (brightonpride26, sent by email) can be redeemed up to
- * and including 31 October 2026 23:59:59 Europe/London. This is the first
- * instant they are closed: midnight starting 1 November London time
- * (GMT then, so 2026-11-01T00:00:00Z). Exclusive.
- */
-export const PERSONAL_PRIDE_REDEEM_ENDS = europeLondonMidnightUtc('2026-11-01');
+export const PERSONAL_PRIDE_REDEEM_ENDS = startOfEuropeLondonDay('2026-11-01');
+/** Same instant, named for both kinds of Pride code. */
+export const PRIDE_CODES_REDEEM_ENDS = PERSONAL_PRIDE_REDEEM_ENDS;
 
 export const PERSONAL_PRIDE_EXPIRED_MESSAGE = 'This Pride code has expired. You can still join free.';
 
 export function isPersonalPrideRedeemOpen(now: Date = promoClock.now()): boolean {
   return now.getTime() < PERSONAL_PRIDE_REDEEM_ENDS.getTime();
 }
+
+/** True until the Pride cutoff, for promo codes and Pride invites alike. */
+export function isPrideCodeRedeemOpen(now: Date = promoClock.now()): boolean {
+  return isPersonalPrideRedeemOpen(now);
+}
+
+/** Claim form (/pride) after the cutoff: no new codes and no resends. */
+export const PRIDE_CLAIM_ENDED_MESSAGE = 'Pride codes have now ended. You can still join free.';
 
 /** User-facing line for an expired personal Pride code. Kind and plain; no date maths for the reader. */
 export function personalPrideExpiredMessage(_expiresAt?: Date | null): string {

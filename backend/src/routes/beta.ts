@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { rateLimitKey } from '../lib/clientIp';
 import { z } from 'zod';
 import { inviteCodeService } from '../services/invite-code.service';
+import { PERSONAL_PRIDE_EXPIRED_MESSAGE } from '../services/promo.service';
 import { AuthRequest } from '../middleware/auth';
 
 const router = Router();
@@ -26,6 +27,10 @@ router.post('/validate-invite', validateLimiter, async (req: AuthRequest, res: R
     const { code } = ValidateInviteSchema.parse(req.body);
     // normalizeInviteCode runs inside validate (trim, upper, strip spaces/hyphens).
     const result = await inviteCodeService.validate(code);
+    if (!result.valid && result.reason === 'pride_expired') {
+      // Pride invites close with every Pride code at 31 Oct 23:59:59 London.
+      return res.status(400).json({ valid: false, error: PERSONAL_PRIDE_EXPIRED_MESSAGE, code: 'pride_expired' });
+    }
     if (!result.valid) {
       return res.status(400).json({
         valid: false,

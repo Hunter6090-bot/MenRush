@@ -6,6 +6,7 @@ import {
   normalizeInviteCode,
 } from './invite-code.service';
 import {
+  isPrideCodeRedeemOpen,
   isPrideInviteIssueOpen,
   promoService,
   SHARED_PRIDE_MONTHS_FREE,
@@ -199,6 +200,10 @@ async function mintPrideFlaggedInvite(email: string): Promise<string> {
 export const prideInviteService = {
   async issueFromPridePage(emailRaw: string): Promise<PrideInviteIssueResult> {
     const email = emailRaw.trim().toLowerCase();
+    // After 31 Oct 23:59:59 London no Pride code works, so no new codes and no resends.
+    if (!isPrideCodeRedeemOpen()) {
+      throw new Error('pride_codes_ended');
+    }
     const windowOpen = isPrideInviteIssueOpen();
 
     // Already fully granted via another path. Do not mint a Pride invite on top.
