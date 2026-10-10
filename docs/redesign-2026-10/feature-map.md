@@ -153,4 +153,19 @@ React components use `currentColor`; `filled` for active copper tab state, outli
 | Rooms tab | `IconRooms` outline/filled |
 | Out tab | `IconOut` outline/filled (replaces cruise ship on tab only; Cruise layer keeps `IconHotSpots`) |
 | Menu Discretion slider | `IconDiscretion` outline |
-| Map\|List home toggle | unchanged |
+| Map\|List home toggle | `IconGrid` (List, shown on the map) / `IconMapPin` (Map, shown on the list) |
+
+## Tab icons match the board (10 Oct 2026)
+
+Pete: the bottom tabs use exactly the glyphs on the Claude Design board (MenRush Phone App, 9 states).
+
+| Tab | Icon (`data-icon`) |
+|-----|--------------------|
+| First tab on the map | List, `grid` |
+| First tab on the list | Map, `map-pin` (Pete swap lock) |
+| Chat | `chat-bubble` (was envelope + wax seal) |
+| Rooms | `video-camera` (was camera with two people) |
+| Out | `half-moon` (was pin + star, too close to Map) |
+| You | `person` outline, filled when active (was solid bust) |
+
+Pinned by `frontend/src/components/Layout.tabIcons.test.tsx`.

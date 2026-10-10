@@ -27,6 +27,11 @@ export interface NavItem {
   desktopNav?: boolean;
   /** Reachable on mobile via the "More" sheet instead of the primary tab row. */
   mobileMore?: boolean;
+  /**
+   * Fill the icon when the tab is active. Default true for catalog items; every primary
+   * tab (Map/List, Chat, Rooms, Out, You) is outline-only, active = copper outline (board).
+   */
+  fillWhenActive?: boolean;
 }
 
 /**
@@ -41,6 +46,7 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.map,
       shortLabel: 'Map',
       Icon: IconDiscover,
+      fillWhenActive: false,
       mobileTab: true,
       desktopNav: true,
     },
@@ -49,6 +55,7 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.messages,
       shortLabel: 'Chat',
       Icon: IconChat,
+      fillWhenActive: false,
       badgeKey: 'messages',
       mobileTab: true,
       desktopNav: true,
@@ -58,6 +65,7 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.rooms,
       shortLabel: 'Rooms',
       Icon: IconRooms,
+      fillWhenActive: false,
       mobileTab: true,
       desktopNav: true,
     },
@@ -66,6 +74,7 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.out,
       shortLabel: 'Out',
       Icon: IconOut,
+      fillWhenActive: false,
       mobileTab: true,
       desktopNav: true,
     },
@@ -74,6 +83,7 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.you,
       shortLabel: 'You',
       Icon: IconProfile,
+      fillWhenActive: false,
       mobileTab: true,
       desktopNav: true,
     },
