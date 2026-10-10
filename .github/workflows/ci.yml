@@ -35,6 +35,8 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
+      - name: Security checks (source guards, uploads, media, CORS)
+        run: npm run test:security
 
   backend-adult-assurance:
     name: Adult assurance + Veriff checks
