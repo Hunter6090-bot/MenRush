@@ -72,6 +72,8 @@
     "test:community-ghost-hidden": "ts-node scripts/community-ghost-hidden-integration.ts",
     "test:delete-own-posts-integration": "ts-node scripts/delete-own-posts-integration.ts",
     "test:reports-survive-deletion-integration": "ts-node scripts/reports-survive-deletion-integration.ts",
+    "test:report-evidence-retention-integration": "ts-node scripts/report-evidence-retention-integration.ts",
+    "test:report-owner-brief": "ts-node scripts/report-owner-brief-checks.ts",
     "test:room-temp-identity-privacy": "ts-node src/services/room-temp-identity.privacy.test.ts",
     "test:nightlife-checkin": "ts-node scripts/nightlife-checkin-checks.ts",
     "test:hot-spot-free-counts": "ts-node --transpile-only scripts/hot-spot-free-counts-checks.ts",

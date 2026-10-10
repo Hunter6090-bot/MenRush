@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { Premium } from './Premium';
+import { premiumStartLine } from '../lib/premiumStart';
 
 const mocks = vi.hoisted(() => ({
   getPlans: vi.fn(),
@@ -197,7 +198,7 @@ describe('Premium manual invoice stopgap and password step', () => {
     expect(screen.getByText(/Bank details are not shown here yet/i)).toBeInTheDocument();
   });
 
-  it('immediate start tick starts unticked, is required, is 44px and 15px, and is sent with the invoice', async () => {
+  it('immediate start tick is optional and unticked, Legal text exact, 44px and 15px', async () => {
     mocks.createInvoice.mockResolvedValue({
       data: {
         invoice: {
@@ -229,26 +230,114 @@ describe('Premium manual invoice stopgap and password step', () => {
     const label = screen.getByTestId('immediate-start-consent-label');
     expect(box.type).toBe('checkbox');
     expect(box.checked).toBe(false);
-    expect(box.required).toBe(true);
+    expect(box.required).toBe(false);
     expect(label).toHaveTextContent(
-      'Start my Premium as soon as my payment is confirmed. I understand that if I cancel within 14 days, my refund will be reduced for the days of Premium I have had.',
+      'Start my Premium as soon as my payment is confirmed. I understand that if I cancel within 14 days, my refund will be reduced for the days of Premium I have had. If I leave this unticked, Premium starts after the 14 day cancellation period.',
     );
     expect(label.className).toContain('min-h-[44px]');
     expect(label.className).toContain('text-[15px]');
+  });
 
-    const button = screen.getByTestId('generate-invoice-button') as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
-    fireEvent.click(button);
-    expect(mocks.createInvoice).not.toHaveBeenCalled();
+  it('shows both options and what each means at 15px, and says plainly unticked starts after 14 days', async () => {
+    render(
+      <MemoryRouter>
+        <Premium />
+      </MemoryRouter>,
+    );
+    const options = await screen.findByTestId('start-options');
+    expect(options.className).toContain('text-[15px]');
+    expect(screen.getByTestId('start-option-ticked')).toHaveTextContent(
+      'Box ticked: Premium starts once we confirm your payment. If you cancel within 14 days, your refund is reduced for the days of Premium you have had.',
+    );
+    expect(screen.getByTestId('start-option-unticked')).toHaveTextContent(
+      'Box left unticked: Premium starts after the 14 day cancellation period. If you cancel within the 14 days, you get a full refund.',
+    );
+  });
 
+  it('shows the resulting start date at 15px and updates it live on tick and untick', async () => {
+    render(
+      <MemoryRouter>
+        <Premium />
+      </MemoryRouter>,
+    );
+    const line = await screen.findByTestId('premium-start-date');
+    expect(line.className).toContain('text-[15px]');
+    expect(line).toHaveTextContent(premiumStartLine(false));
+    expect(line.textContent).toMatch(/^Your Premium starts on \d{1,2} [A-Z][a-z]+ \d{4}, after the 14 day cancellation period/);
+    const box = screen.getByTestId('immediate-start-consent') as HTMLInputElement;
     fireEvent.click(box);
-    expect(box.checked).toBe(true);
+    expect(line).toHaveTextContent('Your Premium starts as soon as we confirm your payment.');
+    fireEvent.click(box);
+    expect(line).toHaveTextContent(premiumStartLine(false));
+  });
+
+  it('unticked still issues an invoice (delayed start) and sends false; ticked sends true', async () => {
+    mocks.createInvoice.mockResolvedValue({
+      data: {
+        invoice: {
+          id: 'inv-tick',
+          invoice_number: 'MR-INV-20261010-TICK01',
+          amount_pence: 699,
+          plan_days: 30,
+          status: 'unpaid',
+          payment_reference: 'MR-0000TICK',
+        },
+        payment_instructions: {
+          account_name: null,
+          sort_code: null,
+          account_number: null,
+          bank_name: null,
+          currency: 'GBP',
+          payment_reference: 'MR-0000TICK',
+          instructions: 'Bank details are not shown here yet.',
+          bank_configured: false,
+        },
+      },
+    });
+    render(
+      <MemoryRouter>
+        <Premium />
+      </MemoryRouter>,
+    );
+    const button = (await screen.findByTestId('generate-invoice-button')) as HTMLButtonElement;
     expect(button.disabled).toBe(false);
     fireEvent.click(button);
     await waitFor(() => expect(mocks.createInvoice).toHaveBeenCalledTimes(1));
-    expect(mocks.createInvoice).toHaveBeenCalledWith(
-      expect.objectContaining({ immediate_start_consent: true }),
+    expect(mocks.createInvoice).toHaveBeenLastCalledWith({ plan_tier: 'premium', immediate_start_consent: false });
+  });
+
+  it('ticked sends immediate_start_consent true', async () => {
+    mocks.createInvoice.mockResolvedValue({
+      data: {
+        invoice: {
+          id: 'inv-tick',
+          invoice_number: 'MR-INV-20261010-TICK01',
+          amount_pence: 699,
+          plan_days: 30,
+          status: 'unpaid',
+          payment_reference: 'MR-0000TICK',
+        },
+        payment_instructions: {
+          account_name: null,
+          sort_code: null,
+          account_number: null,
+          bank_name: null,
+          currency: 'GBP',
+          payment_reference: 'MR-0000TICK',
+          instructions: 'Bank details are not shown here yet.',
+          bank_configured: false,
+        },
+      },
+    });
+    render(
+      <MemoryRouter>
+        <Premium />
+      </MemoryRouter>,
     );
+    fireEvent.click(await screen.findByTestId('immediate-start-consent'));
+    fireEvent.click(screen.getByTestId('generate-invoice-button'));
+    await waitFor(() => expect(mocks.createInvoice).toHaveBeenCalled());
+    expect(mocks.createInvoice).toHaveBeenLastCalledWith({ plan_tier: 'premium', immediate_start_consent: true });
   });
 
   it('includes set/change password step in the manual payment journey', async () => {

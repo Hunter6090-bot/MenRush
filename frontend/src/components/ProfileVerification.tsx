@@ -20,18 +20,18 @@ export function ProfileVerification({ verification }: { verification: ReturnType
           : 'Verify your ID and take a live selfie with Veriff. Free and optional.';
   return (
     <section aria-label="Profile verification" className="mt-4 rounded-2xl border border-[var(--copper)]/35 bg-[var(--copper)]/5 p-4">
-      <h3 className="text-sm font-bold text-[var(--cream)]">{title}</h3>
-      <p role="status" className="mt-1 text-sm leading-5 text-[var(--cream-muted)]">{copy}</p>
-      {error ? <p role="alert" className="mt-2 text-sm text-[var(--cream)]">{error}</p> : null}
+      <h3 className="text-[15px] font-bold text-[var(--cream)]">{title}</h3>
+      <p role="status" className="mt-1 text-[15px] leading-snug text-[var(--cream-muted)]">{copy}</p>
+      {error ? <p role="alert" className="mt-2 text-[15px] text-[var(--cream)]">{error}</p> : null}
       {!status ? (
         error ? <button type="button" onClick={() => void refresh()} className="mt-3 min-h-11 font-bold text-[var(--copper)]">Try again</button>
-          : <p className="mt-2 text-sm text-[var(--cream-muted)]">Loading verification status…</p>
+          : <p className="mt-2 text-[15px] text-[var(--cream-muted)]">Loading verification status…</p>
       ) : !checking ? (
-        <button type="button" disabled={loading} onClick={() => void start()} className="mt-3 min-h-11 rounded-xl bg-[#C4832A] px-5 py-2.5 text-sm font-bold text-[#1A0E03] disabled:opacity-60">
+        <button type="button" disabled={loading} onClick={() => void start()} className="mt-3 min-h-11 rounded-xl bg-[#C4832A] px-5 py-2.5 text-[15px] font-bold text-[#1A0E03] disabled:opacity-60">
           {loading ? 'Opening Veriff…' : resume ? 'Continue verification' : actionNeeded ? 'Try again' : 'Get verified'}
         </button>
       ) : error ? <button type="button" onClick={() => void refresh()} className="mt-3 min-h-11 font-bold text-[var(--copper)]">Refresh status</button> : null}
-      <Link to="/privacy" className="ml-3 inline-block py-3 text-xs text-[var(--cream-muted)] underline">Privacy</Link>
+      <Link to="/privacy" data-testid="verification-privacy-link" className="ml-3 inline-flex min-h-[44px] min-w-[44px] items-center justify-center px-1 text-[15px] text-[var(--cream-muted)] underline">Privacy</Link>
     </section>
   );
 }

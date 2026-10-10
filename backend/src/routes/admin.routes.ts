@@ -622,6 +622,57 @@ router.post('/premium/invoices', privateNoStore, async (req: Request, res: Respo
 });
 
 /**
+ * POST /api/admin/premium/invoices/:id/cancel-refund
+ * 7.6A cancellation of a PAID invoice. Works out the refund and resets Premium.
+ */
+router.post('/premium/invoices/:id/cancel-refund', privateNoStore, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const { AdminCancelRefundSchema } = await import('../types/validation');
+  const parsed = AdminCancelRefundSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'validation_error', details: parsed.error.flatten() });
+  }
+  try {
+    const { invoiceService } = await import('../services/invoice.service');
+    const r = await invoiceService.cancelPaidInvoiceWithRefund(req.params.id, parsed.data.admin_actor);
+    return res.json({
+      ok: true,
+      invoice: r.invoice,
+      refund_pence: r.refundPence,
+      days_had: r.daysHad,
+      premium_until: r.premiumUntil,
+      refund_method: 'bank_transfer_by_hand',
+    });
+  } catch (err: any) {
+    if (err?.name === 'InvoiceActionError') return res.status(err.status).json({ error: err.code });
+    console.error('[admin] cancel-refund error');
+    return res.status(500).json({ error: 'cancel_refund_failed' });
+  }
+});
+
+/**
+ * POST /api/admin/premium/invoices/:id/refund-paid
+ * Record that ops paid the refund by bank transfer, by hand.
+ */
+router.post('/premium/invoices/:id/refund-paid', privateNoStore, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const { AdminMarkRefundPaidSchema } = await import('../types/validation');
+  const parsed = AdminMarkRefundPaidSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'validation_error', details: parsed.error.flatten() });
+  }
+  try {
+    const { invoiceService } = await import('../services/invoice.service');
+    const invoice = await invoiceService.markRefundPaid(req.params.id, parsed.data.admin_actor);
+    return res.json({ ok: true, invoice });
+  } catch (err: any) {
+    if (err?.name === 'InvoiceActionError') return res.status(err.status).json({ error: err.code });
+    console.error('[admin] refund-paid error');
+    return res.status(500).json({ error: 'refund_paid_failed' });
+  }
+});
+
+/**
  * POST /api/admin/premium/invoices/:id/confirm-payment
  * Ops mark invoice paid after real payment received (bank transfer / manual).
  * Activates / extends Premium with entitlement stacking.

@@ -1,3 +1,4 @@
+import { premiumStartLine } from '../lib/premiumStart';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { premiumAPI, PremiumPlan, PremiumInvoice, ManualPaymentInstructions } from '../api/premium';
@@ -10,7 +11,7 @@ import { MobileBackButton } from '../components/MobileBackButton';
 import { ThemeToggle } from '../components/ThemeToggle';
 
 const IMMEDIATE_START_CONSENT_TEXT =
-  'Start my Premium as soon as my payment is confirmed. I understand that if I cancel within 14 days, my refund will be reduced for the days of Premium I have had.';
+  'Start my Premium as soon as my payment is confirmed. I understand that if I cancel within 14 days, my refund will be reduced for the days of Premium I have had. If I leave this unticked, Premium starts after the 14 day cancellation period.';
 
 const FEATURES = [
   'See who already matched you',
@@ -78,15 +79,11 @@ export const Premium: React.FC = () => {
 
   const handleCreateInvoice = async () => {
     setError(null);
-    if (!immediateStartConsent) {
-      setError('Please tick the box to confirm when your Premium starts.');
-      return;
-    }
     setGeneratingInvoice(true);
     try {
       const res = await premiumAPI.createInvoice({
         plan_tier: 'premium',
-        immediate_start_consent: true,
+        immediate_start_consent: immediateStartConsent,
       });
       setUnpaidInvoice(res.data.invoice);
       setPaymentInstructions(res.data.payment_instructions);
@@ -347,28 +344,47 @@ export const Premium: React.FC = () => {
                 /* Invoice Generation Button, behind the required immediate start tick */
                 plan && (
                   <>
+                  <div
+                    className="mb-3 space-y-2 text-[15px] leading-snug text-[var(--cream-muted)]"
+                    data-testid="start-options"
+                  >
+                    <p className="font-bold text-[var(--cream)]">When your Premium starts is your choice</p>
+                    <p data-testid="start-option-ticked">
+                      <strong className="text-[var(--cream)]">Box ticked:</strong> Premium starts once we confirm
+                      your payment. If you cancel within 14 days, your refund is reduced for the days of Premium
+                      you have had.
+                    </p>
+                    <p data-testid="start-option-unticked">
+                      <strong className="text-[var(--cream)]">Box left unticked:</strong> Premium starts after the
+                      14 day cancellation period. If you cancel within the 14 days, you get a full refund.
+                    </p>
+                  </div>
                   <label
-                    className="flex min-h-[44px] cursor-pointer items-start gap-3 py-2 mb-3 text-[15px] leading-snug text-[var(--cream)]"
+                    className="flex min-h-[44px] cursor-pointer items-start gap-3 py-2 mb-2 text-[15px] leading-snug text-[var(--cream)]"
                     data-testid="immediate-start-consent-label"
                   >
                     <input
                       type="checkbox"
                       checked={immediateStartConsent}
-                      onChange={(e) => {
-                        setImmediateStartConsent(e.target.checked);
-                        if (e.target.checked) setError(null);
-                      }}
-                      required
-                      aria-required="true"
+                      onChange={(e) => setImmediateStartConsent(e.target.checked)}
+                      aria-describedby="premium-start-date"
                       className="mt-0.5 h-6 w-6 shrink-0 rounded accent-[#C4832A]"
                       data-testid="immediate-start-consent"
                     />
                     <span>{IMMEDIATE_START_CONSENT_TEXT}</span>
                   </label>
+                  <p
+                    id="premium-start-date"
+                    aria-live="polite"
+                    className="mb-4 text-[15px] leading-snug font-bold text-[var(--cream)]"
+                    data-testid="premium-start-date"
+                  >
+                    {premiumStartLine(immediateStartConsent)}
+                  </p>
                   <button
                     type="button"
-                    disabled={generatingInvoice || !immediateStartConsent}
-                    aria-disabled={generatingInvoice || !immediateStartConsent}
+                    disabled={generatingInvoice}
+                    aria-disabled={generatingInvoice}
                     onClick={handleCreateInvoice}
                     className="w-full rounded-xl border border-[#C4832A]/50 bg-[#C4832A]/15 hover:bg-[#C4832A]/25 transition-colors p-4 disabled:opacity-60 mb-5"
                     data-testid="generate-invoice-button"

@@ -432,17 +432,16 @@ export type AlbumMediaMessageInput = z.infer<typeof AlbumMediaMessageSchema>;
 
 /** Exact wording of the required tick on /premium (Legal soft advice, Terms 7.6A). */
 export const IMMEDIATE_START_CONSENT_TEXT =
-  'Start my Premium as soon as my payment is confirmed. I understand that if I cancel within 14 days, my refund will be reduced for the days of Premium I have had.';
+  'Start my Premium as soon as my payment is confirmed. I understand that if I cancel within 14 days, my refund will be reduced for the days of Premium I have had. If I leave this unticked, Premium starts after the 14 day cancellation period.';
 
 export const CreateInvoiceSchema = z
   .object({
     // The server sets the amount and length from PREMIUM_PRICE_LIST. Anything else a
     // client sends (amount_pence, plan_days, notes, ...) is refused with 400.
     plan_tier: z.literal('premium').default('premium'),
-    // Required and must be exactly true: no invoice is issued unless the member ticked it.
-    immediate_start_consent: z.literal(true, {
-      errorMap: () => ({ message: 'Please tick the box to confirm when your Premium starts.' }),
-    }),
+    // Optional, unticked by default (Terms 7.6A). true: Premium starts at payment
+    // confirmation with a reduced refund on cancel. false: it starts after 14 days.
+    immediate_start_consent: z.boolean().default(false),
   })
   .strict();
 
@@ -468,6 +467,19 @@ export const AdminCreateInvoiceSchema = z
 export const AdminConfirmInvoiceSchema = z.object({
   notes: z.string().max(500).optional(),
 });
+
+/** Admin only: 7.6A cancellation of a paid invoice. The refund is paid by hand by bank transfer. */
+export const AdminCancelRefundSchema = z
+  .object({
+    admin_actor: z.string().trim().min(1).max(64),
+  })
+  .strict();
+
+export const AdminMarkRefundPaidSchema = z
+  .object({
+    admin_actor: z.string().trim().min(1).max(64),
+  })
+  .strict();
 
 export type CreateInvoiceInput = z.infer<typeof CreateInvoiceSchema>;
 export type AdminCreateInvoiceInput = z.infer<typeof AdminCreateInvoiceSchema>;

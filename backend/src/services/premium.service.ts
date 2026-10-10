@@ -9,6 +9,8 @@ import {
   paidEndWithEarnedMonths,
   placeEarnedGrant,
   referralExtendedEnd,
+  activePaidPeriodEnd,
+  closeEndedManualInvoiceSubscriptions,
 } from './referral-earned-months';
 import { PREMIUM_PRICE_LIST } from '../lib/premiumPriceList';
 
@@ -125,6 +127,36 @@ async function syncUserEntitlements(
   );
 }
 
+/**
+ * The single rule for "is this member Premium right now". Every payload and gate
+ * goes through this (directly, or via getStatus / isPremium / hasFeature):
+ * is_premium, started (premium_starts_at not in the future, e.g. the delayed
+ * 14-day start of an invoice without immediate start), and not expired.
+ * While Premium is free for everyone, everyone is Premium.
+ */
+export function premiumTruthFromRow(
+  row: {
+    is_premium?: unknown;
+    premium_tier?: unknown;
+    premium_until?: unknown;
+    premium_starts_at?: unknown;
+  },
+  opts: { betaFree: boolean; now?: Date },
+): { is_premium: boolean; premium_tier: PremiumTier } {
+  const now = (opts.now ?? new Date()).getTime();
+  const until = row.premium_until ? new Date(row.premium_until as string | Date) : null;
+  const starts = row.premium_starts_at ? new Date(row.premium_starts_at as string | Date) : null;
+  const active =
+    Boolean(row.is_premium) &&
+    (!starts || starts.getTime() <= now) &&
+    (!until || until.getTime() > now);
+  if (opts.betaFree) return { is_premium: true, premium_tier: 'premium' };
+  return {
+    is_premium: active,
+    premium_tier: active ? (((row.premium_tier as PremiumTier) || 'premium') as PremiumTier) : 'free',
+  };
+}
+
 export const premiumService = {
   async getStatus(userId: string) {
     const result = await query(
@@ -150,16 +182,13 @@ export const premiumService = {
 
     const until = row.premium_until ? new Date(row.premium_until) : null;
     const starts = row.premium_starts_at ? new Date(row.premium_starts_at) : null;
-    const started = !starts || starts.getTime() <= Date.now();
-    const active =
-      Boolean(row.is_premium) &&
-      started &&
-      (!until || until.getTime() > Date.now());
-
     const betaFree = this.isBetaPremiumFree();
+    const truth = premiumTruthFromRow(row, { betaFree });
+    const active = truth.is_premium;
+
     return {
-      tier: betaFree ? 'premium' : ((row.premium_tier || 'free') as PremiumTier),
-      is_premium: betaFree || active,
+      tier: truth.premium_tier,
+      is_premium: active,
       beta_premium_included: betaFree,
       premium_until: until?.toISOString() ?? null,
       premium_starts_at: starts?.toISOString() ?? null,
@@ -260,6 +289,8 @@ export const premiumService = {
     skippedLifetime: boolean;
   }> {
     const db: Queryable = client ?? pool;
+    // A manual invoice whose period has ended no longer counts as paid.
+    await closeEndedManualInvoiceSubscriptions(db, userId, now);
     const row = await db.query(
       `SELECT name, is_premium, premium_until, premium_starts_at
        FROM users WHERE id = $1`,
@@ -283,12 +314,40 @@ export const premiumService = {
     // Premium already set to begin later (a promo or another delayed invoice).
     const pendingLater = Boolean(user.is_premium) && !startedAlready && runningUntilLater;
 
-    // Paid days start at the later of startAt and the end of any Premium already running
-    // or booked. Existing Premium (12-month promo, waitlist gift) is never shortened.
-    const base = runningUntilLater && currentUntil!.getTime() > startAt.getTime() ? currentUntil! : startAt;
-    const candidateUntil = new Date(base.getTime() + planDays * 24 * 60 * 60 * 1000);
-    const effectiveUntil =
-      currentUntil && currentUntil.getTime() > candidateUntil.getTime() ? currentUntil : candidateUntil;
+    // Where the paid days go. Existing Premium (promo, waitlist gift, earned months)
+    // is never shortened, and earned months are never counted twice:
+    //  - a paid period is still running: the new days follow that PAID end, and the
+    //    earned months stacked on it ride on top of the new paid end;
+    //  - otherwise: the new days follow whatever Premium is running or booked
+    //    (which already includes any earned months), and those months are folded
+    //    in so a later grant cannot add them again.
+    const prevPaidEnd = await activePaidPeriodEnd(db, userId);
+    const DAY = 24 * 60 * 60 * 1000;
+    let base: Date;
+    let effectiveUntil: Date;
+    let paidPeriodEnd: Date;
+    if (prevPaidEnd && prevPaidEnd.getTime() > now.getTime()) {
+      base = prevPaidEnd.getTime() > startAt.getTime() ? prevPaidEnd : startAt;
+      const paidEnd = new Date(base.getTime() + planDays * DAY);
+      const withEarned = await paidEndWithEarnedMonths(db, userId, paidEnd, {
+        freeForEveryone: this.isBetaPremiumFree(),
+        now,
+      });
+      effectiveUntil =
+        currentUntil && currentUntil.getTime() > withEarned.getTime() ? currentUntil : withEarned;
+      paidPeriodEnd = paidEnd;
+    } else {
+      base = runningUntilLater && currentUntil!.getTime() > startAt.getTime() ? currentUntil! : startAt;
+      const paidEnd = new Date(base.getTime() + planDays * DAY);
+      effectiveUntil = paidEnd;
+      // Earned months already counted inside `base`.
+      await db.query(
+        `UPDATE referral_premium_grants SET applied_until = $2
+          WHERE user_id = $1 AND state = 'applied' AND applied_until IS NOT NULL AND applied_until > $2`,
+        [userId, now],
+      );
+      paidPeriodEnd = paidEnd;
+    }
 
     // Start of the member's Premium window. Running Premium keeps its start (any gap
     // between it and a delayed paid start stays covered, in the member's favour).
@@ -332,13 +391,16 @@ export const premiumService = {
         planTier,
         invoiceNumber || null,
         base,
-        effectiveUntil,
+        paidPeriodEnd,
         JSON.stringify({
           plan_days: planDays,
           amount_pence: amountPence,
           invoice_number: invoiceNumber,
           source: 'manual_invoice',
           paid_days_start: base.toISOString(),
+          // What the member had before this invoice, so a 7.6A refund can put it back.
+          prior_premium_until: runningUntilLater ? currentUntil!.toISOString() : null,
+          prior_premium_starts_at: runningUntilLater && existingStarts ? existingStarts.toISOString() : null,
         }),
       ],
     );

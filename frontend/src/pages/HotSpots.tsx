@@ -124,6 +124,8 @@ export const HotSpots = () => {
         id: spot.id,
         name: spot.name,
         category_icon: spot.category_icon,
+        category_slug: spot.category_slug,
+        category_name: spot.category_name,
         live_count_exact: spot.live_count_exact,
         // Server display count (rounded for Free). The pin shows only this.
         live_count: spot.live_count,
@@ -137,7 +139,7 @@ export const HotSpots = () => {
           existing.spot.live_count !== spot.live_count ||
           existing.spot.has_active_checkins !== spot.has_active_checkins ||
           existing.spot.name !== spot.name ||
-          existing.spot.category_icon !== spot.category_icon
+          existing.spot.category_slug !== spot.category_slug
         ) {
           existing.root.render(<HotSpotPin spot={pinData} size={52} />);
         }

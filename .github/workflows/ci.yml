@@ -87,6 +87,8 @@ jobs:
         run: npm run test:no-query-coordinates
       - name: Welcome emails use the official mark (no typed wordmark)
         run: npm run test:welcome-email-brand
+      - name: Owner brief for reports has no raw ids
+        run: npm run test:report-owner-brief
       - name: Social drafts say no waitlist, no dating app, no em dashes
         run: npm run test:social-copy-guard
 
@@ -224,6 +226,8 @@ jobs:
         run: npm run test:travel-account-deletion-integration
       - name: Reports survive when the reported member deletes their account (real PG)
         run: npm run test:reports-survive-deletion-integration
+      - name: Report evidence snapshot, reporter anonymise, gated purge (real PG)
+        run: npm run test:report-evidence-retention-integration
       - name: Travel trips deleted when ended, and 30 days after they end (real PG)
         run: npm run test:travel-retention-integration
       - name: Manual invoice Premium, immediate start tick and 14-day email (real PG)

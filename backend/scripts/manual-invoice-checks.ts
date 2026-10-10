@@ -510,6 +510,7 @@ test('Email: "Your MenRush Premium is now on" carries the 14-day cancellation de
     assert.match(body, /support@menrush\.com with your invoice reference, MR-INV-20261010-ABC123/);
     assert.match(body, /refund you within 14 days of hearing from you, to the account you paid from/);
     assert.match(body, /less an amount for the days of Premium you have had/);
+    assert.match(body, /As you asked for your Premium to start as soon as your payment was confirmed/, 'states the choice');
     assert.match(body, /All the best,/);
   }
   // Janet's voice: no dashes, no 'love', no 'beta'.
@@ -530,6 +531,7 @@ test('Email: "Your MenRush Premium is now on" carries the 14-day cancellation de
   assert.strictEqual(noTick.subject, 'Your MenRush payment has arrived');
   for (const body of [noTick.text, noTick.html]) {
     assert.match(body, /your Premium starts on 25 October 2026, after the 14-day cancellation period/);
+    assert.match(body, /As you chose not to start straight away/, 'states the choice');
     assert.match(body, /before then, just email support@menrush\.com with your invoice reference, MR-INV-20261010-DEF456/);
     assert.match(body, /full refund within 14 days of hearing from you, to the account you paid from/);
     assert.doesNotMatch(body, /less an amount|is now switched on/);
@@ -538,7 +540,7 @@ test('Email: "Your MenRush Premium is now on" carries the 14-day cancellation de
   assert.doesNotMatch(noTick.text, /[\u2013\u2014]| - |\blove\b|beta/i);
 });
 
-test('HTTP: invoice is refused (400) unless the immediate start box is ticked, and the tick is recorded', async () => {
+test('HTTP: the immediate start tick is optional; the choice is recorded (time and wording, or null)', async () => {
   const user = await createTestUser('consent');
   const token = authService.issueAccessToken(user.id);
   const express = (await import('express')).default;
@@ -558,18 +560,17 @@ test('HTTP: invoice is refused (400) unless the immediate start box is ticked, a
     });
 
   try {
-    for (const body of [
-      { plan_tier: 'premium' },
-      { plan_tier: 'premium', immediate_start_consent: false },
-      { plan_tier: 'premium', immediate_start_consent: 'true' },
-    ]) {
+    // Unticked (missing or false): an invoice IS issued, with no consent recorded.
+    for (const body of [{ plan_tier: 'premium' }, { plan_tier: 'premium', immediate_start_consent: false }]) {
       const res = await post(body);
-      assert.strictEqual(res.status, 400, `refused: ${JSON.stringify(body)}`);
+      assert.strictEqual(res.status, 201, `unticked issues an invoice: ${JSON.stringify(body)}`);
       const json = (await res.json()) as any;
-      assert.strictEqual(json.error, 'validation_error');
+      assert.strictEqual(json.invoice.immediate_start_consent_at, null);
+      assert.strictEqual(json.invoice.metadata.immediate_start_consent_text, undefined);
     }
-    const none = await query(`SELECT COUNT(*)::int AS n FROM premium_invoices WHERE user_id = $1`, [user.id]);
-    assert.strictEqual(none.rows[0].n, 0, 'no invoice row is created without the tick');
+    // Not a boolean: refused.
+    const bad = await post({ plan_tier: 'premium', immediate_start_consent: 'true' });
+    assert.strictEqual(bad.status, 400);
 
     const before = Date.now();
     const ok = await post({ plan_tier: 'premium', immediate_start_consent: true });
@@ -768,6 +769,314 @@ test('Start rule with Premium already running: paid days follow it and nothing i
     res.userPremium.premiumUntil?.getTime(),
     longUntil.getTime() + PREMIUM_PRICE_LIST.premium.planDays * 86_400_000,
   );
+});
+
+async function shiftUserTimeBack(userId: string, days: number) {
+  // Simulate time passing: move every stored time for this member back.
+  const iv = `${days} days`;
+  await query(
+    `UPDATE users SET premium_starts_at = premium_starts_at - $2::interval,
+                      premium_until = premium_until - $2::interval WHERE id = $1`,
+    [userId, iv],
+  );
+  await query(
+    `UPDATE premium_invoices SET created_at = created_at - $2::interval, paid_at = paid_at - $2::interval WHERE user_id = $1`,
+    [userId, iv],
+  );
+  await query(
+    `UPDATE subscriptions SET current_period_start = current_period_start - $2::interval,
+                              current_period_end = current_period_end - $2::interval,
+                              created_at = created_at - $2::interval WHERE user_id = $1`,
+    [userId, iv],
+  );
+  await query(
+    `UPDATE referral_premium_grants SET applied_at = applied_at - $2::interval,
+                                        applied_until = applied_until - $2::interval,
+                                        granted_at = granted_at - $2::interval WHERE user_id = $1`,
+    [userId, iv],
+  );
+}
+
+async function withBetaPremiumOff<T>(run: () => Promise<T>): Promise<T> {
+  const prev = process.env.BETA_PREMIUM_FREE;
+  process.env.BETA_PREMIUM_FREE = 'false';
+  try {
+    return await run();
+  } finally {
+    if (prev === undefined) delete process.env.BETA_PREMIUM_FREE;
+    else process.env.BETA_PREMIUM_FREE = prev;
+  }
+}
+
+test('Delayed start truth: before day 14 not Premium in login, /me or a gated route; Premium after day 14', async () => {
+  await withBetaPremiumOff(async () => {
+    const user = await createTestUser('truth');
+    const password = 'Truth-Test-Passw0rd!';
+    const bcrypt = (await import('bcryptjs')).default;
+    await query(`UPDATE users SET password_hash = $2, email_confirmed = TRUE WHERE id = $1`, [
+      user.id,
+      await bcrypt.hash(password, 4),
+    ]);
+    const invoice = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: false });
+    await invoiceService.confirmPayment(invoice.id);
+
+    const express = (await import('express')).default;
+    const http = (await import('http')).default;
+    const { requirePremium } = await import('../src/middleware/premium');
+    const { authMiddleware } = await import('../src/middleware/auth');
+    const app = express();
+    app.use(express.json());
+    app.use('/api/users', (await import('../src/routes/users')).default);
+    app.get('/gated', authMiddleware, requirePremium(), (_req, res) => res.json({ ok: true }));
+    const server = http.createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    const token = authService.issueAccessToken(user.id);
+    const check = async () => {
+      const login = (await authService.login({ email: user.email, password } as never)) as any;
+      const me = await fetch(`${baseUrl}/api/users/me`, { headers: { Authorization: `Bearer ${token}` } });
+      const meBody = (await me.json()) as any;
+      const gated = await fetch(`${baseUrl}/gated`, { headers: { Authorization: `Bearer ${token}` } });
+      return {
+        login: login.user?.is_premium,
+        loginTier: login.user?.premium_tier,
+        me: (meBody.user ?? meBody).is_premium,
+        meTier: (meBody.user ?? meBody).premium_tier,
+        gated: gated.status,
+        status: (await premiumService.getStatus(user.id))?.is_premium,
+      };
+    };
+    try {
+      const before = await check();
+      assert.deepStrictEqual(before, {
+        login: false, loginTier: 'free', me: false, meTier: 'free', gated: 402, status: false,
+      }, `day 0: ${JSON.stringify(before)}`);
+
+      await shiftUserTimeBack(user.id, 13);
+      const day13 = await check();
+      assert.strictEqual(day13.login, false, 'day 13 still not Premium');
+      assert.strictEqual(day13.gated, 402);
+
+      await shiftUserTimeBack(user.id, 2);
+      const after = await check();
+      assert.deepStrictEqual(after, {
+        login: true, loginTier: 'premium', me: true, meTier: 'premium', gated: 200, status: true,
+      }, `day 15: ${JSON.stringify(after)}`);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+});
+
+test('Member invoice left unticked starts after 14 days and the email says so', async () => {
+  const user = await createTestUser('member-unticked');
+  const invoice = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: false });
+  assert.strictEqual(invoice.immediate_start_consent_at, null);
+  const res = await invoiceService.confirmPayment(invoice.id);
+  assert.strictEqual(
+    res.userPremium.premiumStartsAt?.getTime(),
+    cancellationPeriodEnd(new Date(invoice.created_at)).getTime(),
+  );
+});
+
+async function adminServer() {
+  const express = (await import('express')).default;
+  const http = (await import('http')).default;
+  const app = express();
+  app.use(express.json());
+  app.use('/api/admin', (await import('../src/routes/admin.routes')).default);
+  process.env.ADMIN_TOKEN = 'test-admin-secret-token';
+  const server = http.createServer(app);
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const post = (path: string, body: unknown, token = 'test-admin-secret-token') =>
+    fetch(`${baseUrl}/api/admin/premium/invoices/${path}`, {
+      method: 'POST',
+      headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  return { post, close: () => new Promise<void>((resolve) => server.close(() => resolve())) };
+}
+
+async function captureLogs<T>(run: () => Promise<T>): Promise<{ result: T; logs: string[] }> {
+  const logs: string[] = [];
+  const orig = console.log;
+  console.log = (...a: unknown[]) => {
+    logs.push(a.map(String).join(' '));
+  };
+  try {
+    return { result: await run(), logs };
+  } finally {
+    console.log = orig;
+  }
+}
+
+test('Cancel/refund: not started gives a full refund and resets Premium; admin only; refund paid by hand recorded', async () => {
+  const user = await createTestUser('refund-full');
+  const invoice = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: false });
+  await invoiceService.confirmPayment(invoice.id);
+  const admin = await adminServer();
+  try {
+    assert.strictEqual((await admin.post(`${invoice.id}/cancel-refund`, { admin_actor: 'ops-r' }, 'wrong')).status, 401);
+    assert.strictEqual((await admin.post(`${invoice.id}/cancel-refund`, {})).status, 400, 'actor required');
+
+    const { result: res, logs } = await captureLogs(() => admin.post(`${invoice.id}/cancel-refund`, { admin_actor: 'ops-r' }));
+    assert.strictEqual(res.status, 200);
+    const body = (await res.json()) as any;
+    assert.strictEqual(body.refund_pence, 699, 'full refund before Premium starts');
+    assert.strictEqual(body.days_had, 0);
+    assert.strictEqual(body.invoice.status, 'refunded');
+    assert.strictEqual(body.invoice.cancelled_by, 'ops-r');
+    assert.strictEqual(body.invoice.refund_paid_at, null);
+    const u = await query(`SELECT is_premium, premium_until, premium_starts_at FROM users WHERE id = $1`, [user.id]);
+    assert.strictEqual(u.rows[0].is_premium, false, 'no Premium left');
+    const sub = await query(`SELECT status FROM subscriptions WHERE user_id = $1 AND processor_subscription_id = $2`, [user.id, invoice.invoice_number]);
+    assert.strictEqual(sub.rows[0].status, 'canceled');
+    const line = logs.find((l) => l.includes('[invoice] cancel-refund'));
+    assert.ok(line);
+    assert.match(line!, new RegExp(`invoice=${invoice.id} admin=ops-r paid_pence=699 refund_pence=699 days_had=0 at=\\d{4}-`));
+    assert.ok(!line!.includes(user.id) && !line!.includes(user.email), 'no member data');
+
+    // Twice: refused.
+    assert.strictEqual((await admin.post(`${invoice.id}/cancel-refund`, { admin_actor: 'ops-r' })).status, 409);
+
+    const { result: paid, logs: paidLogs } = await captureLogs(() => admin.post(`${invoice.id}/refund-paid`, { admin_actor: 'ops-s' }));
+    assert.strictEqual(paid.status, 200);
+    const paidBody = (await paid.json()) as any;
+    assert.ok(paidBody.invoice.refund_paid_at);
+    assert.strictEqual(paidBody.invoice.refund_paid_by, 'ops-s');
+    assert.strictEqual(paidBody.invoice.metadata.refund_method, 'bank_transfer_by_hand');
+    assert.ok(paidLogs.some((l) => l.includes(`[invoice] refund-paid invoice=${invoice.id} admin=ops-s refund_pence=699`)));
+    assert.strictEqual((await admin.post(`${invoice.id}/refund-paid`, { admin_actor: 'ops-s' })).status, 409, 'only once');
+  } finally {
+    await admin.close();
+  }
+});
+
+test('Cancel/refund: started gives amount less days had, pro rata; refused after 14 days', async () => {
+  const user = await createTestUser('refund-part');
+  const invoice = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: true });
+  await invoiceService.confirmPayment(invoice.id);
+  // 2 days and 23 hours in: 3 days had (each started day counts).
+  await shiftUserTimeBack(user.id, 2);
+  await query(
+    `UPDATE subscriptions SET current_period_start = current_period_start - INTERVAL '23 hours' WHERE user_id = $1`,
+    [user.id],
+  );
+  const r = await invoiceService.cancelPaidInvoiceWithRefund(invoice.id, 'ops-t');
+  assert.strictEqual(r.daysHad, 3);
+  assert.strictEqual(r.refundPence, 699 - Math.round((699 * 3) / 30));
+  assert.strictEqual(r.refundPence, 629);
+  const status = await premiumService.getStatus(user.id);
+  if (!premiumService.isBetaPremiumFree()) assert.strictEqual(status?.is_premium, false);
+
+  const late = await createTestUser('refund-late');
+  const inv2 = await invoiceService.createInvoice({ userId: late.id, immediateStartConsent: true });
+  await invoiceService.confirmPayment(inv2.id);
+  await shiftUserTimeBack(late.id, 15);
+  await assert.rejects(() => invoiceService.cancelPaidInvoiceWithRefund(inv2.id, 'ops-t'), /cancellation_period_over/);
+});
+
+test('Cancel/refund keeps earlier Premium and earned referral months (never shortened)', async () => {
+  const user = await createTestUser('refund-keep');
+  const promoUntil = new Date(Date.now() + 40 * 86_400_000);
+  await query(
+    `UPDATE users SET is_premium = TRUE, premium_tier = 'premium', premium_starts_at = NOW() - INTERVAL '5 days', premium_until = $2 WHERE id = $1`,
+    [user.id, promoUntil],
+  );
+  const invoice = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: true });
+  await invoiceService.confirmPayment(invoice.id);
+  // Earn one month while the paid period is active: stacked on it.
+  const g = await query(
+    `INSERT INTO referral_premium_grants (user_id, milestone, verified_count_at_grant, months_granted) VALUES ($1, 1, 3, 1) RETURNING id`,
+    [user.id],
+  );
+  const { placeEarnedGrant } = await import('../src/services/referral-earned-months');
+  const placed = await placeEarnedGrant(pool, user.id, g.rows[0].id, 1, { freeForEveryone: false });
+  assert.strictEqual(placed.state, 'stacked');
+
+  const r = await invoiceService.cancelPaidInvoiceWithRefund(invoice.id, 'ops-u');
+  assert.strictEqual(r.refundPence, 699, 'paid days follow the promo, not started yet');
+  // Promo kept, and the earned month runs on after it.
+  assert.ok(r.premiumUntil && r.premiumUntil.getTime() > promoUntil.getTime() + 27 * 86_400_000, 'earned month kept after the promo');
+  assert.ok(r.premiumUntil!.getTime() < promoUntil.getTime() + 32 * 86_400_000, 'paid 30 days removed');
+  const u = await query(`SELECT is_premium, premium_starts_at FROM users WHERE id = $1`, [user.id]);
+  assert.strictEqual(u.rows[0].is_premium, true);
+  assert.ok(new Date(u.rows[0].premium_starts_at).getTime() < Date.now(), 'running promo keeps its start');
+});
+
+test('End of period: the manual invoice subscription closes, the card stops saying paid, a new month starts from now', async () => {
+  const rem = await import('../src/services/referral-earned-months');
+  const user = await createTestUser('period-end');
+  const invoice = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: true });
+  await invoiceService.confirmPayment(invoice.id);
+  assert.strictEqual(await rem.rewardModeFor(pool, user.id, { freeForEveryone: false }), 'paid');
+
+  await shiftUserTimeBack(user.id, 45);
+  const mode = await rem.rewardModeFor(pool, user.id, { freeForEveryone: false });
+  assert.notStrictEqual(mode, 'paid', 'no paid line after the period ends');
+  const sub = await query(`SELECT status FROM subscriptions WHERE user_id = $1 AND processor = 'manual_invoice'`, [user.id]);
+  assert.strictEqual(sub.rows[0].status, 'expired', 'subscription closed');
+
+  const g = await query(
+    `INSERT INTO referral_premium_grants (user_id, milestone, verified_count_at_grant, months_granted) VALUES ($1, 1, 3, 1) RETURNING id`,
+    [user.id],
+  );
+  const before = Date.now();
+  const placed = await rem.placeEarnedGrant(pool, user.id, g.rows[0].id, 1, { freeForEveryone: false });
+  assert.strictEqual(placed.state, 'applied');
+  const days = (placed.premiumUntil!.getTime() - before) / 86_400_000;
+  assert.ok(days > 27 && days < 33, `earned month runs from now (${days.toFixed(1)} days)`);
+});
+
+test('Buying more never counts earned months twice', async () => {
+  const rem = await import('../src/services/referral-earned-months');
+  const DAY = 86_400_000;
+  const user = await createTestUser('no-double');
+  const inv1 = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: true });
+  const c1 = await invoiceService.confirmPayment(inv1.id);
+  const paidEnd1 = c1.userPremium.premiumUntil!.getTime();
+  const g1 = await query(
+    `INSERT INTO referral_premium_grants (user_id, milestone, verified_count_at_grant, months_granted) VALUES ($1, 1, 3, 1) RETURNING id`,
+    [user.id],
+  );
+  const p1 = await rem.placeEarnedGrant(pool, user.id, g1.rows[0].id, 1, { freeForEveryone: false });
+  const afterEarn = p1.premiumUntil!.getTime();
+  assert.ok(afterEarn - paidEnd1 > 27 * DAY && afterEarn - paidEnd1 < 32 * DAY, 'one month stacked');
+
+  // Buy more: +30 days on the paid end, the earned month still rides once.
+  const inv2 = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: true });
+  const c2 = await invoiceService.confirmPayment(inv2.id);
+  const afterBuy = c2.userPremium.premiumUntil!.getTime();
+  assert.ok(Math.abs(afterBuy - (afterEarn + 30 * DAY)) < 2 * DAY, `buy adds 30 days only (${(afterBuy - afterEarn) / DAY})`);
+
+  // Earn another: exactly one more month, not two.
+  const g2 = await query(
+    `INSERT INTO referral_premium_grants (user_id, milestone, verified_count_at_grant, months_granted) VALUES ($1, 2, 6, 1) RETURNING id`,
+    [user.id],
+  );
+  const p2 = await rem.placeEarnedGrant(pool, user.id, g2.rows[0].id, 1, { freeForEveryone: false });
+  const gain = (p2.premiumUntil!.getTime() - afterBuy) / DAY;
+  assert.ok(gain > 27 && gain < 32, `second month adds one month only (${gain.toFixed(1)} days)`);
+
+  // And with applied months before any paid period (free member who earned a month first).
+  const u2 = await createTestUser('no-double-applied');
+  const g3 = await query(
+    `INSERT INTO referral_premium_grants (user_id, milestone, verified_count_at_grant, months_granted) VALUES ($1, 1, 3, 1) RETURNING id`,
+    [u2.id],
+  );
+  const p3 = await rem.placeEarnedGrant(pool, u2.id, g3.rows[0].id, 1, { freeForEveryone: false });
+  const inv3 = await invoiceService.createInvoice({ userId: u2.id, immediateStartConsent: true });
+  const c3 = await invoiceService.confirmPayment(inv3.id);
+  const afterBuy3 = c3.userPremium.premiumUntil!.getTime();
+  assert.ok(Math.abs(afterBuy3 - (p3.premiumUntil!.getTime() + 30 * DAY)) < 2 * DAY, 'paid days after the earned month');
+  const g4 = await query(
+    `INSERT INTO referral_premium_grants (user_id, milestone, verified_count_at_grant, months_granted) VALUES ($1, 2, 6, 1) RETURNING id`,
+    [u2.id],
+  );
+  const p4 = await rem.placeEarnedGrant(pool, u2.id, g4.rows[0].id, 1, { freeForEveryone: false });
+  const gain4 = (p4.premiumUntil!.getTime() - afterBuy3) / DAY;
+  assert.ok(gain4 > 27 && gain4 < 32, `earlier applied month not re-added (${gain4.toFixed(1)} days)`);
 });
 
 test('Migration 085 is tracked in schema_migrations', async () => {

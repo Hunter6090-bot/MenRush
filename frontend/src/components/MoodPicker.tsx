@@ -25,7 +25,7 @@ export const MoodPicker: React.FC<MoodPickerProps> = ({ current, onSelect }) => 
           key={item.value}
           type="button"
           onClick={() => void onSelect(active ? null : item.value)}
-          className="rounded-full border px-3 py-2 text-xs font-semibold transition-all"
+          className="rounded-full border px-3 py-2 text-[15px] font-semibold transition-all"
           style={{
             borderColor: active ? item.accent : 'var(--border-default)',
             background: active ? `${item.accent}22` : 'var(--bg-primary)',

@@ -51,6 +51,12 @@ export interface NearbyUser {
   is_visitor?: boolean;
   /** ISO expiry for visitor boost — null when not visiting. */
   visitor_expires_at?: string | null;
+  /**
+   * Travel (#359): set only when this member is on a live trip here AND the
+   * server lets this viewer see it (location visible, not Ghost, viewer not on
+   * their Hide my location list). Never computed on the client.
+   */
+  visiting?: { city: string; starts_at: string | null; ends_at: string | null } | null;
 }
 
 interface ProfileCardProps {
