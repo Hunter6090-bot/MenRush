@@ -140,6 +140,34 @@ const tests: [string, () => void][] = [
     assert.ok(/console\.warn\(`\[2fa\] decrypt failed user=\$\{userId\} failure=\$\{failure\}`\)/.test(svc));
     assert.ok(/WHERE id = \$2 AND totp_secret_encrypted = \$3/.test(svc), 'lazy re-encrypt is guarded');
   }],
+  ['rotate script takes keys and DATABASE_URL from the environment only, never a local .env', () => {
+    const fs = require('fs') as typeof import('fs');
+    const os = require('os') as typeof import('os');
+    const path = require('path') as typeof import('path');
+    const { spawnSync } = require('child_process') as typeof import('child_process');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'totp-env-'));
+    const fakeKey = passphrase();
+    fs.writeFileSync(path.join(dir, '.env'),
+      `DATABASE_URL=postgresql://dotenv-user:dotenv-pass@dotenv-host.invalid:5432/x\nTOTP_ENCRYPTION_KEY=${fakeKey}\nJWT_SECRET=${fakeKey}\n`);
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    for (const k of ['DATABASE_URL', 'TOTP_ENCRYPTION_KEY', 'TOTP_ENCRYPTION_KEY_PREVIOUS', 'JWT_SECRET']) delete env[k];
+    const tsNode = path.join(__dirname, '../node_modules/.bin/ts-node');
+    const run = spawnSync(tsNode, ['--transpile-only', path.join(__dirname, 'rotate-totp-key.ts')], { cwd: dir, env, encoding: 'utf8', timeout: 60_000 });
+    fs.rmSync(dir, { recursive: true, force: true });
+    const out = `${run.stdout}${run.stderr}`;
+    assert.equal(run.status, 2, out);
+    assert.match(out, /DATABASE_URL is not set in the environment/);
+    assert.ok(!out.includes(fakeKey) && !out.includes('dotenv-pass') && !out.includes('dotenv-host'), 'nothing from .env printed or used');
+  }],
+  ['rotate script source never prints process.env', () => {
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    for (const f of ['scripts/rotate-totp-key.ts', 'src/security/totp-rotation.ts']) {
+      const src = fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+      const printed = src.match(/console\.(log|error|warn|info)\([^;]*;/g) ?? [];
+      for (const call of printed) assert.ok(!/process\.env|secret|stored|row\.id|\bkey\b\s*[,)]/.test(call), `${f}: ${call}`);
+    }
+  }],
 ];
 
 let failures = 0;
