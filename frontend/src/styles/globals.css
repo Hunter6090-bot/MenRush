@@ -519,6 +519,40 @@ input:-webkit-autofill:focus {
   cursor: pointer;
 }
 
+/* Menu Discretion slider: 44px tall drag area (transparent), same 6px track and 18px thumb.
+   Fill left of the thumb uses --nn-accent-text, the rest --border-default (>= 3:1 in both themes). */
+.proximity-range--tall {
+  height: 44px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.proximity-range--tall::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--nn-accent-text) 0 var(--range-pct, 0%),
+    var(--border-default) var(--range-pct, 0%) 100%
+  );
+}
+
+.proximity-range--tall::-webkit-slider-thumb {
+  margin-top: -6px;
+}
+
+.proximity-range--tall::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--border-default);
+}
+
+.proximity-range--tall::-moz-range-progress {
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--nn-accent-text);
+}
+
 /* Claude Design room icons (RoomAvatar): copper line on a soft copper tile,
    matching the design board in dark and light. */
 .room-avatar--icon {

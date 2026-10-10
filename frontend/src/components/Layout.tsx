@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore, useNotificationStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from './UserAvatar';
@@ -66,6 +66,8 @@ function LayoutInner({ children }: LayoutProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  // Stable so AccountMenu's open effect never re-runs (and steals focus) on Layout re-renders.
+  const closeAccountMenu = useCallback(() => setAccountMenuOpen(false), []);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   const [matchCount, setMatchCount] = useState(0);
   const [homeView, setHomeView] = useState<HomeView>(() => readHomeView());
@@ -516,7 +518,7 @@ function LayoutInner({ children }: LayoutProps) {
 
       <AccountMenu
         open={accountMenuOpen}
-        onClose={() => setAccountMenuOpen(false)}
+        onClose={closeAccountMenu}
         onSignOut={requestSignOut}
         onSearch={() => setSearchOpen(true)}
       >

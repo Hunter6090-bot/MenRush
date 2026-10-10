@@ -143,8 +143,11 @@ function SearchGlyph() {
 const footerLinkClass =
   'inline-flex min-h-[44px] items-center text-[15px] font-semibold text-[var(--cream-muted)] hover:text-[var(--cream)]';
 
-const rowClass =
-  'flex min-h-[48px] w-full items-center gap-3 rounded-2xl px-4 text-left text-[17px] font-bold text-[var(--cream)] transition-colors active:bg-[var(--bg-card)] hover:bg-[var(--bg-card)]';
+/** Row layout without a text colour, so active and default colours never fight on CSS order. */
+const rowBaseClass =
+  'flex min-h-[48px] w-full items-center gap-3 rounded-2xl px-4 text-left text-[17px] font-bold transition-colors active:bg-[var(--bg-card)] hover:bg-[var(--bg-card)]';
+
+const rowClass = `${rowBaseClass} text-[var(--cream)]`;
 
 export function AccountMenu({
   open,
@@ -163,17 +166,23 @@ export function AccountMenu({
 }) {
   const location = useLocation();
   const panelRef = useRef<HTMLDivElement>(null);
+  // Latest onClose without re-running the open effect: an inline onClose from the parent
+  // must not move focus back to Close on every re-render (Discretion arrow keys, VoiceOver).
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
     document.addEventListener('keydown', onKeyDown);
     const first = panelRef.current?.querySelector<HTMLElement>('a, button, input');
     first?.focus();
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -246,7 +255,7 @@ export function AccountMenu({
                     onClick={onClose}
                     data-testid={`account-menu-${item.id}`}
                     aria-current={active ? 'page' : undefined}
-                    className={`${rowClass} ${active ? 'text-[var(--copper)]' : ''}`}
+                    className={`${rowBaseClass} ${active ? 'text-[var(--nn-accent-text)]' : 'text-[var(--cream)]'}`}
                   >
                     {item.label}
                   </Link>

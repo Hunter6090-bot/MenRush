@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import {
   formatFuzzMetersLabel,
   MAP_PIN_FUZZ_STEPS_M,
@@ -29,6 +30,7 @@ export function MapDiscretionSlider({
   const snapped = nearestMapPinFuzzStep(valueM);
   const index = Math.max(0, steps.indexOf(snapped));
   const label = formatFuzzMetersLabel(snapped);
+  const fillPct = steps.length > 1 ? (index / (steps.length - 1)) * 100 : 0;
 
   return (
     <div
@@ -53,7 +55,8 @@ export function MapDiscretionSlider({
         aria-valuemax={steps[steps.length - 1]}
         aria-valuenow={snapped}
         aria-valuetext={label}
-        className={`proximity-range min-w-0 flex-1 ${wide ? 'order-last basis-full' : ''}`}
+        className={`proximity-range min-w-0 flex-1 ${wide ? 'proximity-range--tall order-last basis-full' : ''}`}
+        style={wide ? ({ '--range-pct': `${fillPct}%` } as CSSProperties) : undefined}
         data-testid="map-discretion-range"
       />
       <span
