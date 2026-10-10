@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { setTopPromptBottom } from '../lib/topPromptOverlay';
+import { markTopPromptPending, setTopPromptBottom } from '../lib/topPromptOverlay';
 import {
   enablePushNotifications,
   getPushSupport,
@@ -58,7 +58,10 @@ export function PushAlertBanner() {
         if (getPushSupport() !== 'default') return decide(null);
         decide('alerts');
       } catch {
-        decide(null);
+        if (!cancelled) {
+          decide(null);
+          setTopPromptBottom(null);
+        }
       }
     })();
     return () => {
@@ -92,6 +95,10 @@ export function PushAlertBanner() {
   // below it instead of being covered (QC P2 on #357).
   const cardRef = useRef<HTMLDivElement | null>(null);
   useLayoutEffect(() => {
+    if (eligible === undefined || !ready) {
+      markTopPromptPending();
+      return;
+    }
     const card = cardRef.current;
     if (!visible || !card) {
       setTopPromptBottom(null);
@@ -105,9 +112,15 @@ export function PushAlertBanner() {
     return () => {
       ro?.disconnect();
       window.removeEventListener('resize', publish);
-      setTopPromptBottom(null);
     };
-  }, [visible]);
+  }, [visible, eligible, ready]);
+
+  useLayoutEffect(
+    () => () => {
+      setTopPromptBottom(null);
+    },
+    [],
+  );
 
   if (!visible) return null;
 
