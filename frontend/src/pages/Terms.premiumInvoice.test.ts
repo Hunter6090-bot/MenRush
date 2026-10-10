@@ -16,7 +16,36 @@ const S76A =
 const S73 =
   '7.3</Strong> Card payments are not available yet. Before card payment opens, we will update these Terms and tell you who processes card payments. For now, you can buy Premium by manual invoice from the Premium page.';
 
+const S75 =
+  '7.5</Strong> Prices are shown in pounds sterling (GBP). The price shown on your invoice or at checkout is the full amount you pay us, and if VAT applies it is shown there. If we change the price of Premium, the new price applies only to Premium you buy after the change, and you will see it before you pay.';
+
+const section7 = () => {
+  const start = terms.indexOf('{/* 7. Premium');
+  const end = terms.indexOf('{/* 8.');
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  return terms.slice(start, end);
+};
+
 describe('Terms section 7 manual invoice wording', () => {
+  it('7.5 is Legal wording exactly', () => {
+    expect(terms).toContain(S75);
+    expect(terms).not.toMatch(/inclusive of any applicable VAT/i);
+  });
+
+  it('section 7 never calls Premium a subscription and nothing in it renews', () => {
+    const s7 = section7();
+    expect(s7).not.toMatch(/subscri/i);
+    expect(s7).not.toMatch(/auto-?renew|(?<!does not )renews? (automatically|unless)|recurring/i);
+    expect(s7).toMatch(/does not renew automatically/);
+    expect(terms).toMatch(/title: 'Premium' \}/);
+    expect(s7).toContain('You buy Premium as a one-off purchase for a fixed period.');
+  });
+
+  it('section 7 has no em or en dashes', () => {
+    expect(section7()).not.toMatch(/[\u2013\u2014]/);
+  });
+
   it('7.3 is Legal wording exactly, with no recurring billing or merchant review', () => {
     expect(terms).toContain(S73);
     const i73 = terms.indexOf('<Strong>7.3</Strong>');

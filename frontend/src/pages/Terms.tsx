@@ -15,7 +15,7 @@ const SECTIONS: Section[] = [
   { id: 'acceptable-use', number: '4', title: 'Acceptable Use' },
   { id: 'user-content', number: '5', title: 'User Content' },
   { id: 'location-services', number: '6', title: 'Location Services' },
-  { id: 'premium-subscription', number: '7', title: 'Premium Subscription' },
+  { id: 'premium-subscription', number: '7', title: 'Premium' },
   { id: 'refunds', number: '8', title: 'Refunds' },
   { id: 'intellectual-property', number: '9', title: 'Intellectual Property' },
   { id: 'privacy', number: '10', title: 'Privacy' },
@@ -380,13 +380,13 @@ export const Terms = () => {
               )}
             </section>
 
-            {/* 7. Premium Subscription */}
+            {/* 7. Premium */}
             <section>
               {sectionHeading(SECTIONS[6])}
               {para(
                 <>
-                  <Strong>7.1</Strong> MenRush offers a free tier and a paid Premium subscription.
-                  Premium features are detailed on the Platform and are subject to change.
+                  <Strong>7.1</Strong> MenRush offers a free tier and paid Premium. You buy Premium as a
+                  one-off purchase for a fixed period. Premium features are detailed on the Platform and are subject to change.
                 </>,
               )}
               {para(
@@ -396,7 +396,7 @@ export const Terms = () => {
                   sign-up, unless a valid promotional offer (including a Pride /{' '}
                   <span className="font-mono tracking-wide">PRIDE</span> promo code) grants a
                   longer free Premium period instead. Where such a promo applies, it replaces the
-                  30-day waitlist reward — it is not added on top.
+                  30-day waitlist reward. It is not added on top.
                 </>,
               )}
               {para(
@@ -417,8 +417,10 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>7.5</Strong> Prices are displayed in GBP and are inclusive of any
-                  applicable VAT. We reserve the right to change pricing with 30 days' notice.
+                  <Strong>7.5</Strong> Prices are shown in pounds sterling (GBP). The price shown on
+                  your invoice or at checkout is the full amount you pay us, and if VAT applies it is
+                  shown there. If we change the price of Premium, the new price applies only to Premium
+                  you buy after the change, and you will see it before you pay.
                 </>,
               )}
               {para(
