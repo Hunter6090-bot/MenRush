@@ -119,10 +119,10 @@ export function PulseFab({
           onClick={openModal}
           aria-label={
             isPulsing
-              ? `Pulsing — ${minutesLeft} min left`
+              ? `Pulsing, ${minutesLeft} min left`
               : onCooldown
-                ? `Pulse on cooldown — ${cooldownMinutesLeft} min left. Open for details.`
-                : "Pulse — go visible"
+                ? `Pulse on cooldown, ${cooldownMinutesLeft} min left. Open for details.`
+                : "Pulse: go visible"
           }
           title={
             onCooldown
@@ -137,31 +137,34 @@ export function PulseFab({
             flex flex-col items-center justify-center gap-0.5
             w-[var(--fab-size)] h-[var(--fab-size)]
             rounded-full
-            bg-[var(--copper)] text-[var(--bg-primary)]
+            bg-[var(--copper)] text-[var(--nn-on-copper)]
             shadow-[var(--shadow-glow)]
             transition-all duration-[var(--duration-base)] ease-[var(--ease-out)]
             ${isPulsing ? "animate-pulse-glow" : ""}
-            ${onCooldown ? "opacity-70" : "hover:scale-105 active:scale-95"}
+            ${onCooldown ? "ring-2 ring-[var(--border-strong)]" : "hover:scale-105 active:scale-95"}
           `}
           style={{
             // Keep clear of Mapbox bottom-right controls when the map panel is mid-height.
             marginBottom: "env(safe-area-inset-bottom, 0px)",
           }}
         >
+          {/* QC 10 Oct: icon full strength above the label (was 30% behind it, 1.48:1 in light). */}
           <IconPulse
-            size={22}
-            className={`absolute opacity-30 ${isPulsing ? "animate-pulse-breathe" : ""}`}
+            size={20}
+            className={isPulsing ? "animate-pulse-breathe" : ""}
             aria-hidden
+            data-testid="pulse-fab-icon"
           />
           <span
-            className={`relative z-10 font-display text-[13px] font-black uppercase leading-none tracking-[0.08em] ${
+            data-testid="pulse-fab-label"
+            className={`relative z-10 font-display text-[15px] font-black uppercase leading-none tracking-[0.04em] ${
               isPulsing ? "animate-pulse-breathe" : ""
             }`}
           >
             Pulse
           </span>
           {isPulsing && (
-            <span className="absolute -bottom-1 -right-1 z-20 bg-[var(--bg-primary)] text-[var(--copper)] text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-[var(--copper)]">
+            <span data-testid="pulse-fab-minutes" className="absolute -bottom-1 -right-1 z-20 bg-[var(--bg-primary)] text-[var(--nn-accent-text)] text-[15px] font-bold px-1.5 py-0.5 rounded-full border border-[var(--copper)]">
               {minutesLeft}
             </span>
           )}
