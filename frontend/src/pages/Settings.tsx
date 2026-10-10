@@ -115,6 +115,7 @@ export const Settings = () => {
       reporter_email: string;
       reported_name?: string | null;
       reported_email?: string | null;
+      reported_account_deleted_at?: string | null;
     }>
   >([]);
   const [reportsLoading, setReportsLoading] = useState(false);
@@ -1062,7 +1063,7 @@ export const Settings = () => {
                             </p>
                           </div>
                           <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
-                            {report.reporter_name} → {report.reported_name ?? 'unknown'}
+                            {report.reporter_name} → {report.reported_name ?? (report.reported_account_deleted_at ? 'Deleted account' : 'unknown')}
                           </p>
                           {report.details ? (
                             <p className="mt-1 text-[12px] text-[var(--cream)]">{report.details}</p>

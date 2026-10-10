@@ -18,33 +18,121 @@ import {
 } from '../src/security/media';
 import { isAllowedOrigin, isMenRushVercelHost } from '../src/security/cors';
 
+/** Keep newlines (so line anchors still work) and blank every other character. */
+function blank(text: string): string {
+  return text.replace(/[^\n]/g, ' ');
+}
+
+/** Characters after which a `/` starts a regex literal rather than a division. */
+const REGEX_PRECEDERS = new Set(['', '(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';', '+', '-', '*', '%', '<', '>', '~', '^']);
+
 /**
- * Remove // and /* *\/ comments so commented-out code cannot satisfy a source guard.
- * String and template literals are kept as they are; newlines are kept so line anchors still work.
+ * Neutralise everything that is not live code, so a source guard only ever matches real code:
+ * - // and /* *\/ comments are blanked;
+ * - the contents of '...', "..." and `...` literals (and regex literals) are blanked, keeping the
+ *   quotes, so a guard hidden in a string or a multi-line template literal never counts, and a
+ *   string that merely mentions router.use(...) is never flagged;
+ * - ${...} inside a template literal is live code and is kept (and scanned the same way).
+ * Newlines are always kept so ^ and $ line anchors still work.
  */
 export function stripComments(source: string): string {
   let out = '';
   let i = 0;
+  // Each entry is the brace depth at which a ${ ... } template expression closes.
+  const templateStack: number[] = [];
+  let braceDepth = 0;
+
+  const lastSignificant = (): string => {
+    const m = /(\S)\s*$/.exec(out);
+    if (!m) return '';
+    const word = /([A-Za-z_$][\w$]*)\s*$/.exec(out);
+    if (word && /^(return|typeof|case|do|else|in|of|new|delete|void|throw|yield|await)$/.test(word[1])) return '(';
+    return m[1];
+  };
+
+  // Scan template literal body starting just after the opening backtick (or after a closing }).
+  const scanTemplate = (): void => {
+    while (i < source.length) {
+      const ch = source[i];
+      if (ch === '\\') {
+        out += blank(source.slice(i, i + 2));
+        i += 2;
+        continue;
+      }
+      if (ch === '`') {
+        out += '`';
+        i += 1;
+        return;
+      }
+      if (ch === '$' && source[i + 1] === '{') {
+        out += '${';
+        i += 2;
+        templateStack.push(braceDepth);
+        braceDepth += 1;
+        return; // back to code; the matching } resumes the template
+      }
+      out += ch === '\n' ? '\n' : ' ';
+      i += 1;
+    }
+  };
+
   while (i < source.length) {
     const ch = source[i];
     const next = source[i + 1];
     if (ch === '/' && next === '/') {
-      while (i < source.length && source[i] !== '\n') i += 1;
+      const end = source.indexOf('\n', i);
+      const stop = end < 0 ? source.length : end;
+      out += blank(source.slice(i, stop));
+      i = stop;
       continue;
     }
     if (ch === '/' && next === '*') {
       const end = source.indexOf('*/', i + 2);
       const stop = end < 0 ? source.length : end + 2;
-      out += source.slice(i, stop).replace(/[^\n]/g, '');
+      out += blank(source.slice(i, stop));
       i = stop;
       continue;
     }
-    if (ch === "'" || ch === '"' || ch === '`') {
+    if (ch === '/' && REGEX_PRECEDERS.has(lastSignificant())) {
       let j = i + 1;
-      while (j < source.length && source[j] !== ch) j += source[j] === '\\' ? 2 : 1;
-      out += source.slice(i, j + 1);
-      i = j + 1;
+      let inClass = false;
+      while (j < source.length && source[j] !== '\n') {
+        if (source[j] === '\\') { j += 2; continue; }
+        if (source[j] === '[') inClass = true;
+        else if (source[j] === ']') inClass = false;
+        else if (source[j] === '/' && !inClass) break;
+        j += 1;
+      }
+      if (source[j] === '/') {
+        out += '/' + blank(source.slice(i + 1, j)) + '/';
+        i = j + 1;
+        continue;
+      }
+      // Not a regex after all (no closing / on the line): treat as an operator.
+    }
+    if (ch === "'" || ch === '"') {
+      let j = i + 1;
+      while (j < source.length && source[j] !== ch && source[j] !== '\n') j += source[j] === '\\' ? 2 : 1;
+      out += ch + blank(source.slice(i + 1, j)) + (source[j] === ch ? ch : '');
+      i = source[j] === ch ? j + 1 : j;
       continue;
+    }
+    if (ch === '`') {
+      out += '`';
+      i += 1;
+      scanTemplate();
+      continue;
+    }
+    if (ch === '{') braceDepth += 1;
+    if (ch === '}') {
+      braceDepth -= 1;
+      if (templateStack.length && templateStack[templateStack.length - 1] === braceDepth) {
+        templateStack.pop();
+        out += '}';
+        i += 1;
+        scanTemplate();
+        continue;
+      }
     }
     out += ch;
     i += 1;
@@ -52,19 +140,37 @@ export function stripComments(source: string): string {
   return out;
 }
 
-const ROUTER_GUARD_LINE = /^router\.use\((?:privateNoStore,\s*)?authMiddleware,\s*verifiedMiddleware\);?[ \t]*$/m;
-const FIRST_ROUTE = /\brouter\s*\.\s*(?:get|post|put|patch|delete)\s*\(/;
+const VERB = String.raw`(?:get|post|put|patch|delete|all|options|head|route)`;
+/** `router.use(...)` reached by dot or optional chaining. */
+const ROUTER_USE = /\brouter\s*(?:\?\.|\.)\s*use\s*\(/g;
+/**
+ * router.use([privateNoStore, ]authMiddleware, verifiedMiddleware) at the start of a line.
+ * Multi-line and trailing-comma forms are fine, so Prettier can format it.
+ */
+const ROUTER_GUARD_LINE =
+  /^router\.use\(\s*(?:privateNoStore\s*,\s*)?authMiddleware\s*,\s*verifiedMiddleware\s*,?\s*\)\s*;?[ \t]*$/m;
+/** First route: any verb by dot or optional chaining, or any bracket access such as router['get']. */
+const FIRST_ROUTE = new RegExp(String.raw`\brouter\s*(?:(?:\?\.|\.)\s*${VERB}\s*\(|(?:\?\.)?\s*\[)`);
+const ROUTER_CALL = /\bRouter\s*\(/g;
+const ROUTER_DECL = /^(?:export\s+)?(?:const|let|var)\s+router\s*(?::[^=]+)?=\s*(?:express\s*\.\s*)?Router\s*\(/m;
+const ROUTER_BRACKET = /\brouter\s*(?:\?\.)?\s*\[/;
 
 /**
  * Guarded routers apply auth and verification once, at router level, before any route:
- * exactly one router.use, at the start of a line, reading
- * router.use([privateNoStore, ]authMiddleware, verifiedMiddleware), ahead of the first route.
+ * - exactly one Router() in the file, assigned to `router` (no second router to hang routes on);
+ * - exactly one router.use, at the start of a line, reading
+ *   router.use([privateNoStore, ]authMiddleware, verifiedMiddleware), ahead of the first route;
+ * - no bracket access on router (router['use'] would dodge the count).
  * A router-level privateNoStore may sit ahead of auth on purpose (#348) so 401s carry
  * Cache-Control: private, no-store as well.
+ * `strip` is injectable only so the self-test can prove the samples depend on stripComments.
  */
-export function assertRouterGuard(route: string, source: string): void {
-  const code = stripComments(source);
-  const uses = code.match(/\brouter\s*\.\s*use\s*\(/g) ?? [];
+export function assertRouterGuard(route: string, source: string, strip: (s: string) => string = stripComments): void {
+  const code = strip(source);
+  const routers = code.match(ROUTER_CALL) ?? [];
+  assert.equal(routers.length, 1, `${route}: expected exactly one Router(), found ${routers.length}`);
+  assert.ok(ROUTER_DECL.test(code), `${route}: the only Router() must be assigned to \`router\``);
+  const uses = code.match(ROUTER_USE) ?? [];
   assert.equal(uses.length, 1, `${route}: expected exactly one router.use, found ${uses.length}`);
   const guard = ROUTER_GUARD_LINE.exec(code);
   assert.ok(
@@ -74,6 +180,7 @@ export function assertRouterGuard(route: string, source: string): void {
   const firstRoute = FIRST_ROUTE.exec(code);
   assert.ok(firstRoute, `${route}: no routes found`);
   assert.ok(guard.index < firstRoute.index, `${route}: router.use must come before the first route`);
+  assert.ok(!ROUTER_BRACKET.test(code), `${route}: bracket access on router (router['...']) is not allowed`);
 }
 
 const AUTH_ONLY_GUARD_LINE = /^router\.use\(privateNoStore,\s*authMiddleware\);?[ \t]*$/m;
@@ -292,22 +399,62 @@ test('protected media paths cannot traverse storage and expired media is denied'
   assert.throws(() => verifyMediaAccess(token, '/api/messages/message-2/media'));
 });
 
-test('source guard helpers reject commented, extra, late or indented router.use', () => {
+test('source guard helpers reject commented, hidden, extra, late or indented router.use', () => {
   const ok = "import x from 'y';\nconst router = Router();\nrouter.use(authMiddleware, verifiedMiddleware);\nrouter.get('/', h);\n";
+  const GUARD = 'router.use(authMiddleware, verifiedMiddleware);';
   assertRouterGuard('ok', ok);
   assertRouterGuard('no-store first', ok.replace('router.use(', 'router.use(privateNoStore, '));
   assertRouterGuard('url in string', ok + "router.get('/x', (_q, r) => r.send('https://a.b/*'));\n");
+  assertRouterGuard('router.use in a string is not counted', ok + "router.get('/x', (_q, r) => r.send('router.use(evilMw)'));\n");
+  assertRouterGuard('router.use in a template is not counted', ok + 'const note = `\nrouter.use(evilMw);\n`;\n');
+  assertRouterGuard('Prettier multi-line, trailing comma', ok.replace(GUARD, 'router.use(\n  privateNoStore,\n  authMiddleware,\n  verifiedMiddleware,\n);'));
+  assertRouterGuard('trailing comma on one line', ok.replace(GUARD, 'router.use(authMiddleware, verifiedMiddleware,);'));
+  assertRouterGuard('express.Router()', ok.replace('Router()', 'express.Router()'));
+  assertRouterGuard('regex with quote and slash', ok + "router.get('/r', (q, r) => r.send(/['\"`]/.test(q.path)));\n");
+  assertRouterGuard('template expression is live code', ok + 'router.get(`/${base}/x`, h);\n');
+
+  const blockAroundGuard = ok.replace(GUARD, `/*\n${GUARD}\n*/`);
   const bad: Record<string, string> = {
     'line comment': ok.replace('router.use(', '// router.use('),
-    'block comment': ok.replace('router.use(authMiddleware, verifiedMiddleware);', '/* router.use(authMiddleware, verifiedMiddleware); */'),
+    'block comment': ok.replace(GUARD, `/* ${GUARD} */`),
+    'multi-line block comment around guard': blockAroundGuard,
+    'guard inside multi-line template literal': ok.replace(GUARD, `const doc = \`\n${GUARD}\n\`;`),
+    'guard inside a string': ok.replace(GUARD, `const doc = '${GUARD}';`),
     'extra router.use': ok + 'router.use(evilMw);\n',
+    'extra multi-line router.use': ok + 'router.use(\n  evilMw,\n);\n',
+    'optional-chained router.use': ok + 'router?.use(evilMw);\n',
+    'bracket router.use': ok + "router['use'](evilMw);\n",
     'not at line start': ok.replace('router.use(', 'if (on) router.use('),
-    'after first route': "const router = Router();\nrouter.get('/', h);\nrouter.use(authMiddleware, verifiedMiddleware);\n",
+    'after first route (get)': "const router = Router();\nrouter.get('/', h);\nrouter.use(authMiddleware, verifiedMiddleware);\n",
     'missing verified': ok.replace('authMiddleware, verifiedMiddleware', 'authMiddleware'),
+    'second Router() with its own verb': ok + "export const r2 = Router();\nr2.get('/open', h);\n",
+    'Router() not named router': ok.replace('const router = Router();', 'const r = Router();\nconst router = r;'),
+    'no Router()': ok.replace('const router = Router();\n', ''),
   };
+  for (const verb of ['all', 'options', 'head', 'route', 'post', 'put', 'patch', 'delete']) {
+    bad[`after first route (${verb})`] = `const router = Router();\nrouter.${verb}('/', h);\n${GUARD}\nrouter.get('/x', h);\n`;
+  }
+  bad['after first route (bracket get)'] = `const router = Router();\nrouter['get']('/', h);\n${GUARD}\nrouter.get('/x', h);\n`;
+  bad['after first route (multi-line chain)'] = `const router = Router();\nrouter\n  .get('/', h);\n${GUARD}\n`;
+  bad['bracket access after guard'] = ok + "router['get']('/late', h);\n";
   for (const [name, source] of Object.entries(bad)) {
     assert.throws(() => assertRouterGuard(name, source), assert.AssertionError, name);
   }
+
+  // The comment and literal samples only fail because stripComments works: with a no-op
+  // stripper they would pass, so a broken stripComments makes this self-test fail.
+  const noop = (s: string) => s;
+  for (const name of ['multi-line block comment around guard', 'guard inside multi-line template literal']) {
+    assert.doesNotThrow(() => assertRouterGuard(name, bad[name], noop), `${name} should depend on stripComments`);
+  }
+  assert.throws(() => assertRouterGuard('string router.use with no-op strip', ok + "const s = 'router.use(evilMw)';\n", noop));
+
+  // stripComments keeps quotes and newlines, blanks contents.
+  const stripped = stripComments("a('x\\'y');\nb(`l1\nl2 ${c('z')}`);\n/* c\nd */e();");
+  assert.equal(stripped.split('\n').length, 5);
+  assert.match(stripped, /^a\(' +'\);$/m);
+  assert.match(stripped, /\$\{c\(' '\)\}`\);$/m);
+  assert.match(stripped, /^ *e\(\);$/m);
 });
 
 test('auth-only guard helper rejects missing no-store, extra use, aliases and member ids from the request', () => {

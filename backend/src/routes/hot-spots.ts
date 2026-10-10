@@ -4,17 +4,23 @@ import { rateLimitKey } from '../lib/clientIp';
 import { z } from 'zod';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { privateNoStore } from '../middleware/noStore';
+import { viewerStoredLocation } from '../lib/viewerOrigin';
 import { hotSpotsService } from '../services/hot-spots.service';
 import { venueClaimService } from '../services/venue-claim.service';
 import { venueCalendarService } from '../services/venue-calendar.service';
 import {
-  LocationSchema,
   SubmitVenueClaimSchema,
   DisputeVenueClaimSchema,
   VenueCalendarEventCreateSchema,
   VenueCalendarEventUpdateSchema,
   VenueCalendarEventCancelSchema,
 } from '../types/validation';
+
+const HOT_SPOT_PRIVACY = {
+  venueCoordinatesOnly: true,
+  liveCountsRoundedForFree: true,
+  checkInsAnonymousOption: true,
+} as const;
 
 const router = Router();
 // Every hot-spot response depends on the viewer (counts, times, my check-in).
@@ -69,10 +75,11 @@ router.get('/categories', async (_req: AuthRequest, res: Response) => {
 
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    const location = LocationSchema.parse({
-      lat: parseFloat(String(req.query.lat)),
-      lng: parseFloat(String(req.query.lng)),
-    });
+    // Origin: the viewer's stored location (POST /api/users/location), never the URL.
+    const location = await viewerStoredLocation(req.userId!);
+    if (!location) {
+      return res.json({ spots: [], location_required: true, privacy: HOT_SPOT_PRIVACY });
+    }
     const radius = req.query.radiusKm ? parseFloat(String(req.query.radiusKm)) : undefined;
     const category = typeof req.query.category === 'string' ? req.query.category : undefined;
     const cruisingOnly = req.query.cruising === 'true';
@@ -98,11 +105,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     });
     res.json({
       spots,
-      privacy: {
-        venueCoordinatesOnly: true,
-        liveCountsRoundedForFree: true,
-        checkInsAnonymousOption: true,
-      },
+      privacy: HOT_SPOT_PRIVACY,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Invalid request';

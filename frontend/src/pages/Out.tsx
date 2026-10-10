@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { eventsAPI, hotSpotsAPI, type EventDTO, type HotSpotDTO } from '../api/client';
+import { eventsAPI, hotSpotsAPI, onLocationSaved, type EventDTO, type HotSpotDTO } from '../api/client';
 import { Layout } from '../components/Layout';
 import { PulseRing } from '../components/PulseRing';
 import { CommunityFeed } from '../components/CommunityFeed';
@@ -95,6 +95,18 @@ export function Out() {
     [params, setParams],
   );
 
+  // A brand-new member's first read can land before the server has their
+  // location (empty list, location_required). Reload once when it is saved.
+  const [needsLocation, setNeedsLocation] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  useEffect(() => {
+    if (!needsLocation) return;
+    return onLocationSaved(() => {
+      setNeedsLocation(false);
+      setReloadKey((k) => k + 1);
+    });
+  }, [needsLocation]);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -110,7 +122,10 @@ export function Out() {
                 return;
               }
               const res = await hotSpotsAPI.listNearby(lat, lng, 80);
-              if (!cancelled) setSpots(res.data.spots ?? []);
+              if (!cancelled) {
+                setSpots(res.data.spots ?? []);
+                setNeedsLocation(Boolean((res.data as { location_required?: boolean }).location_required));
+              }
             })(),
           );
         } else if (!cancelled) {
@@ -141,7 +156,7 @@ export function Out() {
     return () => {
       cancelled = true;
     };
-  }, [chip, lat, lng]);
+  }, [chip, lat, lng, reloadKey]);
 
   const visibleSpots = useMemo(
     () => spots.filter((s) => spotMatchesChip(s, chip)),
@@ -226,7 +241,7 @@ export function Out() {
             <PulseRing size={36} label="Loading Out" />
           </div>
         ) : error ? (
-          <p className="py-8 text-center text-sm text-[var(--cream-muted)]">{error}</p>
+          <p className="py-8 text-center text-[15px] text-[var(--cream-muted)]">{error}</p>
         ) : (
           <div className="space-y-3" data-testid="out-list">
             {visibleSpots.map((spot) => (
@@ -236,26 +251,26 @@ export function Out() {
               <OutEventRow key={ev.id} event={ev} />
             ))}
             {visibleSpots.length === 0 && visibleEvents.length === 0 ? (
-              <p className="py-12 text-center text-sm text-[var(--cream-muted)]">
+              <p className="py-12 text-center text-[15px] text-[var(--cream-muted)]">
                 Nothing in this chip yet.
               </p>
             ) : null}
             <div className="flex flex-wrap gap-2 pt-2">
               <Link
                 to="/hot-spots"
-                className="inline-flex min-h-[44px] items-center text-[12px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
+                className="inline-flex min-h-[44px] items-center text-[15px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
               >
                 Full Cruise map
               </Link>
               <Link
                 to="/events"
-                className="inline-flex min-h-[44px] items-center text-[12px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
+                className="inline-flex min-h-[44px] items-center text-[15px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
               >
                 Full Events
               </Link>
               <Link
                 to="/stream"
-                className="inline-flex min-h-[44px] items-center text-[12px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
+                className="inline-flex min-h-[44px] items-center text-[15px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
               >
                 Community feed
               </Link>
@@ -297,10 +312,10 @@ function OutSpotRow({ spot }: { spot: HotSpotDTO }) {
       </div>
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-[15px] font-extrabold text-[var(--cream)]">{spot.name}</h2>
-        <p className="mt-0.5 truncate text-[12px] font-medium text-[var(--cream-muted)]">
+        <p className="mt-0.5 truncate text-[15px] font-medium text-[var(--cream-muted)]">
           {[dist, spot.city].filter(Boolean).join(' · ') || spot.category_name}
         </p>
-        <p className="mt-1 text-[14px] text-[var(--cream-soft)]">
+        <p className="mt-1 text-[15px] text-[var(--cream-soft)]">
           {spot.category_icon} {spot.category_name}
         </p>
       </div>
@@ -308,7 +323,7 @@ function OutSpotRow({ spot }: { spot: HotSpotDTO }) {
         href={mapUrl}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--border-default)] px-3 text-[14px] font-extrabold uppercase tracking-wide text-[var(--cream)]"
+        className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--border-default)] px-3 text-[15px] font-extrabold uppercase tracking-wide text-[var(--cream)]"
         aria-label={`Map directions to ${spot.name}`}
       >
         Map
@@ -331,11 +346,11 @@ function OutEventRow({ event }: { event: EventDTO }) {
       </div>
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-[15px] font-extrabold text-[var(--cream)]">{event.name}</h2>
-        <p className="mt-0.5 truncate text-[12px] font-medium text-[var(--cream-muted)]">
+        <p className="mt-0.5 truncate text-[15px] font-medium text-[var(--cream-muted)]">
           {[event.venue_name, event.starts_at].filter(Boolean).join(' · ')}
         </p>
       </div>
-      <span className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--copper)]/40 px-3 text-[14px] font-extrabold uppercase tracking-wide text-[var(--copper)]">
+      <span className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--copper)]/40 px-3 text-[15px] font-extrabold uppercase tracking-wide text-[var(--copper)]">
         Event
       </span>
     </article>
