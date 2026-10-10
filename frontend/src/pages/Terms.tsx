@@ -435,9 +435,9 @@ export const Terms = () => {
                   at register by 5 September 2026. All other Pride codes work at register up to and
                   including 31 October 2026 (23:59:59 UK time) and are refused from 1 November 2026.
                   That covers both kinds: Brighton Pride personal promo codes sent by email, and
-                  MenRush Pride invites (MENRUSH codes) from the menrush.com/pride claim form. So if
-                  you have an unused Pride code, register by 31 October 2026. Redeeming a valid Pride
-                  code grants 3 months of Premium. One grant per person. No stacking. Pride replaces
+                  MenRush Pride invites (MENRUSH codes) from the menrush.com/pride claim form. The
+                  claim form closes at the same time. Redeeming a valid Pride code grants 3 months of
+                  Premium. One grant per person. No stacking. Pride replaces
                   the 30 days of Premium in clause 7.2. It does not add to them. Cannot be
                   combined with the{' '}
                   <span className="font-mono tracking-wide">BSF26</span> promo in clause 7.8 or the{' '}
