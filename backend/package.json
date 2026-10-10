@@ -63,6 +63,7 @@
     "test:nightlife-checkin": "ts-node scripts/nightlife-checkin-checks.ts",
     "test:hot-spot-free-counts": "ts-node --transpile-only scripts/hot-spot-free-counts-checks.ts",
     "test:hot-spot-live-sort-integration": "ts-node --transpile-only scripts/hot-spot-live-sort-integration.ts",
+    "test:events-ghost-first-checkin": "ts-node scripts/events-ghost-first-checkin-integration.ts",
     "test:pride-invite-register-integration": "ts-node --transpile-only scripts/pride-invite-register-integration.ts",
     "test:nightlife-integration": "ts-node scripts/nightlife-checkin-integration.ts",
     "test:push": "ts-node scripts/test-push.ts",
