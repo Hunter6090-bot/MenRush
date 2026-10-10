@@ -98,6 +98,12 @@ async function main() {
     assert.equal(typeof verify.json.token, 'string', 'session token after 2FA');
     const sessionToken = verify.json.token as string;
 
+    const replay = await call('POST', '/api/auth/2fa/verify', {
+      body: { pendingToken, code },
+    });
+    assert.equal(replay.status, 401, 'pending token is single-use');
+    assert.ok(!replay.json.token, 'replay does not issue a second session');
+
     const meSession = await call('GET', '/api/users/me', { token: sessionToken });
     assert.equal(meSession.status, 200, 'session token accepted on /users/me');
     const accountSession = await call('GET', '/api/auth/account', { token: sessionToken });

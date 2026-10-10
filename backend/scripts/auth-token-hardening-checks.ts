@@ -160,7 +160,15 @@ function verifyTokenChecks() {
 
   const pending = authService.signTwoFactorPendingToken(MEMBER_ID);
   throwsInvalid(() => authService.verifyToken(pending), '2fa_pending as session');
-  assert.equal(authService.verifyTwoFactorPendingToken(pending).userId, MEMBER_ID);
+  const pendingClaims = authService.verifyTwoFactorPendingToken(pending);
+  assert.equal(pendingClaims.userId, MEMBER_ID);
+  assert.equal(typeof pendingClaims.jti, 'string');
+  assert.ok(pendingClaims.jti.length > 0, 'pending token carries a jti');
+
+  const futureNbf = purposeToken(MEMBER_ID, { nbf: Math.floor(Date.now() / 1000) + 3600 });
+  throwsInvalid(() => authService.verifyToken(futureNbf), 'future nbf as session');
+  const pastNbf = purposeToken(MEMBER_ID, { nbf: Math.floor(Date.now() / 1000) - 60 });
+  assert.equal(authService.verifyToken(pastNbf).userId, MEMBER_ID, 'past nbf is valid');
 
   throwsInvalid(
     () => authService.verifyTwoFactorPendingToken(session),
@@ -304,6 +312,22 @@ async function httpAuthChecks() {
     assert.equal((await request(srv.port, '/api/auth/account', { token: session })).status, 200);
     assert.equal((await request(srv.port, '/api/users/me', { token: legacy })).status, 200);
     assert.equal((await request(srv.port, '/api/auth/account', { token: legacy })).status, 200);
+    assert.equal(
+      (
+        await request(srv.port, '/api/users/me', {
+          token: purposeToken(MEMBER_ID, { nbf: Math.floor(Date.now() / 1000) + 3600 }),
+        })
+      ).status,
+      401,
+    );
+    assert.equal(
+      (
+        await request(srv.port, '/api/users/me', {
+          token: purposeToken(MEMBER_ID, { nbf: Math.floor(Date.now() / 1000) - 60 }),
+        })
+      ).status,
+      200,
+    );
 
     assert.equal(
       (await request(srv.port, '/api/users/me', { token: purposeToken(MEMBER_ID, { kind: 'reset' }) }))
@@ -361,6 +385,8 @@ function sourceGuards() {
   assert.match(auth, /SESSION_TIME_KEYS/);
   assert.match(auth, /scope:\s*'2fa_pending'/);
   assert.match(auth, /verifyTwoFactorPendingToken/);
+  assert.match(auth, /consumeTwoFactorPendingJti/);
+  assert.match(auth, /record\.nbf/);
   assert.match(
     fs.readFileSync(path.join(__dirname, '../src/routes/auth.ts'), 'utf8'),
     /completeTwoFactorLogin\(data\.pendingToken/,

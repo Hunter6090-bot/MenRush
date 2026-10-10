@@ -80,7 +80,11 @@ type TwoFactorPendingPayload = {
   userId: string;
   scope: '2fa_pending';
   exp: number;
+  jti?: string;
 };
+
+const hashPendingJti = (jti: string): string =>
+  crypto.createHash('sha256').update(jti).digest('hex');
 
 const base64UrlEncode = (input: Buffer | string): string => {
   const buf = Buffer.isBuffer(input) ? input : Buffer.from(input, 'utf8');
@@ -110,6 +114,11 @@ const assertSessionPayload = (payload: unknown): TokenPayload => {
   }
   if (record.exp < Math.floor(Date.now() / 1000)) {
     throw new Error('Token expired');
+  }
+  if (record.nbf !== undefined) {
+    if (typeof record.nbf !== 'number' || record.nbf > Math.floor(Date.now() / 1000)) {
+      throw new Error('Invalid token');
+    }
   }
 
   // Live session tokens on main are { userId, exp }. New tokens add type: 'session'.
@@ -822,6 +831,7 @@ export const authService = {
     const payload: TwoFactorPendingPayload = {
       userId,
       scope: '2fa_pending',
+      jti: uuidv4(),
       exp: Math.floor(Date.now() / 1000) + TWO_FACTOR_PENDING_TTL_SECONDS,
     };
     const payloadJson = JSON.stringify(payload);
@@ -833,7 +843,7 @@ export const authService = {
     return `${payloadPart}.${base64UrlEncode(signature)}`;
   },
 
-  verifyTwoFactorPendingToken(token: string): { userId: string } {
+  verifyTwoFactorPendingToken(token: string): { userId: string; jti: string } {
     const [payloadPart, signaturePart] = token.split('.');
     if (!payloadPart || !signaturePart) {
       throw new Error('Invalid token');
@@ -861,7 +871,22 @@ export const authService = {
       throw new Error('Token expired');
     }
 
-    return { userId: payload.userId };
+    const jti =
+      typeof payload.jti === 'string' && payload.jti.length > 0
+        ? payload.jti
+        : hashPendingJti(token);
+    return { userId: payload.userId, jti };
+  },
+
+  async consumeTwoFactorPendingJti(userId: string, jti: string): Promise<boolean> {
+    const used = await query(
+      `INSERT INTO two_factor_pending_used (jti_hash, user_id, expires_at)
+       VALUES ($1, $2, NOW() + INTERVAL '1 hour')
+       ON CONFLICT (jti_hash) DO NOTHING
+       RETURNING jti_hash`,
+      [hashPendingJti(jti), userId],
+    );
+    return used.rows.length > 0;
   },
 
   async completeTwoFactorLogin(
@@ -869,11 +894,14 @@ export const authService = {
     code: string,
     options?: { trustThisDevice?: boolean; userAgent?: string },
   ) {
-    const { userId } = this.verifyTwoFactorPendingToken(pendingToken);
+    const { userId, jti } = this.verifyTwoFactorPendingToken(pendingToken);
     const { twoFactorService } = await import('./two-factor.service');
     const valid = await twoFactorService.verifyForLogin(userId, code);
     if (!valid) {
       throw new Error('Invalid authentication code');
+    }
+    if (!(await this.consumeTwoFactorPendingJti(userId, jti))) {
+      throw new Error('Invalid token');
     }
 
     const result = await query(
