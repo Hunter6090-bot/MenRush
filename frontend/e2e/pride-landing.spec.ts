@@ -111,7 +111,8 @@ test.describe('Pride promotion landing', () => {
     await expect(body).toContainText(/5 September 2026/i);
     await expect(body).toContainText(/earlier email/i);
     await expect(body).toContainText(/31 October 2026/i);
-    await expect(body).toContainText(/3 months of Premium from launch/i);
+    await expect(body).toContainText('Redeeming a valid Pride code grants 3 months of Premium.');
+    await expect(body).not.toContainText(/Premium from launch/i);
     await expect(body).toContainText(/One grant per person/i);
     await expect(body).toContainText(/No stacking/i);
     await expect(body).toContainText(/clause 7\.2/i);
