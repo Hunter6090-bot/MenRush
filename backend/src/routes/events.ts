@@ -4,9 +4,9 @@ import { rateLimitKey } from '../lib/clientIp';
 import { z } from 'zod';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { privateNoStore } from '../middleware/noStore';
+import { viewerStoredLocation } from '../lib/viewerOrigin';
 import { eventService } from '../services/event.service';
 import { hotSpotsService } from '../services/hot-spots.service';
-import { LocationSchema } from '../types/validation';
 
 const router = Router();
 // Ahead of auth so 401s are not stored either; covers nearby and check-in.
@@ -27,11 +27,10 @@ const EventCheckInSchema = z.object({
 
 router.get('/nearby', async (req: AuthRequest, res: Response) => {
   try {
-    const { lat, lng, radius, limit, days } = req.query;
-    const location = LocationSchema.parse({
-      lat: parseFloat(lat as string),
-      lng: parseFloat(lng as string),
-    });
+    const { radius, limit, days } = req.query;
+    // Origin: the viewer's stored location (POST /api/users/location), never the URL.
+    const location = await viewerStoredLocation(req.userId!);
+    if (!location) return res.json([]);
     const events = await eventService.getNearbyEvents({
       lat: location.lat,
       lng: location.lng,
