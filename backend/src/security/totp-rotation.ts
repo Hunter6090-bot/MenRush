@@ -4,16 +4,15 @@
  *
  * Modes
  * - dry-run (default): read every stored secret, try to decrypt in memory, count. No writes.
- * - apply:   one transaction, rows locked FOR UPDATE. Each secret is decrypted (current or
- *            previous key), re-encrypted to v2 under the current key, and the new value is
- *            decrypted with the current key alone and compared before the UPDATE. Any failure
- *            rolls the whole transaction back.
+ * - apply:   a lock-free pre-check (any unreadable row: nothing is written), then batches of
+ *            rows, each its own transaction locking only that batch FOR UPDATE. Each secret is
+ *            decrypted (current or previous key), re-encrypted to v2 under the current key, and
+ *            checked with the current key alone before the guarded UPDATE.
  * - verify:  every row must be in the write format (v2, or v1 during a code rollback) and
  *            decrypt with the CURRENT key alone (previous ignored).
  * - reverse: code rollback only. Refuses unless TOTP_WRITE_FORMAT=v1 is set, so the running
- *            app cannot write v2 again behind it. One transaction, FOR UPDATE: every row is
- *            rewritten as v1 under the CURRENT key (the key the pre-v2 code will use), checked
- *            before commit.
+ *            app cannot write v2 again behind it. Same pre-check and batches as apply: every
+ *            row is rewritten as v1 under the CURRENT key (the key the pre-v2 code will use).
  *
  * A key rollback (back to the old key, same code) is not "reverse": swap the two variables
  * (TOTP_ENCRYPTION_KEY=old, TOTP_ENCRYPTION_KEY_PREVIOUS=new) and run apply, then verify.
@@ -44,6 +43,8 @@ export interface RotationReport {
   readableOnlyWithPrevious: number;
   unreadable: number;
   written: number;
+  /** Write batches committed (apply / reverse). */
+  batches: number;
   committed: boolean;
   /** The format this run writes or verifies (TOTP_WRITE_FORMAT, default v2). */
   format: TotpVersion;
@@ -62,6 +63,8 @@ export interface RotationReport {
 export interface RotationOptions {
   /** Tests only: restrict to these user ids so a shared test DB cannot interfere. */
   onlyUserIds?: string[];
+  /** Rows per write transaction for apply / reverse (default DEFAULT_ROTATION_BATCH_SIZE). */
+  batchSize?: number;
 }
 
 interface Row {
@@ -72,7 +75,7 @@ interface Row {
 
 const currentRaw = currentTotpKeyRaw;
 
-async function loadRows(client: PoolClient, lock: boolean, opts: RotationOptions): Promise<Row[]> {
+async function loadRows(client: PoolClient, opts: RotationOptions, lock = false): Promise<Row[]> {
   const params: unknown[] = [];
   let where = 'totp_secret_encrypted IS NOT NULL';
   if (opts.onlyUserIds) {
@@ -91,7 +94,7 @@ function emptyReport(mode: RotationMode): RotationReport {
   return {
     mode, total: 0, enabled: 0, pending: 0, v1: 0, v2: 0,
     readableWithCurrent: 0, readableOnlyWithPrevious: 0, unreadable: 0,
-    written: 0, committed: false, format: totpWriteFormat(), keyProblem: null, ok: false,
+    written: 0, batches: 0, committed: false, format: totpWriteFormat(), keyProblem: null, ok: false,
   };
 }
 
@@ -131,17 +134,17 @@ export async function runTotpRotation(
     report.refused = 'current-key-not-strong';
     return report;
   }
+  if (mode === 'apply' || mode === 'reverse') {
+    return runBatchedWrite(pool, mode, report, current as string, opts);
+  }
+  // dry-run and verify: one read-only transaction, no locks.
   const client = await pool.connect();
-  const writes = mode === 'apply' || mode === 'reverse';
   try {
-    if (writes) await client.query('BEGIN');
-    else await client.query('BEGIN READ ONLY');
-    const rows = await loadRows(client, writes, opts);
-
+    await client.query('BEGIN READ ONLY');
+    const rows = await loadRows(client, opts);
     for (const row of rows) {
       tally(report, row);
       const stored = row.totp_secret_encrypted;
-
       if (mode === 'verify') {
         try {
           decryptTotpSecretWith(stored, current as string);
@@ -151,60 +154,117 @@ export async function runTotpRotation(
         }
         continue;
       }
-
-      let secret: string;
       try {
         const opened = decryptTotpSecretDetailed(stored);
-        secret = opened.secret;
         if (opened.keySlot === 'current') report.readableWithCurrent += 1;
         else report.readableOnlyWithPrevious += 1;
       } catch {
         report.unreadable += 1;
-        continue;
       }
-      if (!writes) continue;
-
-      // apply writes v2, reverse writes v1; both under the current key, checked with it alone.
-      const next = encryptTotpSecretWith(secret, current as string, mode === 'apply' ? 'v2' : 'v1');
-      if (decryptTotpSecretWith(next, current as string) !== secret) throw new Error('Re-encrypt check failed');
-      const upd = await client.query(
-        `UPDATE users SET totp_secret_encrypted = $1 WHERE id = $2 AND totp_secret_encrypted = $3`,
-        [next, row.id, stored],
-      );
-      report.written += upd.rowCount ?? 0;
     }
-
+    await client.query('ROLLBACK');
     if (mode === 'verify') {
       const wrongFormat = format === 'v2' ? report.v1 : report.v2;
       report.ok = report.unreadable === 0 && wrongFormat === 0 && !report.keyProblem;
-      await client.query('ROLLBACK');
-      return report;
-    }
-    if (!writes) {
+    } else {
       report.ok = report.unreadable === 0 && !report.keyProblem;
-      await client.query('ROLLBACK');
-      return report;
     }
-    // Writes: all-or-nothing.
-    if (report.unreadable > 0 || report.written !== report.total) {
-      await client.query('ROLLBACK');
-      report.ok = false;
-      return report;
-    }
-    await client.query('COMMIT');
-    report.committed = true;
-    report.ok = true;
     return report;
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
-    report.committed = false;
     report.ok = false;
-    // Crypto failures are TotpCryptoError, whose message is fixed and friendly; pg errors
-    // never include parameter values. So the message is safe to print.
     throw new Error(`TOTP rotation ${mode} failed: ${err instanceof Error ? err.message : 'unknown error'}`);
   } finally {
     client.release();
   }
+}
+
+/** Rows per write transaction: only these are locked at a time. */
+export const DEFAULT_ROTATION_BATCH_SIZE = 100;
+
+/**
+ * apply / reverse in batches, so no run locks every row for its whole length.
+ * 1. Pre-check, read-only and lock-free: every row must decrypt (current or previous key). If
+ *    any row is unreadable, nothing is written at all.
+ * 2. Then, per batch of ids: BEGIN, lock just that batch FOR UPDATE, re-encrypt each row under
+ *    the current key (v2 for apply, v1 for reverse), check it with the current key alone, write
+ *    with a guarded UPDATE, COMMIT. A failure rolls back that batch and stops the run.
+ * Stopping part-way is safe: every row, rewritten or not, still decrypts with the variables set
+ * for the run (current + previous), and v1 rows are readable by both code versions. Re-running
+ * finishes the job; --verify passes only when every row is done.
+ */
+async function runBatchedWrite(
+  pool: Pool,
+  mode: 'apply' | 'reverse',
+  report: RotationReport,
+  current: string,
+  opts: RotationOptions,
+): Promise<RotationReport> {
+  const target: TotpVersion = mode === 'apply' ? 'v2' : 'v1';
+  const batchSize = Math.max(1, opts.batchSize ?? DEFAULT_ROTATION_BATCH_SIZE);
+  let ids: string[];
+  const scan = await pool.connect();
+  try {
+    await scan.query('BEGIN READ ONLY');
+    const rows = await loadRows(scan, opts);
+    await scan.query('ROLLBACK');
+    for (const row of rows) {
+      tally(report, row);
+      try {
+        const opened = decryptTotpSecretDetailed(row.totp_secret_encrypted);
+        if (opened.keySlot === 'current') report.readableWithCurrent += 1;
+        else report.readableOnlyWithPrevious += 1;
+      } catch {
+        report.unreadable += 1;
+      }
+    }
+    ids = rows.map((r) => r.id);
+  } catch (err) {
+    await scan.query('ROLLBACK').catch(() => {});
+    throw new Error(`TOTP rotation ${mode} failed: ${err instanceof Error ? err.message : 'unknown error'}`);
+  } finally {
+    scan.release();
+  }
+  if (report.unreadable > 0) {
+    report.ok = false;
+    return report; // nothing written
+  }
+
+  for (let i = 0; i < ids.length; i += batchSize) {
+    const batch = ids.slice(i, i + batchSize);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const rows = await loadRows(client, { onlyUserIds: batch }, true);
+      let written = 0;
+      for (const row of rows) {
+        const stored = row.totp_secret_encrypted;
+        const secret = decryptTotpSecretDetailed(stored).secret; // throws: batch rolls back
+        const next = encryptTotpSecretWith(secret, current, target);
+        if (decryptTotpSecretWith(next, current) !== secret) throw new Error('Re-encrypt check failed');
+        const upd = await client.query(
+          `UPDATE users SET totp_secret_encrypted = $1 WHERE id = $2 AND totp_secret_encrypted = $3`,
+          [next, row.id, stored],
+        );
+        written += upd.rowCount ?? 0;
+      }
+      await client.query('COMMIT');
+      report.written += written;
+      report.batches += 1;
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      report.committed = report.batches > 0;
+      report.ok = false;
+      throw new Error(
+        `TOTP rotation ${mode} stopped after ${report.batches} batch(es): ${err instanceof Error ? err.message : 'unknown error'}`,
+      );
+    } finally {
+      client.release();
+    }
+  }
+  report.committed = true;
+  report.ok = report.written === report.total;
+  return report;
 }
 
 /** Counts only, one line per field, for the CLI. */
@@ -223,7 +283,7 @@ export function formatRotationReport(r: RotationReport): string {
   }
   if (r.refused) lines.push(`refused=${r.refused}`);
   if (r.mode === 'apply' || r.mode === 'reverse') {
-    lines.push(`written=${r.written} committed=${r.committed}`);
+    lines.push(`written=${r.written} batches=${r.batches} committed=${r.committed}`);
   }
   lines.push(`result=${r.ok ? 'OK' : 'NOT OK'}`);
   return lines.join('\n');

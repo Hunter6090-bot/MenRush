@@ -11,9 +11,13 @@ service variables into that one process only.
 | Mode | Command flag | Writes? | Passes when |
 | --- | --- | --- | --- |
 | Dry run | (none) | No, read-only transaction | `result=OK`: every row decrypts with the current or previous key |
-| Apply | `--apply --confirm-production` | Yes, one transaction, rows locked | every row re-encrypted to v2 under the current key and checked before commit; any unreadable row rolls the whole thing back |
+| Apply | `--apply --confirm-production` | Yes, in batches of 100 rows, each its own short transaction locking only that batch | a lock-free pre-check first: if any row is unreadable, nothing is written. Then every row is re-encrypted to v2 under the current key and checked before its batch commits |
 | Verify | `--verify` | No | every row is in the write format (v2, or v1 while `TOTP_WRITE_FORMAT=v1`) and decrypts with `TOTP_ENCRYPTION_KEY` **alone** |
-| Reverse | `--reverse --confirm-production` | Yes, one transaction, rows locked | code rollback only: every row rewritten as v1 under the current key, checked before commit |
+| Reverse | `--reverse --confirm-production` | Yes, same pre-check and batches as apply | code rollback only: every row rewritten as v1 under the current key, checked before its batch commits |
+
+If a run stops part-way (a batch fails), the batches already committed are fine: every row still
+decrypts with the variables set for the run, so nobody is locked out. Fix the cause and run the
+same command again; `--verify` passes only when every row is done.
 
 Safety gate: `NODE_ENV` must be set for the run or the script refuses. A Railway database is
 refused unless `NODE_ENV=production`. On production, `--apply` and `--reverse` refuse without
@@ -45,6 +49,13 @@ railway run --service backend -- env NODE_ENV=production npm run -s totp:rotate 
 If `DATABASE_URL` is a `*.railway.internal` host, override it for that run with the Postgres
 public URL, or run inside the service.
 
+**Railway warning: never set either key as a Railway reference such as
+`${{TOTP_ENCRYPTION_KEY}}`, `${{shared.TOTP_ENCRYPTION_KEY}}` or `${{backend.JWT_SECRET}}`.
+A reference is resolved again on every deploy, so after you change `TOTP_ENCRYPTION_KEY`, a
+`TOTP_ENCRYPTION_KEY_PREVIOUS=${{TOTP_ENCRYPTION_KEY}}` silently becomes the NEW key, the old
+key is gone, and every 2FA member is locked out. Always enter the literal value, and check in
+the Railway variables view that neither key shows `${{` before you redeploy.**
+
 "Today's key" below means the value the backend uses now: `TOTP_ENCRYPTION_KEY`, or
 `JWT_SECRET` if `TOTP_ENCRYPTION_KEY` is unset. Check which in Railway; nobody has read it for
 this PR.
@@ -59,8 +70,8 @@ this PR.
 
 ## 2. Rotate (forward)
 
-1. Generate the new key in a terminal with `openssl rand -base64 32` and put it straight into
-   Railway. In **one** variables change, set:
+1. Generate the new key in a terminal with `openssl rand -hex 32` (the only recommended form)
+   and put it straight into Railway. In **one** variables change, set:
    - `TOTP_ENCRYPTION_KEY` = the new key
    - `TOTP_ENCRYPTION_KEY_PREVIOUS` = today's key
 

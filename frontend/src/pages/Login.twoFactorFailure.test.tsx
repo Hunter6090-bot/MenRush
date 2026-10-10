@@ -51,6 +51,9 @@ describe('Login 2FA step when the server cannot read the secret', () => {
 
     const message = await screen.findByText(SUPPORT_COPY);
     expect(message.className).toContain('text-[15px]');
+    // Danger text token, 5.26:1 on the always-dark auth panel (the old #B0432E was 3.16:1).
+    expect(message.className).toContain('text-[var(--nn-danger-light)]');
+    expect(message.className).not.toContain('#B0432E');
     expect(message.textContent).not.toMatch(/[\u2013\u2014]/);
     await waitFor(() => expect(verifyTwoFactorLogin).toHaveBeenCalledTimes(1));
     // Still on the code step with the same pending token: "try again" is one tap away.

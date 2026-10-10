@@ -4,7 +4,8 @@
  * Runbook (deploy, rotate, verify, key rollback, code rollback): docs/totp-key-rotation.md
  *
  *   npm run totp:rotate                                    # dry run (default): counts, no writes
- *   npm run totp:rotate -- --apply --confirm-production    # one transaction, FOR UPDATE, check before commit
+ *   npm run totp:rotate -- --apply --confirm-production    # pre-check, then batches of 100 rows, each locked
+ *                                                          # only for its own short transaction
  *   npm run totp:rotate -- --verify                        # every row in the write format, readable with
  *                                                          # TOTP_ENCRYPTION_KEY alone
  *   npm run totp:rotate -- --reverse --confirm-production  # code rollback only: v1 under the current key

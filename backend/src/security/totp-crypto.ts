@@ -157,7 +157,7 @@ export function assertTotpKeyForProduction(env: NodeJS.ProcessEnv = process.env)
   if (problem) {
     throw new Error(
       `Refusing to start: TOTP_ENCRYPTION_KEY is ${problem}. It must be at least ${TOTP_KEY_MIN_BYTES} random bytes ` +
-        'written as base64 or hex (openssl rand -base64 32), set through the TOTP rotation (npm run totp:rotate -- --verify).',
+        'written as hex or base64 (generate with openssl rand -hex 32), set through the TOTP rotation (npm run totp:rotate -- --verify).',
     );
   }
 }

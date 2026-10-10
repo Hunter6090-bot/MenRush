@@ -103,6 +103,15 @@ const tests: [string, () => void][] = [
     assert.equal(totpKeyByteLength(b64), 32);
     assert.equal(decodeTotpKey(crypto.randomBytes(32).toString('hex'))?.encoding, 'hex');
   }],
+  ['the refusal recommends only openssl rand -hex 32 and never echoes the value', () => {
+    const weak = 'a passphrase that is long enough to pass a length check';
+    assert.throws(() => assertTotpKeyForProduction(prod(weak)), (err: Error) => {
+      assert.match(err.message, /openssl rand -hex 32/);
+      assert.ok(!/rand -base64/.test(err.message), 'no base64 generation advice');
+      assert.ok(!err.message.includes(weak), 'value never echoed');
+      return true;
+    });
+  }],
   ['no known-value list or fingerprint in the code (nothing to help offline guessing)', () => {
     const src = fs.readFileSync(path.join(__dirname, '../src/security/totp-crypto.ts'), 'utf8');
     assert.ok(!/[0-9a-f]{64}/.test(src), 'no 64-hex fingerprints');

@@ -227,7 +227,15 @@ export const Login = () => {
           )}
 
           {error ? (
-            <p className={pendingToken ? 'text-[15px] font-semibold leading-snug text-[#B0432E]' : publicErrorClass}>
+            <p
+              role="alert"
+              className={
+                pendingToken
+                  ? // The auth panel is always dark (#1E1508), whatever the theme: --nn-danger-light is 5.26:1 there.
+                    'text-[15px] font-semibold leading-snug text-[var(--nn-danger-light)]'
+                  : publicErrorClass
+              }
+            >
               {error}
             </p>
           ) : null}

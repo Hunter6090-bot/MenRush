@@ -154,7 +154,7 @@ async function main() {
     const brokenScope = { onlyUserIds: [...rotationIds, ids.broken] };
     const beforeBroken = await Promise.all(rotationIds.map(stored));
     const refused = await runTotpRotation(pool, 'apply', brokenScope);
-    assert.deepEqual([refused.unreadable, refused.committed, refused.ok], [1, false, false]);
+    assert.deepEqual([refused.unreadable, refused.written, refused.batches, refused.committed, refused.ok], [1, 0, 0, false, false], 'pre-check: nothing written');
     assert.deepEqual(await Promise.all(rotationIds.map(stored)), beforeBroken, 'nothing committed');
 
     // ── Rollback journeys: every member can verify at every step ───────────
@@ -176,8 +176,9 @@ async function main() {
     async function rotateTo(current: string, previous: string, step: string) {
       useKeys(current, previous);
       await everyoneVerifies(`${step} (both keys set, before apply)`);
-      const r = await runTotpRotation(pool, 'apply', fleetScope);
-      assert.deepEqual([r.unreadable, r.committed, r.ok], [0, true, true], `${step}: apply`);
+      // Batches of 2 over 5 rows: 3 short transactions, each locking only its own rows.
+      const r = await runTotpRotation(pool, 'apply', { ...fleetScope, batchSize: 2 });
+      assert.deepEqual([r.unreadable, r.written, r.batches, r.committed, r.ok], [0, 5, 3, true, true], `${step}: apply in batches`);
       useKeys(current); // previous removed only after verify with the new key alone
       const v = await runTotpRotation(pool, 'verify', fleetScope);
       assert.deepEqual([v.v1, v.unreadable, v.ok], [0, 0, true], `${step}: verify with one key`);
