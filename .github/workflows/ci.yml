@@ -180,6 +180,8 @@ jobs:
         run: npm run test:hot-spot-live-sort-integration
       - name: Pride code holders can register (real PG)
         run: npm run test:pride-invite-register-integration
+      - name: Deleting a member who created a room works (real PG)
+        run: npm run test:delete-room-creator-integration
       - name: Ghost or hidden first event check-in creates no public spot (real PG)
         run: npm run test:events-ghost-first-checkin
       # --if-present: these scripts arrive with their own PRs (#333, #327,
