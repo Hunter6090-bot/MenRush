@@ -8,7 +8,7 @@ const sections = [
     items: [
       'Account details such as email, display name, age and encrypted login credentials.',
       'Profile content you choose to add, including photos, bio, interests, mood and preferences.',
-      'Precise location from your device, with your permission, when you use the map and nearby discovery. We use it to work out an approximate position and rounded distance that other members can see. We never show your exact location to other members unless you choose to share it yourself in a chat.',
+      'Precise location from your device, with your permission, when you use the map and nearby discovery. We use it to work out an approximate position and rounded distance that other members can see. Unless you choose to share it yourself in a chat, we never show your exact location to other members.',
       'Messages, media metadata, reports, blocks and safety signals needed to operate the service.',
       'Device, log and security information used to protect accounts and prevent abuse.',
     ],

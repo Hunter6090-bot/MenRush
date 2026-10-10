@@ -6,7 +6,7 @@ import { Privacy } from './Privacy';
 
 /** Legal ruling 10 Oct 2026, word for word. Written out here, not imported, so a drift in the copy fails. */
 const RETENTION =
-  "We keep your current location while your account is open. It's replaced each time your device sends a new one, including when you use Ghost mode, and we delete it when you delete your account. We also keep the location from when you first joined. When you post to the map or the community, we automatically save your exact location with that post. We keep it with the post until you delete your account, even after the post stops showing. Locations you choose to share in a chat are kept until that chat content is deleted. We're shortening how long we keep location data and will update this section when that's in place.";
+  "We keep your current location while your account is open. It's replaced each time your device sends a new one, including when you use Ghost mode, and we delete it when you delete your account. We also keep the location from when you first joined. When you post to the map or the community, we automatically save your exact location with that post. We keep it with the post until you delete the post or your account. Locations you share in a chat are kept until that chat or your account is deleted, and check-ins are kept until your account is deleted. We're shortening how long we keep location data and will update this section when that's in place.";
 
 /** Rendered text with whitespace collapsed, so JSX line breaks do not matter. */
 function pageText(ui: React.ReactElement): string {
@@ -20,7 +20,7 @@ describe('Legal location wording (Legal, Oct 2026)', () => {
   it('Terms 6.3 uses the plain location lines', () => {
     const text = pageText(<Terms />);
     expect(text).toContain(
-      'We never show your exact location to other members unless you choose to share it yourself in a chat. They see an approximate position, moved by your Discretion setting, and distances rounded to "under 1 mile" or whole miles. Members who choose Ghost or hidden mode don\'t appear on the map.',
+      'Unless you choose to share it yourself in a chat, we never show your exact location to other members. They see an approximate position, moved by your Discretion setting, and distances rounded to "under 1 mile" or whole miles. Members who choose Ghost or hidden mode don\'t appear on the map.',
     );
     expect(text).toContain(
       'If you choose to share a place or location yourself, for example in a chat or a check-in, other members will see what you share.',
@@ -44,7 +44,7 @@ describe('Legal location wording (Legal, Oct 2026)', () => {
   it('Privacy uses the precise location and rounded distance lines', () => {
     const text = pageText(<Privacy />);
     expect(text).toContain(
-      'Precise location from your device, with your permission, when you use the map and nearby discovery. We use it to work out an approximate position and rounded distance that other members can see. We never show your exact location to other members unless you choose to share it yourself in a chat.',
+      'Precise location from your device, with your permission, when you use the map and nearby discovery. We use it to work out an approximate position and rounded distance that other members can see. Unless you choose to share it yourself in a chat, we never show your exact location to other members.',
     );
     expect(text).toContain('Distances are shown rounded, as "under 1 mile" or in whole miles.');
     expect(text).not.toContain('privacy-bucketed');
@@ -75,10 +75,10 @@ describe('Legal location wording (Legal, Oct 2026)', () => {
     const terms = pageText(<Terms />);
     const privacy = pageText(<Privacy />);
     for (const text of [terms, privacy]) {
-      expect(text).toContain('We never show your exact location to other members unless you choose to share it yourself in a chat.');
-      // Every "never exact" claim carries the exception; no bare version is left.
-      const claims = text.split('We never show your exact location to other members').length - 1;
-      const withException = text.split('We never show your exact location to other members unless you choose to share it yourself in a chat.').length - 1;
+      expect(text).toContain('Unless you choose to share it yourself in a chat, we never show your exact location to other members.');
+      // Every "never exact" claim opens with the exception; no bare version is left.
+      const claims = text.split(/we never show your exact location to other members/i).length - 1;
+      const withException = text.split('Unless you choose to share it yourself in a chat, we never show your exact location to other members.').length - 1;
       expect(claims).toBeGreaterThan(0);
       expect(withException).toBe(claims);
     }
@@ -92,12 +92,15 @@ describe('Legal location wording (Legal, Oct 2026)', () => {
     expect(text).toContain('To improve product reliability and performance.');
   });
 
-  it('post locations are stated as kept until you delete your account', () => {
+  it('post, chat and check-in locations are stated as Zoul worded them', () => {
     for (const text of [pageText(<Terms />), pageText(<Privacy />)]) {
       expect(text).toContain(
-        'We keep it with the post until you delete your account, even after the post stops showing.',
+        'We keep it with the post until you delete the post or your account.',
       );
       expect(text).not.toContain('until the post is deleted');
+      expect(text).toContain(
+        'Locations you share in a chat are kept until that chat or your account is deleted, and check-ins are kept until your account is deleted.',
+      );
     }
   });
 
