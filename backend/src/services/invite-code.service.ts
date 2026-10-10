@@ -90,7 +90,8 @@ export const inviteCodeService = {
     return { valid: true, code: row.code };
   },
 
-  async redeemForRegistration(rawCode: string, userId: string, client: PoolClient): Promise<void> {
+  /** Marks the invite used inside the register transaction; returns the invite row id. */
+  async redeemForRegistration(rawCode: string, userId: string, client: PoolClient): Promise<string> {
     const normalized = normalizeInviteCode(rawCode);
     if (!normalized.startsWith('MENRUSH') || normalized.length !== 15) {
       throw new Error(inviteUnavailableMessage());
@@ -113,6 +114,7 @@ export const inviteCodeService = {
        VALUES ($1, $2)`,
       [row.id, userId],
     );
+    return String(row.id);
   },
 
   async generateBatch(options: {

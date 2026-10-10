@@ -3,6 +3,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { MAP_PIN_FUZZ_DEFAULT_M, privateMapPointAround } from '../lib/mapPinFuzz';
 import { clampRadiusKm, PIN_PREFILTER_BUFFER_M, publicPinSql } from '../lib/mapPinSql';
 import { viewerStoredLocation } from '../lib/viewerOrigin';
+import { locationHiddenFromViewerSql, notLocationHiddenFromViewerSql } from '../lib/locationHiddenSql';
+
+/** Most posts a single feed read returns. */
+export const MAP_FEED_LIMIT = 200;
 
 /** Sender's public pin for a post (seed map:<senderId>, sender's Discretion). */
 const SENDER_PIN = publicPinSql('mf.lat', 'mf.lng', 'mf.sender_id', 'sp.map_pin_fuzz_m');
@@ -27,7 +31,7 @@ export const mapFeedService = {
     userId: string,
     // lat / lng are ignored: the query point is always the viewer's stored
     // location, so it cannot be moved around to triangulate someone.
-    opts: { lat?: number; lng?: number; radiusKm?: number } = {},
+    opts: { lat?: number; lng?: number; radiusKm?: number; limit?: number } = {},
   ): Promise<MapFeedMessage[]> {
     const origin = await viewerStoredLocation(userId);
     if (!origin) return [];
@@ -35,6 +39,7 @@ export const mapFeedService = {
     // Same radius bounds as Nearby and Community (min 0.8 km).
     const radiusMeters = clampRadiusKm(opts.radiusKm, 5) * 1000;
     const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const limit = Math.min(MAP_FEED_LIMIT, Math.max(1, Math.floor(Number(opts.limit) || MAP_FEED_LIMIT)));
 
     // Coordinates returned and the radius check both use the sender's public
     // (Discretion-fuzzed) pin for the post, never raw GPS.
@@ -57,9 +62,12 @@ export const mapFeedService = {
            WHERE (b.blocker_id = $5 AND b.blocked_id = mf.sender_id)
               OR (b.blocker_id = mf.sender_id AND b.blocked_id = $5)
          )
-       ORDER BY mf.created_at DESC
-       LIMIT 200`,
-      [origin.lat, origin.lng, fifteenMinsAgo, radiusMeters, userId],
+         -- Hide my location from: posts and pins from members who hide from the viewer.
+         -- In SQL, before LIMIT, so hidden posts never use up the page.
+         AND ${notLocationHiddenFromViewerSql('mf.sender_id', '$5::uuid')}
+       ORDER BY mf.created_at DESC, mf.id DESC
+       LIMIT $6`,
+      [origin.lat, origin.lng, fifteenMinsAgo, radiusMeters, userId, limit],
     );
 
     // lat / lng are already the sender's public pin (SENDER_PIN in SQL).
@@ -115,6 +123,7 @@ export const mapFeedService = {
   /**
    * Socket fan-out targets for a new post. With senderId, anyone the sender
    * blocked or who blocked the sender is left out (same block lookup as Nearby),
+   * anyone the sender hides their location from is left out,
    * and a ghost / hidden sender only reaches themselves.
    */
   async nearbyUserIds(
@@ -141,6 +150,7 @@ export const mapFeedService = {
                WHERE (b.blocker_id = $4::uuid AND b.blocked_id = profiles.user_id)
                   OR (b.blocker_id = profiles.user_id AND b.blocked_id = $4::uuid)
              )
+             AND NOT ${locationHiddenFromViewerSql('$4::uuid', 'profiles.user_id')}
            )
          )`,
       [lat, lng, radiusMeters, senderId ?? null],
