@@ -1,5 +1,43 @@
-import { query } from '../db';
-import { ccbillService, CCBillTier } from './ccbill.service';
+import type { PoolClient } from 'pg';
+import pool, { query } from '../db';
+import { isInviteRequired } from './invite-code.service';
+import { isAlwaysPremiumName } from '../lib/always-premium';
+
+type Queryable = PoolClient | typeof pool;
+
+export type PaymentProcessor = 'verotel' | 'segpay';
+
+export type PaymentWebhookEvent = {
+  eventType: string;
+  userId: string | null;
+  subscriptionId: string | null;
+  customerId: string | null;
+  periodEnd: Date | null;
+  processor?: string;
+  raw: Record<string, string>;
+};
+
+export class BillingNotConfiguredError extends Error {
+  constructor(message = 'Billing is not configured') {
+    super(message);
+    this.name = 'BillingNotConfiguredError';
+  }
+}
+
+/** Fallback when webhook body omits billed amount — matches standard premium price. */
+export const PREMIUM_PAID_PRICE = 6.99;
+
+/**
+ * Waitlist gift cutoff: UK launch midnight 1 Oct 2026 (BST = UTC+1).
+ * Anyone who registers before this gets 30 days Premium with no code.
+ * Pride / BSF26 / MR3FREE 3-month grants replace this gift (do not stack).
+ */
+export const WAITLIST_GIFT_CUTOFF = new Date('2026-09-30T23:00:00Z');
+export const WAITLIST_GIFT_DAYS = 30;
+
+export function isWaitlistGiftOpen(now = new Date()): boolean {
+  return now.getTime() < WAITLIST_GIFT_CUTOFF.getTime();
+}
 
 export type PremiumTier = 'free' | 'premium' | 'premium_plus';
 export type PremiumFeature =
@@ -81,6 +119,7 @@ export const premiumService = {
          u.premium_tier,
          u.is_premium,
          u.premium_until,
+         u.premium_starts_at,
          s.id AS subscription_id,
          s.status AS subscription_status,
          s.processor,
@@ -97,8 +136,12 @@ export const premiumService = {
     if (!row) return null;
 
     const until = row.premium_until ? new Date(row.premium_until) : null;
+    const starts = row.premium_starts_at ? new Date(row.premium_starts_at) : null;
+    const started = !starts || starts.getTime() <= Date.now();
     const active =
-      Boolean(row.is_premium) && (!until || until.getTime() > Date.now());
+      Boolean(row.is_premium) &&
+      started &&
+      (!until || until.getTime() > Date.now());
 
     const betaFree = this.isBetaPremiumFree();
     return {
@@ -106,6 +149,7 @@ export const premiumService = {
       is_premium: betaFree || active,
       beta_premium_included: betaFree,
       premium_until: until?.toISOString() ?? null,
+      premium_starts_at: starts?.toISOString() ?? null,
       subscription: row.subscription_id
         ? {
             id: row.subscription_id,
@@ -121,7 +165,96 @@ export const premiumService = {
   },
 
   isBetaPremiumFree(): boolean {
-    return process.env.BETA_PREMIUM_FREE === 'true';
+    // MenRush is currently in beta, so Premium is included unless an operator
+    // explicitly ends the beta entitlement with BETA_PREMIUM_FREE=false.
+    return process.env.BETA_PREMIUM_FREE !== 'false' || isInviteRequired();
+  },
+
+  /**
+   * Immediate 30-day Premium for open signup before UK launch (Terms 7.2).
+   * Call only when no Pride / BSF26 / MR3FREE path applied for this registration.
+   */
+  async grantWaitlistGift(
+    userId: string,
+    client?: PoolClient,
+    now = new Date(),
+  ): Promise<{ premiumUntil: Date } | null> {
+    if (!isWaitlistGiftOpen(now)) return null;
+    const db: Queryable = client ?? pool;
+    const premiumUntil = new Date(now.getTime() + WAITLIST_GIFT_DAYS * 24 * 60 * 60 * 1000);
+    await db.query(
+      `UPDATE users
+       SET is_premium = TRUE,
+           premium_tier = 'premium',
+           premium_starts_at = $2,
+           premium_until = $3,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [userId, now, premiumUntil],
+    );
+    return { premiumUntil };
+  },
+
+  /**
+   * Entitlement grant from 3 verified referrals → 1 month Premium.
+   * Never strips always-Premium accounts (BOA90, Bigbear25, HantsBear).
+   * Extends finite windows; leaves open-ended (null until) alone.
+   */
+  async grantReferralMonth(
+    userId: string,
+    months = 1,
+    now = new Date(),
+  ): Promise<{ premiumUntil: Date | null; skippedLifetime: boolean }> {
+    const row = await query(
+      `SELECT name, is_premium, premium_until, premium_starts_at
+         FROM users WHERE id = $1`,
+      [userId],
+    );
+    const user = row.rows[0];
+    if (!user) return { premiumUntil: null, skippedLifetime: false };
+
+    const always = isAlwaysPremiumName(user.name);
+    const currentUntil = user.premium_until ? new Date(user.premium_until) : null;
+
+    // Open-ended Premium (typical for always-Premium owners): keep forever.
+    if (always && Boolean(user.is_premium) && !currentUntil) {
+      return { premiumUntil: null, skippedLifetime: true };
+    }
+
+    const base =
+      currentUntil && currentUntil.getTime() > now.getTime() ? currentUntil : now;
+    const premiumUntil = new Date(base.getTime() + months * 30 * 24 * 60 * 60 * 1000);
+
+    await query(
+      `UPDATE users
+       SET is_premium = TRUE,
+           premium_tier = 'premium',
+           premium_starts_at = COALESCE(premium_starts_at, $2),
+           premium_until = $3,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [userId, now, premiumUntil],
+    );
+    return { premiumUntil, skippedLifetime: false };
+  },
+
+  /** Parse billed amount from a webhook body; fallback to list price. */
+  extractPaymentAmount(raw: Record<string, string>): number {
+    const keys = [
+      'billedAmount',
+      'BilledAmount',
+      'accountingAmount',
+      'initialPrice',
+      'recurringPrice',
+      'amount',
+    ];
+    for (const key of keys) {
+      const v = raw[key];
+      if (v == null) continue;
+      const n = Number(String(v).replace(/[^0-9.]/g, ''));
+      if (Number.isFinite(n) && n > 0) return Math.round(n * 100) / 100;
+    }
+    return PREMIUM_PAID_PRICE;
   },
 
   async isPremium(userId: string): Promise<boolean> {
@@ -166,15 +299,24 @@ export const premiumService = {
     return result.rows[0]?.count ?? 0;
   },
 
-  buildCheckoutUrl(userId: string, tier: CCBillTier, returnUrl?: string) {
-    return ccbillService.buildFlexFormUrl(userId, tier, returnUrl);
+  buildCheckoutUrl(_userId: string, _tier: PremiumTier, _returnUrl?: string): string {
+    // Verotel is active merchant under review; live checkout wiring disabled until approved.
+    throw new BillingNotConfiguredError();
   },
 
   getPlans() {
-    return ccbillService.getPlans();
+    return [
+      {
+        id: 'premium' as const,
+        name: 'MenRush Premium',
+        tagline: 'See who matched you. Boost. Ghost browse. No caps.',
+        price: '6.99',
+        period_days: 30,
+      },
+    ];
   },
 
-  async activateFromWebhook(event: ReturnType<typeof ccbillService.parseWebhook>) {
+  async activateFromWebhook(event: PaymentWebhookEvent) {
     if (!event.userId) {
       return { ok: false, reason: 'missing_user_id' };
     }
@@ -190,12 +332,14 @@ export const premiumService = {
       [event.userId],
     );
 
+    const processor = event.processor || 'verotel';
+
     await query(
       `INSERT INTO subscriptions (
          user_id, tier, status, processor,
          processor_subscription_id, processor_customer_id,
          current_period_start, current_period_end, metadata
-       ) VALUES ($1, $2, 'active', 'ccbill', $3, $4, NOW(), $5, $6::jsonb)`,
+       ) VALUES ($1, $2, 'active', $7, $3, $4, NOW(), $5, $6::jsonb)`,
       [
         event.userId,
         tier,
@@ -203,14 +347,27 @@ export const premiumService = {
         event.customerId,
         periodEnd,
         JSON.stringify(event.raw),
+        processor,
       ],
     );
 
     await syncUserEntitlements(event.userId, tier, true, periodEnd);
+
+    // Referral commission — record only; never send money / call payout rails.
+    try {
+      const { referralService } = await import('./referral.service');
+      await referralService.onPaidUpgrade(
+        event.userId,
+        this.extractPaymentAmount(event.raw),
+      );
+    } catch (err) {
+      console.error('[premium] referral paid-upgrade hook failed', err);
+    }
+
     return { ok: true, userId: event.userId, tier, periodEnd };
   },
 
-  async renewFromWebhook(event: ReturnType<typeof ccbillService.parseWebhook>) {
+  async renewFromWebhook(event: PaymentWebhookEvent) {
     if (!event.userId) return { ok: false, reason: 'missing_user_id' };
 
     const periodEnd =
@@ -236,11 +393,34 @@ export const premiumService = {
     );
 
     await syncUserEntitlements(event.userId, tier, true, periodEnd);
+
+    try {
+      const { referralService } = await import('./referral.service');
+      await referralService.onPaidUpgrade(
+        event.userId,
+        this.extractPaymentAmount(event.raw),
+      );
+    } catch (err) {
+      console.error('[premium] referral renew hook failed', err);
+    }
+
     return { ok: true, userId: event.userId, tier, periodEnd };
   },
 
-  async deactivateFromWebhook(event: ReturnType<typeof ccbillService.parseWebhook>) {
+  async deactivateFromWebhook(event: PaymentWebhookEvent) {
     if (!event.userId) return { ok: false, reason: 'missing_user_id' };
+
+    // Never strip always-Premium owner accounts.
+    const nameRow = await query(`SELECT name FROM users WHERE id = $1`, [event.userId]);
+    if (isAlwaysPremiumName(nameRow.rows[0]?.name)) {
+      await query(
+        `UPDATE subscriptions
+         SET status = 'expired', updated_at = NOW()
+         WHERE user_id = $1 AND status = 'active'`,
+        [event.userId],
+      );
+      return { ok: true, userId: event.userId, preserved: true };
+    }
 
     await query(
       `UPDATE subscriptions
@@ -254,13 +434,42 @@ export const premiumService = {
   },
 
   async handleWebhook(body: Record<string, unknown>) {
-    if (!ccbillService.verifyWebhook(body)) {
-      const err = new Error('Invalid webhook signature');
-      (err as any).code = 'invalid_signature';
-      throw err;
+    const raw: Record<string, string> = {};
+    for (const [key, value] of Object.entries(body)) {
+      if (typeof value === 'string') raw[key] = value;
     }
 
-    const event = ccbillService.parseWebhook(body);
+    const eventType =
+      (typeof body.eventType === 'string' && body.eventType) ||
+      (typeof body.event_type === 'string' && body.event_type) ||
+      'unknown';
+
+    const userId =
+      (typeof body['X-userId'] === 'string' && body['X-userId']) ||
+      (typeof body.userId === 'string' && body.userId) ||
+      (typeof body.custom1 === 'string' && body.custom1) ||
+      null;
+
+    const subscriptionId =
+      (typeof body.subscriptionId === 'string' && body.subscriptionId) ||
+      (typeof body.subscription_id === 'string' && body.subscription_id) ||
+      null;
+
+    const customerId =
+      (typeof body.customerId === 'string' && body.customerId) ||
+      (typeof body.consumerId === 'string' && body.consumerId) ||
+      null;
+
+    const event: PaymentWebhookEvent = {
+      eventType,
+      userId,
+      subscriptionId,
+      customerId,
+      periodEnd: null,
+      processor: 'verotel',
+      raw,
+    };
+
     const type = event.eventType.toLowerCase();
 
     if (type.includes('newsale') || type.includes('new_sale')) {

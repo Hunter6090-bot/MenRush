@@ -22,11 +22,12 @@ export type PulseStateRow = {
 
 async function isPremiumUser(userId: string): Promise<boolean> {
   const result = await query(
-    `SELECT is_premium, premium_until FROM users WHERE id = $1`,
+    `SELECT is_premium, premium_until, premium_starts_at FROM users WHERE id = $1`,
     [userId],
   );
   const row = result.rows[0];
   if (!row?.is_premium) return false;
+  if (row.premium_starts_at && new Date(row.premium_starts_at) > new Date()) return false;
   if (row.premium_until && new Date(row.premium_until) <= new Date()) return false;
   return true;
 }

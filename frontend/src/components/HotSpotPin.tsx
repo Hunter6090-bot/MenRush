@@ -1,34 +1,49 @@
 import { createRoot, type Root } from 'react-dom/client';
+import { IconCruise } from './icons';
+import { CRUISE_PIN_LABEL } from '../lib/cruiseCopy';
+import { hotSpotCountLabel, isHotSpotActive } from '../lib/hotSpotCounts';
 
 export type HotSpotPinData = {
   id: string;
   name: string;
   category_icon?: string;
-  /** Exact live check-in count (anonymous + profile). */
-  live_count_exact: number;
+  /** Exact live check-in count. Premium only (null for Free); used for occupancy, never as a label. */
+  live_count_exact?: number | null;
+  /** Server display count (rounded for Free). The only number the pin shows. */
+  live_count?: number | string | null;
+  has_active_checkins?: boolean;
 };
 
 interface HotSpotPinProps {
   spot: HotSpotPinData;
   size?: number;
+  /** Hide name/Cruise label when zoomed out so piles stay tappable. */
+  showLabel?: boolean;
 }
 
 /**
- * Always-visible Hot Spot marker — must read as a cruising venue at a glance.
+ * Always-visible Cruise marker on the Nearby map — shows the spot's category icon
+ * (park, parking, sauna, bar…); falls back to the cruise-ship icon if none is set.
+ * Pin label is Brand "Cruise". Chip on the map chrome is "Hot Spots".
  * Empty: solid copper pin (slightly quieter, never near-invisible).
- * Occupied: larger glow + pulse + live count badge.
+ * Occupied: larger glow + pulse + venue name + approximate check-in count.
+ * Does not invent venues or occupancy — only renders existing check-in data.
  */
-export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
-  const occupied = spot.live_count_exact > 0;
+export function HotSpotPin({ spot, size = 48, showLabel = true }: HotSpotPinProps) {
+  const occupied = isHotSpotActive(spot);
   const pinSize = occupied ? size : Math.round(size * 0.92);
+  // Server value only (Free is already rounded). Never derive a number from live_count_exact.
+  const countLabel = hotSpotCountLabel(spot);
 
   return (
     <div
       className="hotspot-pin"
       title={
         occupied
-          ? `${spot.name} · ${spot.live_count_exact} checked in`
-          : `${spot.name} · Hot Spot`
+          ? countLabel
+            ? `${spot.name} · ${countLabel} checked in`
+            : `${spot.name} · Active now`
+          : `${spot.name} · ${CRUISE_PIN_LABEL}`
       }
       style={{
         width: pinSize,
@@ -42,6 +57,9 @@ export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
       data-occupied={occupied ? '1' : '0'}
       data-testid={`hotspot-pin-${occupied ? 'solid' : 'dim'}`}
       data-hotspot-id={spot.id}
+      data-hotspot-name={spot.name}
+      data-cruise-pin="1"
+      data-cruise-label={CRUISE_PIN_LABEL}
     >
       {occupied ? (
         <span
@@ -79,14 +97,29 @@ export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
           boxShadow: occupied
             ? '0 0 20px rgba(196,131,42,0.85), 0 4px 14px rgba(0,0,0,0.55)'
             : '0 0 10px rgba(196,131,42,0.45), 0 3px 10px rgba(0,0,0,0.5)',
-          fontSize: pinSize * 0.4,
-          lineHeight: 1,
           color: '#FFF6E6',
         }}
       >
-        <span aria-hidden style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.45))' }}>
-          {spot.category_icon || '📍'}
-        </span>
+        {spot.category_icon ? (
+          <span
+            aria-hidden
+            data-testid="hotspot-category-icon"
+            style={{
+              fontSize: Math.round(pinSize * 0.48),
+              lineHeight: 1,
+              filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.45))',
+            }}
+          >
+            {spot.category_icon}
+          </span>
+        ) : (
+          <IconCruise
+            size={Math.round(pinSize * 0.52)}
+            aria-hidden
+            data-testid="cruise-ship-icon"
+            style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.45))' }}
+          />
+        )}
       </div>
       {occupied ? (
         <span
@@ -100,8 +133,9 @@ export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
             border: '1.5px solid #C4832A',
             boxShadow: '0 2px 6px rgba(0,0,0,0.45)',
           }}
+          data-testid="hotspot-pin-count"
         >
-          {spot.live_count_exact > 9 ? '9+' : spot.live_count_exact}
+          {countLabel}
         </span>
       ) : (
         <span
@@ -120,26 +154,69 @@ export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
           }}
         />
       )}
+      {showLabel ? (
+        <span
+          data-testid={occupied ? 'hotspot-pin-name' : 'cruise-pin-label'}
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '100%',
+            transform: 'translateX(-50%)',
+            marginTop: occupied ? 4 : 6,
+            maxWidth: 96,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            padding: '2px 6px',
+            borderRadius: 999,
+            background: 'rgba(26, 14, 3, 0.92)',
+            border: '1px solid rgba(196,131,42,0.55)',
+            color: '#F0E0C0',
+            fontSize: 10,
+            fontWeight: 800,
+            lineHeight: 1.2,
+            pointerEvents: 'none',
+          }}
+        >
+          {occupied ? spot.name : CRUISE_PIN_LABEL}
+        </span>
+      ) : null}
     </div>
   );
 }
 
+/**
+ * Build the DOM node Mapbox mounts as a Marker.
+ *
+ * Critical: do NOT set `position` on this root. Mapbox GL requires
+ * `.mapboxgl-marker { position: absolute }` so pins stay at true lng/lat.
+ * `position: relative` on the marker root overrides that and forces pins into
+ * document-flow vertical stacks when zoomed out (Mapbox #4048 / #7258).
+ * Absolute children (badge, Cruise label) live on the inner `.hotspot-pin`.
+ */
 export function createHotSpotPinElement(
   spot: HotSpotPinData,
-  onTap: () => void,
+  _onTap: () => void,
   size = 48,
+  showLabel = true,
 ): { element: HTMLDivElement; root: Root } {
   const el = document.createElement('div');
-  el.style.width = `${size}px`;
-  el.style.height = `${size + 6}px`;
-  el.style.position = 'relative';
+  const occupied = isHotSpotActive(spot);
+  // Tighter footprint when labels are off — reduces unpressable piles over people.
+  const labelPad = showLabel ? 28 : 4;
+  const widthPad = showLabel ? (occupied ? 104 : 72) : size;
+  el.style.width = `${Math.max(size, widthPad)}px`;
+  el.style.height = `${size + labelPad}px`;
   el.style.cursor = 'pointer';
-  el.style.zIndex = spot.live_count_exact > 0 ? '3' : '2';
-  el.addEventListener('click', (e) => {
-    e.stopPropagation();
-    onTap();
-  });
+  // People pins sit above empty Cruise; occupied Cruise above empty.
+  el.style.zIndex = occupied ? '4' : '2';
+  el.style.display = 'flex';
+  el.style.justifyContent = 'center';
+  // Canvas owns pan/pinch — markers must not capture touches (see mapMarkerHitTest).
+  // Tap opens the Cruise sheet via map click hit-test in Discover.
+  el.style.touchAction = 'none';
+  el.style.pointerEvents = 'none';
   const root = createRoot(el);
-  root.render(<HotSpotPin spot={spot} size={size} />);
+  root.render(<HotSpotPin spot={spot} size={size} showLabel={showLabel} />);
   return { element: el, root };
 }

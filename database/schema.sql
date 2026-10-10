@@ -11,6 +11,7 @@ CREATE TABLE users (
   bio TEXT,
   photo_url TEXT,
   cover_url TEXT,
+  map_photo_url TEXT,
   cover_position_x REAL NOT NULL DEFAULT 50,
   cover_position_y REAL NOT NULL DEFAULT 50,
   cover_zoom REAL NOT NULL DEFAULT 1,
@@ -26,6 +27,12 @@ CREATE TABLE users (
   on_prep BOOLEAN,
   last_tested_at DATE,
   show_age BOOLEAN NOT NULL DEFAULT TRUE,
+  show_height BOOLEAN NOT NULL DEFAULT TRUE,
+  show_weight BOOLEAN NOT NULL DEFAULT TRUE,
+  show_relationship BOOLEAN NOT NULL DEFAULT TRUE,
+  show_distance BOOLEAN NOT NULL DEFAULT TRUE,
+  email_confirmed BOOLEAN NOT NULL DEFAULT TRUE,
+  welcome_email_sent_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -91,6 +98,8 @@ CREATE TABLE IF NOT EXISTS rooms (
   avatar_url TEXT,
   created_by UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
   is_location_based BOOLEAN DEFAULT false,
+  is_official BOOLEAN NOT NULL DEFAULT false,
+  official_slug TEXT,
   location GEOGRAPHY(POINT, 4326),
   lat DECIMAL(10, 8),
   lng DECIMAL(11, 8),
@@ -121,6 +130,23 @@ CREATE TABLE IF NOT EXISTS room_messages (
 CREATE INDEX IF NOT EXISTS idx_room_members_room ON room_members(room_id);
 CREATE INDEX IF NOT EXISTS idx_room_members_user ON room_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_room_messages_room ON room_messages(room_id);
+
+-- Ephemeral Discover map chat (Sniffies-style nearby feed)
+CREATE TABLE IF NOT EXISTS map_feed_messages (
+  id UUID PRIMARY KEY,
+  sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message TEXT NOT NULL CHECK (char_length(trim(message)) BETWEEN 1 AND 280),
+  location GEOGRAPHY(POINT, 4326) NOT NULL,
+  lat DOUBLE PRECISION NOT NULL,
+  lng DOUBLE PRECISION NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_map_feed_messages_location
+  ON map_feed_messages USING GIST (location);
+
+CREATE INDEX IF NOT EXISTS idx_map_feed_messages_created
+  ON map_feed_messages (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_room_messages_created ON room_messages(room_id, created_at);
 
 CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -170,11 +196,16 @@ CREATE TABLE IF NOT EXISTS album_photos (
   storage_key TEXT,
   mime_type  TEXT,
   position   INT NOT NULL DEFAULT 0,
+  -- public | view_once | private — owner discretion; not DISCREET_MEDIA_BLUR.
+  -- Existing unlocked-album photos migrate to public; locked → private (see 041).
+  visibility TEXT NOT NULL DEFAULT 'private'
+    CHECK (visibility IN ('public', 'view_once', 'private')),
   created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_album_photos_album ON album_photos(album_id, position);
 CREATE INDEX IF NOT EXISTS idx_album_photos_user ON album_photos(user_id);
+CREATE INDEX IF NOT EXISTS idx_album_photos_user_visibility ON album_photos (user_id, visibility);
 
 CREATE TABLE IF NOT EXISTS album_grants (
   album_id   UUID NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
@@ -184,6 +215,16 @@ CREATE TABLE IF NOT EXISTS album_grants (
 );
 
 CREATE INDEX IF NOT EXISTS idx_album_grants_viewer ON album_grants(viewer_id);
+
+-- View-once opens (viewers). Revoke never deletes photos — only album_grants.
+CREATE TABLE IF NOT EXISTS album_photo_views (
+  photo_id UUID NOT NULL REFERENCES album_photos(id) ON DELETE CASCADE,
+  viewer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  viewed_at TIMESTAMP DEFAULT NOW(),
+  PRIMARY KEY (photo_id, viewer_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_album_photo_views_viewer ON album_photo_views (viewer_id);
 
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'room';
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS starts_at TIMESTAMP;
@@ -276,3 +317,40 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_created
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
   ON notifications(user_id)
   WHERE read = FALSE;
+
+-- ─── Veriff identity sessions ─────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS veriff_sessions (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_url TEXT,
+  status TEXT NOT NULL DEFAULT 'created'
+    CHECK (status IN (
+      'created',
+      'submitted',
+      'approved',
+      'declined',
+      'resubmission_requested',
+      'expired',
+      'abandoned',
+      'review'
+    )),
+  decision_code TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  decided_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_veriff_sessions_user_id ON veriff_sessions (user_id);
+CREATE INDEX IF NOT EXISTS idx_veriff_sessions_status ON veriff_sessions (status);
+
+-- "Hide my location from" list (migration 073).
+CREATE TABLE IF NOT EXISTS location_hidden_from (
+  owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  hidden_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (owner_id, hidden_user_id),
+  CONSTRAINT location_hidden_from_not_self CHECK (owner_id <> hidden_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_location_hidden_from_hidden_user
+  ON location_hidden_from (hidden_user_id, owner_id);

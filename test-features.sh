@@ -70,20 +70,47 @@ SUFFIX=$(date +%s)
 RES1=$(curl -s -X POST "$API_URL/auth/register" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"alice+$SUFFIX@test.com\",\"password\":\"password123\",\"name\":\"Alice\",\"age\":25,\"invite_code\":\"$BETA_CODE\"}")
+CONFIRM1=$(json_field "$RES1" "devConfirmToken")
 TOKEN1=$(json_field "$RES1" "token")
 USER1_ID=$(json_field "$RES1" "user.id")
-[ -n "$TOKEN1" ] || die "Alice registration failed: $RES1"
-ok "Alice registered ($USER1_ID)"
+if [ -n "$CONFIRM1" ]; then
+  CONF1=$(curl -s -X POST "$API_URL/auth/confirm-email" \
+    -H "Content-Type: application/json" \
+    -d "{\"token\":\"$CONFIRM1\"}")
+  TOKEN1=$(json_field "$CONF1" "token")
+  USER1_ID=$(json_field "$CONF1" "user.id")
+  [ -n "$TOKEN1" ] || die "Alice confirm failed: $CONF1"
+  ok "Alice registered + confirmed ($USER1_ID)"
+elif [ -n "$TOKEN1" ]; then
+  # BOA90 lock: non-Al may still get legacy session until EMAIL_CONFIRM_MAIL_OPEN=true
+  [ -n "$USER1_ID" ] || die "Alice registration failed: $RES1"
+  ok "Alice registered via legacy session during BOA90 lock ($USER1_ID)"
+else
+  die "Alice registration failed: $RES1"
+fi
 
 # 3. Register User 2 (Bob)
 echo "👤 Registering Bob..."
 RES2=$(curl -s -X POST "$API_URL/auth/register" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"bob+$SUFFIX@test.com\",\"password\":\"password123\",\"name\":\"Bob\",\"age\":28,\"invite_code\":\"$BETA_CODE\"}")
+CONFIRM2=$(json_field "$RES2" "devConfirmToken")
 TOKEN2=$(json_field "$RES2" "token")
 USER2_ID=$(json_field "$RES2" "user.id")
-[ -n "$TOKEN2" ] || die "Bob registration failed: $RES2"
-ok "Bob registered ($USER2_ID)"
+if [ -n "$CONFIRM2" ]; then
+  CONF2=$(curl -s -X POST "$API_URL/auth/confirm-email" \
+    -H "Content-Type: application/json" \
+    -d "{\"token\":\"$CONFIRM2\"}")
+  TOKEN2=$(json_field "$CONF2" "token")
+  USER2_ID=$(json_field "$CONF2" "user.id")
+  [ -n "$TOKEN2" ] || die "Bob confirm failed: $CONF2"
+  ok "Bob registered + confirmed ($USER2_ID)"
+elif [ -n "$TOKEN2" ]; then
+  [ -n "$USER2_ID" ] || die "Bob registration failed: $RES2"
+  ok "Bob registered via legacy session during BOA90 lock ($USER2_ID)"
+else
+  die "Bob registration failed: $RES2"
+fi
 
 # 4. Login
 echo "🔐 Testing login..."
@@ -129,7 +156,7 @@ fi
 # Age filter empty
 FILTER1=$(curl -s -X GET "$API_URL/users/nearby?lat=40.7128&lng=-74.0060&minAge=18&maxAge=20" \
   -H "Authorization: Bearer $TOKEN1")
-if [ "$FILTER1" = "[]" ]; then
+if [ "$FILTER1" = "[]" ] || echo "$FILTER1" | grep -q '"users":\[\]'; then
   ok "Age filter 18-20 empty"
 else
   bad "Age filter 18-20 expected [] got: $FILTER1"
@@ -146,7 +173,31 @@ fi
 
 # 8. Likes & matches
 echo "❤️  Testing likes & matches..."
+# One-way like first — received list must show liker without premium
 LIKE1=$(curl -s -X POST "$API_URL/users/like/$USER2_ID" -H "Authorization: Bearer $TOKEN1")
+if echo "$LIKE1" | grep -q '"match":false\|"match": false'; then
+  ok "Alice → Bob like recorded (not yet mutual)"
+else
+  # Already matched from a prior run is fine; still verify endpoints below
+  ok "Alice → Bob like response: $LIKE1"
+fi
+
+RECEIVED=$(curl -s -X GET "$API_URL/users/likes/received" -H "Authorization: Bearer $TOKEN2")
+if echo "$RECEIVED" | grep -q "Alice"; then
+  ok "Bob sees Alice in ungated received likes"
+else
+  bad "Received likes missing Alice (must not require premium): $RECEIVED"
+fi
+
+SUMMARY=$(curl -s -X GET "$API_URL/users/likes/received/summary" -H "Authorization: Bearer $TOKEN2")
+SUMMARY_COUNT=$(json_field "$SUMMARY" "count")
+SUMMARY_PREVIEW=$(echo "$SUMMARY" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d.get('preview') or []))" 2>/dev/null || echo 0)
+if [ -n "$SUMMARY_COUNT" ] && [ "$SUMMARY_COUNT" != "0" ] && [ "$SUMMARY_PREVIEW" != "0" ]; then
+  ok "Received likes summary includes free preview (count=$SUMMARY_COUNT)"
+else
+  bad "Summary should return count+preview without premium: $SUMMARY"
+fi
+
 LIKE2=$(curl -s -X POST "$API_URL/users/like/$USER1_ID" -H "Authorization: Bearer $TOKEN2")
 if echo "$LIKE2" | grep -q '"match":true'; then
   ok "Mutual like created a match"
@@ -159,6 +210,14 @@ if echo "$MATCHES" | grep -q "Bob"; then
   ok "Bob listed in Alice matches"
 else
   bad "Matches list missing Bob: $MATCHES"
+fi
+
+# After mutual, Alice should leave Bob's received (non-mutual) list
+RECEIVED_AFTER=$(curl -s -X GET "$API_URL/users/likes/received" -H "Authorization: Bearer $TOKEN2")
+if echo "$RECEIVED_AFTER" | grep -q "Alice"; then
+  bad "Mutual match should leave received-likes list: $RECEIVED_AFTER"
+else
+  ok "Mutual match removed from received-likes list"
 fi
 
 # 9. Messaging

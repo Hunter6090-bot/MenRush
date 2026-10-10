@@ -1,8 +1,8 @@
 import { SVGProps } from 'react';
 
 /**
- * MenRush — Hot Spots icon
- * Cruise ship — venue / social hotspot (distinct from Events calendar).
+ * MenRush — Cruise (formerly Hot Spots) map / layer icon.
+ * Cruise ship — venue check-in markers on Nearby (distinct from Events calendar).
  */
 export function IconHotSpots({ size = 24, ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
   return (
@@ -35,3 +35,6 @@ export function IconHotSpots({ size = 24, ...props }: SVGProps<SVGSVGElement> & 
     </svg>
   );
 }
+
+/** Alias — product face is Cruise; keep IconHotSpots for existing imports. */
+export const IconCruise = IconHotSpots;

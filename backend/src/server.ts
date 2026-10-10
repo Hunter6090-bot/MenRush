@@ -13,6 +13,10 @@ import roomRoutes from './routes/rooms';
 import pushRoutes from './routes/push';
 import pulseRoutes from './routes/pulse';
 import verifyRoutes from './routes/verify';
+import veriffRoutes, {
+  handleVeriffDecisionWebhook,
+  veriffWebhookRawParser,
+} from './routes/veriff';
 import premiumRoutes from './routes/premium';
 import premiumWebhookRoutes from './routes/premium-webhook';
 import contactRoutes from './routes/contact';
@@ -28,18 +32,24 @@ import betaRoutes from './routes/beta';
 import adminRoutes from './routes/admin.routes';
 import campaignRoutes from './routes/campaigns';
 import socialRoutes from './routes/social';
+import mapFeedRoutes from './routes/map-feed';
+import locationPrivacyRoutes from './routes/location-privacy';
+import communityRoutes from './routes/community';
+import mediaDisplayRoutes from './routes/media-display';
 import { startPulseExpiryCron } from './services/pulse.service';
+import { startRoomMessagePurgeCron, startRoomTempIdentityPurgeCron } from './services/room.service';
+import { noteRoomEnter, noteRoomExit } from './services/room-presence';
 import {
   hasWelcomeBeenSent,
   isWaitlistEmailPaused,
   sendWelcomeEmailNow,
   subscribeToWaitlist,
-  startDripWorker,
 } from './services/drip.service';
 import { errorHandler } from './middleware/auth';
 import { authService } from './services/auth.service';
 import { userService } from './services/user.service';
 import { roomService } from './services/room.service';
+import { peerOfSession, roomDmSessions } from './services/room-dm.service';
 import { sendPushToUser } from './services/push.service';
 import { notificationService } from './services/notification.service';
 import { messageService } from './services/message.service';
@@ -52,6 +62,8 @@ import { query } from './db';
 import { ensureUploadDirs, getUploadsRoot, probeUploadsWritable } from './lib/uploads-root';
 import { logCallMetric } from './services/call-metrics.service';
 import { mediaStorageMode } from './services/media-storage.service';
+import { warmIceServers } from './services/webrtc.service';
+import { EarlyCallIceBuffer } from './services/call-ice-buffer';
 
 // Transient DB disconnects must not take down login/API.
 process.on('unhandledRejection', (reason) => {
@@ -77,6 +89,11 @@ const io: any = new SocketIOServer(server, {
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use('/api/premium/webhook', premiumWebhookRoutes);
+// Veriff decision webhook needs the raw body for HMAC (before express.json).
+app.use('/api/verify/veriff', veriffRoutes);
+// Alias: Station sometimes posts to /api/verify/webhook — must not hit JWT auth on /api/verify.
+// Primary portal URL remains /api/verify/veriff/webhook.
+app.post('/api/verify/webhook', veriffWebhookRawParser, handleVeriffDecisionWebhook);
 app.use(express.json());
 app.use('/api/verify', verifyRoutes);
 // Profile / message / album media. fallthrough:true so missing files hit a clean 404
@@ -112,6 +129,7 @@ app.set('io', io);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/media', mediaDisplayRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/pulse', pulseRoutes);
@@ -129,6 +147,9 @@ app.use('/api/beta', betaRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/social', socialRoutes);
+app.use('/api/map-feed', mapFeedRoutes);
+app.use('/api/location-privacy', locationPrivacyRoutes);
+app.use('/api/community', communityRoutes);
 
 // Waitlist signup — POSTs to /api/waitlist land here; the dripRoutes router
 // handles the rest (unsubscribe + admin endpoints). New signups get the
@@ -156,10 +177,10 @@ app.post('/api/waitlist', async (req, res) => {
       success: true,
       already_subscribed: result.alreadySubscribed,
       message: result.alreadySubscribed
-        ? "You're already on the list. Check your inbox for the beta invite if you haven't used it yet."
+        ? "You're already on the list. Check your inbox for your invite if you haven't used it yet."
         : paused
           ? "You're on the list."
-          : "You're on the list! Check your email for a link to join the beta.",
+          : "You're on the list! Check your email for a link to join.",
     });
   } catch (err) {
     console.error('Waitlist insert error:', err);
@@ -221,8 +242,70 @@ interface PendingCall {
   callerId: string;
   calleeId: string;
   answered: boolean;
+  offer?: unknown;
+  fromName?: string;
+  ice: unknown[];
+  deliveredIncoming: boolean;
+  timeout?: ReturnType<typeof setTimeout>;
 }
 const pendingCalls = new Map<string, PendingCall>();
+/** Caller ICE that arrives before its pending call exists (callee offline). */
+const earlyCallIce = new EarlyCallIceBuffer();
+/** How long the callee has to answer after the offer is actually delivered. */
+const CALL_RING_WAIT_MS = Number(process.env.CALL_RING_WAIT_MS) || 35_000;
+/** How long to hold an undelivered offer while the callee is offline / cold-starting. */
+const CALL_OFFER_HOLD_MS = Number(process.env.CALL_OFFER_HOLD_MS) || 35_000;
+
+function expireNoAnswer(pending: PendingCall) {
+  const still = pendingCalls.get(pendingCallKey(pending.callerId, pending.calleeId));
+  if (!still || still.answered) return;
+  clearPendingCall(still.callerId, still.calleeId);
+  logCallMetric('call_no_answer', {
+    callerId: still.callerId,
+    calleeId: still.calleeId,
+  });
+  io.to(`user:${still.callerId}`).emit('call:error', { error: 'no_answer' });
+  void recordMissedCall(still.callerId, still.calleeId);
+}
+
+/**
+ * Ring / missed-call window starts only when the callee has received the offer.
+ * Arming at call:initiate caused false missed calls on cold-start answers.
+ */
+function armRingTimeout(pending: PendingCall) {
+  if (pending.timeout) {
+    clearTimeout(pending.timeout);
+    pending.timeout = undefined;
+  }
+  if (pending.answered) return;
+  pending.timeout = setTimeout(() => expireNoAnswer(pending), CALL_RING_WAIT_MS);
+}
+
+function deliverPendingIncoming(pending: PendingCall) {
+  if (pending.deliveredIncoming || pending.answered || !pending.offer) return;
+  // Drop any undelivered-offer hold before marking delivered / arming the ring.
+  if (pending.timeout) {
+    clearTimeout(pending.timeout);
+    pending.timeout = undefined;
+  }
+  pending.deliveredIncoming = true;
+  io.to(`user:${pending.calleeId}`).emit('call:incoming', {
+    from: pending.callerId,
+    fromName: pending.fromName,
+    offer: pending.offer,
+  });
+  for (const candidate of pending.ice) {
+    io.to(`user:${pending.calleeId}`).emit('call:ice-candidate', {
+      from: pending.callerId,
+      candidate,
+    });
+  }
+  logCallMetric('call_incoming_emitted', {
+    callerId: pending.callerId,
+    calleeId: pending.calleeId,
+  });
+  armRingTimeout(pending);
+}
 
 function pendingCallKey(callerId: string, calleeId: string) {
   return `${callerId}:${calleeId}`;
@@ -234,15 +317,18 @@ function findPendingCall(actorId: string, targetId: string): PendingCall | undef
 }
 
 function clearPendingCall(callerId: string, calleeId: string) {
+  const pending = pendingCalls.get(pendingCallKey(callerId, calleeId));
+  if (pending?.timeout) clearTimeout(pending.timeout);
   pendingCalls.delete(pendingCallKey(callerId, calleeId));
+  earlyCallIce.clear(callerId, calleeId);
 }
 
 async function recordMissedCall(callerId: string, calleeId: string) {
   try {
     const callerName = (await userService.getDisplayName(callerId)) ?? 'Someone';
     const row = await messageService.recordMissedCall(callerId, calleeId);
-    const forCallee = messageService.forViewer(row, calleeId);
-    const forCaller = messageService.forViewer(row, callerId);
+    const forCallee = await messageService.forViewer(row, calleeId);
+    const forCaller = await messageService.forViewer(row, callerId);
     io.to(`user:${calleeId}`).emit('message', forCallee);
     io.to(`user:${callerId}`).emit('message', forCaller);
 
@@ -260,6 +346,7 @@ async function recordMissedCall(callerId: string, calleeId: string) {
       body: 'Missed video call',
       url: `/messages/${callerId}`,
       tag: `missed-call-${callerId}`,
+      kind: 'missed_call',
     }).catch(() => undefined);
   } catch (err) {
     console.error('recordMissedCall failed:', err);
@@ -316,6 +403,12 @@ io.on('connection', (socket: Socket) => {
       await userService.setOnlineStatus(decoded.userId, true);
       socket.join(`user:${decoded.userId}`);
       socket.emit('authenticated', { userId: decoded.userId });
+      // They opened the app from a missed-ring push — attach any waiting offer.
+      for (const pending of pendingCalls.values()) {
+        if (pending.calleeId === decoded.userId && !pending.answered) {
+          deliverPendingIncoming(pending);
+        }
+      }
     } catch (error) {
       socket.emit('authentication:error', { error: 'authentication_failed' });
     }
@@ -340,44 +433,54 @@ io.on('connection', (socket: Socket) => {
         callerId: authorized.actorId,
         calleeId: authorized.targetId,
       });
-      // No live socket for this user → they cannot answer WebRTC (push alone is not enough).
-      // Re-check after a short wait — mobile tabs often reconnect a beat after unlock.
+      // Brief wait — mobile tabs often reconnect a beat after unlock.
       if (!isUserSocketOnline(authorized.targetId)) {
         await new Promise((r) => setTimeout(r, 1500));
       }
-      if (!isUserSocketOnline(authorized.targetId)) {
-        logCallMetric('call_offline', {
-          callerId: authorized.actorId,
-          calleeId: authorized.targetId,
-        });
-        socket.emit('call:error', { error: 'target_offline' });
-        return;
-      }
       const fromName = await userService.getDisplayName(authorized.actorId) ?? '';
-      pendingCalls.set(pendingCallKey(authorized.actorId, authorized.targetId), {
+      const online = isUserSocketOnline(authorized.targetId);
+      // Candidates trickled while this handler was still awaiting above. Take
+      // them before clearPendingCall, which also drops the early buffer.
+      const earlyIce = earlyCallIce.take(authorized.actorId, authorized.targetId);
+      // Replace any prior pending for this pair so an old timer cannot fire late.
+      clearPendingCall(authorized.actorId, authorized.targetId);
+      const pending: PendingCall = {
         callerId: authorized.actorId,
         calleeId: authorized.targetId,
         answered: false,
-      });
-      io.to(`user:${authorized.targetId}`).emit('call:incoming', {
-        from: authorized.actorId,
-        fromName,
         offer: data.offer,
-      });
-      logCallMetric('call_incoming_emitted', {
-        callerId: authorized.actorId,
-        calleeId: authorized.targetId,
-      });
-      // Best-effort heads-up when the recipient's app is backgrounded/locked.
-      // The service worker suppresses this if a foreground tab is focused, so
-      // an in-app session won't double-alert. Web push cannot wake a live
-      // WebRTC answer on a locked phone — this only surfaces the missed call.
+        fromName,
+        ice: earlyIce,
+        deliveredIncoming: false,
+      };
+      pendingCalls.set(pendingCallKey(authorized.actorId, authorized.targetId), pending);
+
+      // Always push so a locked / closed installed app still rings.
       void sendPushToUser(authorized.targetId, {
         title: fromName || 'MenRush',
         body: 'Incoming video call',
         url: `/messages/${authorized.actorId}`,
         tag: `call-${authorized.actorId}`,
+        kind: 'call',
       }).catch(() => undefined);
+
+      if (online) {
+        deliverPendingIncoming(pending);
+      } else {
+        logCallMetric('call_offline_ringing', {
+          callerId: authorized.actorId,
+          calleeId: authorized.targetId,
+        });
+        // Hold the offer for a cold-start open — do NOT start the answer/missed
+        // ring here. The ring window arms in deliverPendingIncoming when they
+        // actually receive the offer (authenticate / socket online).
+        pending.timeout = setTimeout(() => {
+          const still = pendingCalls.get(pendingCallKey(authorized.actorId, authorized.targetId));
+          // If the offer was delivered, the ring timer owns expiry now.
+          if (!still || still.answered || still.deliveredIncoming) return;
+          expireNoAnswer(still);
+        }, CALL_OFFER_HOLD_MS);
+      }
     } catch {
       logCallMetric('call_error', { code: 'target_not_authorized' });
       socket.emit('call:error', { error: 'target_not_authorized' });
@@ -388,7 +491,14 @@ io.on('connection', (socket: Socket) => {
     const authorized = await authorizeCallTarget(socket, data?.to);
     if (!authorized || !data.answer) return;
     const pending = findPendingCall(authorized.actorId, authorized.targetId);
-    if (pending) pending.answered = true;
+    if (pending) {
+      pending.answered = true;
+      // Cancel ring timeout immediately so a late timer cannot write a false miss.
+      if (pending.timeout) {
+        clearTimeout(pending.timeout);
+        pending.timeout = undefined;
+      }
+    }
     logCallMetric('call_answer', {
       calleeId: authorized.actorId,
       callerId: authorized.targetId,
@@ -414,6 +524,14 @@ io.on('connection', (socket: Socket) => {
   socket.on('call:ice-candidate', async (data: { to: string; candidate: any }) => {
     const authorized = await authorizeCallTarget(socket, data?.to);
     if (!authorized || !data.candidate) return;
+    if (!isUserSocketOnline(authorized.targetId)) {
+      // Never drop candidates for an offline peer: hold them on the pending
+      // call, or in the early buffer if call:initiate has not created it yet.
+      const pending = pendingCalls.get(pendingCallKey(authorized.actorId, authorized.targetId));
+      if (pending) pending.ice.push(data.candidate);
+      else earlyCallIce.push(authorized.actorId, authorized.targetId, data.candidate);
+      return;
+    }
     io.to(`user:${authorized.targetId}`).emit('call:ice-candidate', {
       from: authorized.actorId,
       candidate: data.candidate,
@@ -444,6 +562,31 @@ io.on('connection', (socket: Socket) => {
   const resolveRoomId = (data: { roomId?: string; room_id?: string }) =>
     data?.roomId || data?.room_id;
 
+  /** True if this user currently has a socket in the Socket.IO room. */
+  const userInSocketRoom = async (userId: string, roomId: string) => {
+    const peers = await io.in(`room:${roomId}`).fetchSockets();
+    return peers.some((peer: { id: string }) => socketToUser.get(peer.id) === userId);
+  };
+
+  /** End every in-room 1:1 for this user in this room and notify peers. */
+  const endRoomDmsForUser = (roomId: string, userId: string, reason: 'leave' | 'close') => {
+    const ended = roomDmSessions.endAllForUserInRoom(roomId, userId);
+    for (const session of ended) {
+      const peerId = peerOfSession(session, userId);
+      if (!peerId) continue;
+      io.to(`user:${peerId}`).emit('room:dm-ended', {
+        room_id: roomId,
+        peer_id: userId,
+        reason,
+      });
+      io.to(`user:${userId}`).emit('room:dm-ended', {
+        room_id: roomId,
+        peer_id: peerId,
+        reason,
+      });
+    }
+  };
+
   socket.on('room:join', async (data: { roomId?: string; room_id?: string }) => {
     const roomId = resolveRoomId(data);
     const userId = socketToUser.get(socket.id);
@@ -452,42 +595,48 @@ io.on('connection', (socket: Socket) => {
       const member = await roomService.isMember(userId, roomId);
       if (!member) return;
 
-      socket.join(`room:${roomId}`);
+      // Join with chosen identity: profile by default, or active temp disguise.
+      const presence = await roomService.resolveRoomPresence(userId, roomId);
 
-      const profile = await query(
-        `SELECT name, photo_url FROM users WHERE id = $1`,
-        [userId],
-      );
-      const name = profile.rows[0]?.name ?? 'Member';
-      const photo_url = profile.rows[0]?.photo_url ?? null;
+      socket.join(`room:${roomId}`);
+      const occupancy = noteRoomEnter(roomId, userId);
+      io.emit('room:occupancy', { room_id: roomId, count: occupancy });
 
       socket.to(`room:${roomId}`).emit('room:presence', {
         room_id: roomId,
         type: 'join',
         user_id: userId,
-        name,
-        photo_url,
+        name: presence.name,
+        photo_url: presence.photo_url,
+        is_verified: presence.is_verified,
+        using_temp_identity: presence.using_temp_identity,
       });
 
       const peers = await io.in(`room:${roomId}`).fetchSockets();
-      const roster = peers
-        .map((peer: { id: string }) => {
-          const peerUserId = socketToUser.get(peer.id);
-          if (!peerUserId) return null;
-          return { socket_id: peer.id, user_id: peerUserId };
-        })
-        .filter(Boolean);
+      // One tile per user even if they have multiple tabs/sockets.
+      const seen = new Set<string>();
+      const uniqueUserIds: string[] = [];
+      for (const peer of peers) {
+        const peerUserId = socketToUser.get(peer.id);
+        if (!peerUserId || seen.has(peerUserId)) continue;
+        seen.add(peerUserId);
+        uniqueUserIds.push(peerUserId);
+      }
 
-      const rosterDetails = await Promise.all(
-        roster.map(async (entry: any) => {
-          const r = await query(`SELECT name, photo_url FROM users WHERE id = $1`, [entry.user_id]);
-          return {
-            user_id: entry.user_id,
-            name: r.rows[0]?.name ?? 'Member',
-            photo_url: r.rows[0]?.photo_url ?? null,
-          };
-        }),
-      );
+      const rosterDetails = (
+        await Promise.all(
+          uniqueUserIds.map(async (peerUserId: string) => {
+            const p = await roomService.resolveRoomPresence(peerUserId, roomId);
+            return {
+              user_id: peerUserId,
+              name: p.name,
+              photo_url: p.photo_url,
+              is_verified: p.is_verified,
+              using_temp_identity: p.using_temp_identity,
+            };
+          }),
+        )
+      ).filter(Boolean);
 
       socket.emit('room:presence-sync', { room_id: roomId, participants: rosterDetails });
     } catch {
@@ -495,19 +644,158 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
+  /** True if this user still has any other socket in the Socket.IO room. */
+  const userStillInRoom = async (userId: string, roomId: string, exceptSocketId?: string) => {
+    const peers = await io.in(`room:${roomId}`).fetchSockets();
+    return peers.some(
+      (peer: { id: string }) =>
+        peer.id !== exceptSocketId && socketToUser.get(peer.id) === userId,
+    );
+  };
+
   socket.on('room:leave', async (data: { roomId?: string; room_id?: string }) => {
     const roomId = resolveRoomId(data);
     const userId = socketToUser.get(socket.id);
     if (!roomId) return;
     socket.leave(`room:${roomId}`);
-    if (userId) {
+    if (!userId) return;
+    // Only broadcast leave / end in-room 1:1s when no remaining socket of this user is in the room.
+    const stillHere = await userStillInRoom(userId, roomId);
+    if (!stillHere) {
+      endRoomDmsForUser(roomId, userId, 'leave');
+      const occupancy = noteRoomExit(roomId, userId);
+      io.emit('room:occupancy', { room_id: roomId, count: occupancy });
       socket.to(`room:${roomId}`).emit('room:presence', {
         room_id: roomId,
         type: 'leave',
         user_id: userId,
       });
+      void roomService.exitRoomSession(userId, roomId).catch(() => {});
     }
   });
+
+  // ── Ephemeral in-room 1:1 (side list) — room identity only; no DB; dies on leave ──
+  socket.on(
+    'room:dm-open',
+    async (data: { roomId?: string; room_id?: string; to?: string }) => {
+      const actorId = socketToUser.get(socket.id);
+      const roomId = resolveRoomId(data);
+      const targetId = data?.to;
+      if (!actorId || !roomId || typeof targetId !== 'string' || !UUID_PATTERN.test(targetId)) {
+        return;
+      }
+      if (actorId === targetId) return;
+      try {
+        const [actorOk, targetOk, actorPresent, targetPresent] = await Promise.all([
+          roomService.isMember(actorId, roomId),
+          roomService.isMember(targetId, roomId),
+          userInSocketRoom(actorId, roomId),
+          userInSocketRoom(targetId, roomId),
+        ]);
+        if (!actorOk || !targetOk || !actorPresent || !targetPresent) {
+          socket.emit('room:dm-error', { room_id: roomId, error: 'peer_not_present' });
+          return;
+        }
+        const session = roomDmSessions.open(roomId, actorId, targetId);
+        const [actorPresence, targetPresence] = await Promise.all([
+          roomService.resolveRoomPresence(actorId, roomId),
+          roomService.resolveRoomPresence(targetId, roomId),
+        ]);
+        const payload = {
+          room_id: roomId,
+          peer_id: targetId,
+          peer_name: targetPresence.name,
+          peer_photo_url: targetPresence.photo_url,
+          self_name: actorPresence.name,
+          self_photo_url: actorPresence.photo_url,
+        };
+        socket.emit('room:dm-opened', payload);
+        io.to(`user:${targetId}`).emit('room:dm-opened', {
+          room_id: roomId,
+          peer_id: actorId,
+          peer_name: actorPresence.name,
+          peer_photo_url: actorPresence.photo_url,
+          self_name: targetPresence.name,
+          self_photo_url: targetPresence.photo_url,
+        });
+        void session;
+      } catch {
+        /* ignore */
+      }
+    },
+  );
+
+  socket.on(
+    'room:dm-message',
+    async (data: {
+      roomId?: string;
+      room_id?: string;
+      to?: string;
+      message?: string;
+      client_id?: string;
+    }) => {
+      const actorId = socketToUser.get(socket.id);
+      const roomId = resolveRoomId(data);
+      const targetId = data?.to;
+      const text = typeof data?.message === 'string' ? data.message.trim() : '';
+      if (!actorId || !roomId || typeof targetId !== 'string' || !UUID_PATTERN.test(targetId)) {
+        return;
+      }
+      if (!text || text.length > 2000) return;
+      if (actorId === targetId) return;
+      try {
+        const session = roomDmSessions.get(roomId, actorId, targetId);
+        if (!session) {
+          socket.emit('room:dm-error', { room_id: roomId, error: 'dm_not_open' });
+          return;
+        }
+        const [actorPresent, targetPresent] = await Promise.all([
+          userInSocketRoom(actorId, roomId),
+          userInSocketRoom(targetId, roomId),
+        ]);
+        if (!actorPresent || !targetPresent) {
+          endRoomDmsForUser(roomId, !actorPresent ? actorId : targetId, 'leave');
+          return;
+        }
+        const presence = await roomService.resolveRoomPresence(actorId, roomId);
+        const payload = {
+          room_id: roomId,
+          id: data.client_id || `dm-${Date.now()}`,
+          sender_id: actorId,
+          sender_name: presence.name,
+          sender_photo_url: presence.photo_url,
+          message: text,
+          created_at: new Date().toISOString(),
+        };
+        socket.emit('room:dm-message', { ...payload, to: targetId });
+        io.to(`user:${targetId}`).emit('room:dm-message', { ...payload, to: targetId });
+      } catch {
+        /* ignore */
+      }
+    },
+  );
+
+  socket.on(
+    'room:dm-close',
+    async (data: { roomId?: string; room_id?: string; to?: string }) => {
+      const actorId = socketToUser.get(socket.id);
+      const roomId = resolveRoomId(data);
+      const targetId = data?.to;
+      if (!actorId || !roomId || typeof targetId !== 'string' || !UUID_PATTERN.test(targetId)) {
+        return;
+      }
+      const closed = roomDmSessions.close(roomId, actorId, targetId);
+      if (!closed) return;
+      const payload = { room_id: roomId, peer_id: targetId, reason: 'close' as const };
+      socket.emit('room:dm-ended', { room_id: roomId, peer_id: targetId, reason: 'close' });
+      io.to(`user:${targetId}`).emit('room:dm-ended', {
+        room_id: roomId,
+        peer_id: actorId,
+        reason: 'close',
+      });
+      void payload;
+    },
+  );
 
   socket.on('room:message', async (data: { roomId: string; message: string; replyTo?: string }) => {
     const userId = socketToUser.get(socket.id);
@@ -526,13 +814,14 @@ io.on('connection', (socket: Socket) => {
     const userId = socketToUser.get(socket.id);
     const roomId = resolveRoomId(data);
     if (!userId || !roomId || typeof data.typing !== 'boolean') return;
-    const name = (await userService.getDisplayName(userId)) ?? 'Member';
+    // Typing shows the same display identity as presence (profile or temp).
+    const presence = await roomService.resolveRoomPresence(userId, roomId);
     socket.to(`room:${roomId}`).emit('room:typing', {
       roomId,
       room_id: roomId,
       userId,
       user_id: userId,
-      user_name: name,
+      user_name: presence.name,
       typing: data.typing,
     });
   });
@@ -632,6 +921,30 @@ io.on('connection', (socket: Socket) => {
     },
   );
 
+  // Use disconnecting (not disconnect) so socket.rooms still lists group rooms.
+  socket.on('disconnecting', () => {
+    const userId = socketToUser.get(socket.id);
+    if (!userId) return;
+    for (const roomName of socket.rooms) {
+      if (!roomName.startsWith('room:')) continue;
+      const roomId = roomName.slice('room:'.length);
+      void (async () => {
+        const stillHere = await userStillInRoom(userId, roomId, socket.id);
+        if (!stillHere) {
+          endRoomDmsForUser(roomId, userId, 'leave');
+          socket.to(roomName).emit('room:presence', {
+            room_id: roomId,
+            type: 'leave',
+            user_id: userId,
+          });
+          const occupancy = noteRoomExit(roomId, userId);
+          io.emit('room:occupancy', { room_id: roomId, count: occupancy });
+          void roomService.exitRoomSession(userId, roomId).catch(() => {});
+        }
+      })();
+    }
+  });
+
   socket.on('disconnect', () => {
     const userId = socketToUser.get(socket.id);
     if (userId) {
@@ -640,17 +953,6 @@ io.on('connection', (socket: Socket) => {
       // Only mark offline when no other tab/device remains authenticated.
       if (fullyOffline) {
         userService.setOnlineStatus(userId, false);
-      }
-      // Notify any group rooms this socket was in.
-      for (const roomName of socket.rooms) {
-        if (roomName.startsWith('room:')) {
-          const roomId = roomName.slice('room:'.length);
-          socket.to(roomName).emit('room:presence', {
-            room_id: roomId,
-            type: 'leave',
-            user_id: userId,
-          });
-        }
       }
     }
     console.log('User disconnected:', socket.id);
@@ -664,13 +966,9 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  warmIceServers();
   startPulseExpiryCron();
+  startRoomTempIdentityPurgeCron();
+  startRoomMessagePurgeCron();
   startVerificationRetentionWorker();
-  // Optional: in-process drip worker. Prefer an external cron in production
-  // (POST /api/waitlist/admin/run); only enable in-process when running a
-  // single backend instance without separate scheduling.
-  if (process.env.DRIP_WORKER_ENABLED === 'true') {
-    const minutes = parseInt(process.env.DRIP_WORKER_INTERVAL_MINUTES || '60', 10);
-    startDripWorker(Number.isFinite(minutes) && minutes > 0 ? minutes : 60);
-  }
 });

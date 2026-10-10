@@ -5,6 +5,7 @@ import {
   enablePushNotifications,
   disablePushNotifications,
   isPushConfigured,
+  iosNeedsHomeScreenForPush,
 } from '../lib/push';
 
 /**
@@ -12,13 +13,19 @@ import {
  * a clear user action. Unsupported / blocked states are surfaced honestly
  * rather than pretending push is on.
  */
-export const NotificationSettings: React.FC = () => {
+export interface NotificationSettingsProps {
+  flush?: boolean;
+}
+
+export const NotificationSettings: React.FC<NotificationSettingsProps> = ({ flush = false }) => {
   const [support, setSupport] = useState<PushSupport>(getPushSupport());
   const [busy, setBusy] = useState(false);
   const [serverConfigured, setServerConfigured] = useState(true);
+  const [iosInstall, setIosInstall] = useState(false);
 
   useEffect(() => {
     setSupport(getPushSupport());
+    setIosInstall(iosNeedsHomeScreenForPush());
     void isPushConfigured().then(setServerConfigured);
   }, []);
 
@@ -43,33 +50,39 @@ export const NotificationSettings: React.FC = () => {
   const description =
     !serverConfigured
       ? 'Push alerts are not configured on this server yet.'
-      : support === 'unsupported'
-        ? 'Your browser doesn’t support push notifications.'
-        : support === 'denied'
-          ? 'Blocked in your browser settings. Re-enable notifications for this site to turn them on.'
-          : enabled
-            ? 'Get alerts for new messages when MenRush is closed.'
-            : 'Turn on alerts for new messages when MenRush is closed.';
+      : iosInstall
+        ? 'On iPhone: Share → Add to Home Screen, open MenRush from that icon, then turn alerts on. Safari tabs cannot ring when the app is closed.'
+        : support === 'unsupported'
+          ? 'Your browser doesn’t support push notifications.'
+          : support === 'denied'
+            ? 'Blocked in your browser settings. Re-enable notifications for this site to turn them on.'
+            : enabled
+              ? 'Your phone will ping for new messages and incoming calls even if MenRush is closed or in the background.'
+              : 'Turn on alerts so messages and calls still ring when MenRush is closed or in the background.';
 
   return (
     <div
-      className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 flex items-center justify-between shadow-card"
+      className={
+        flush
+          ? 'p-4 sm:p-5 flex items-center justify-between gap-3'
+          : 'bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 flex items-center justify-between shadow-card'
+      }
       data-testid="notification-settings"
     >
       <div className="pr-4">
-        <p className="text-[var(--cream)]/80 text-sm font-semibold">Push notifications</p>
-        <p className="text-[var(--cream-muted)] text-xs mt-0.5" data-testid="notification-settings-status">
+        <p className="text-[var(--cream)] text-[15px] font-bold">Push notifications</p>
+        <p className="text-[var(--cream-muted)] text-[13px] mt-0.5" data-testid="notification-settings-status">
           {description}
         </p>
       </div>
       <button
         type="button"
         onClick={toggle}
-        disabled={busy || !serverConfigured || support === 'unsupported' || support === 'denied'}
+        disabled={busy || !serverConfigured || support === 'unsupported' || support === 'denied' || iosInstall}
         aria-pressed={enabled}
         aria-label="Toggle push notifications"
         data-testid="notification-settings-toggle"
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none disabled:opacity-40 ${
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none disabled:opacity-40 ${
           enabled ? 'bg-[#C4832A]' : 'bg-[var(--border-default)]'
         }`}
       >

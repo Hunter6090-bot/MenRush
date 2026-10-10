@@ -15,6 +15,15 @@ export type FaceMatchResult = {
   review: boolean;
 };
 
+export type ProfilePhotoModerationDecision =
+  | { allowed: true }
+  | {
+      allowed: false;
+      status: 422 | 503;
+      code: 'no_face_detected' | 'multiple_people_detected' | 'photo_moderation_unavailable';
+      message: string;
+    };
+
 type FaceApiModule = typeof import('@vladmandic/face-api');
 
 let engineReady: Promise<FaceApiModule | null> | null = null;
@@ -95,7 +104,82 @@ async function extractDescriptor(
   }
 }
 
+async function countDetectedFaces(
+  faceapi: FaceApiModule,
+  filePath: string,
+): Promise<number> {
+  const { data, info } = await sharp(filePath)
+    .rotate()
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const tensor = (faceapi as any).tf.tensor3d(
+    new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
+    [info.height, info.width, info.channels],
+    'int32',
+  );
+  try {
+    const detections = await faceapi.detectAllFaces(
+      tensor as any,
+      new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35, maxResults: 5 }),
+    );
+    return detections.length;
+  } finally {
+    tensor.dispose();
+  }
+}
+
+export function decideProfilePhotoModeration(
+  result: { count: number; engineAvailable: boolean },
+): ProfilePhotoModerationDecision {
+  if (!result.engineAvailable) {
+    return {
+      allowed: false,
+      status: 503,
+      code: 'photo_moderation_unavailable',
+      message: 'We could not check this photo right now. Please try again in a moment.',
+    };
+  }
+  if (result.count === 0) {
+    return {
+      allowed: false,
+      status: 422,
+      code: 'no_face_detected',
+      message: 'No face was detected. Upload a clear photo of yourself.',
+    };
+  }
+  if (result.count > 1) {
+    return {
+      allowed: false,
+      status: 422,
+      code: 'multiple_people_detected',
+      message: 'Profile photos must show only you. Other people cannot appear in the background.',
+    };
+  }
+  return { allowed: true };
+}
+
 export const faceMatchService = {
+  async countFaces(filePath: string): Promise<{ count: number; engineAvailable: boolean }> {
+    let faceapi: FaceApiModule | null;
+    try {
+      faceapi = await loadEngine();
+    } catch {
+      return { count: 0, engineAvailable: false };
+    }
+    if (!faceapi) return { count: 0, engineAvailable: false };
+
+    try {
+      return { count: await countDetectedFaces(faceapi, filePath), engineAvailable: true };
+    } catch (err) {
+      console.warn(
+        '[profile-moderation] face count failed:',
+        err instanceof Error ? err.message : err,
+      );
+      return { count: 0, engineAvailable: false };
+    }
+  },
+
   async detectFace(filePath: string): Promise<{ found: boolean; engineAvailable: boolean }> {
     let faceapi: FaceApiModule | null;
     try {

@@ -1,10 +1,17 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import {
+  AGE_CLAMP_MAX,
+  AGE_CLAMP_MIN,
   AGE_PRESETS,
-  DISCOVERY_FILTER_CATEGORIES,
+  DEFAULT_DISCOVERY_FILTERS,
   MOOD_FILTER_OPTIONS,
+  PRIMARY_DISCOVERY_FILTER_CATEGORIES,
   STATUS_FILTER_OPTIONS,
   countActiveDiscoveryFilters,
+  hasActiveAgeFilter,
+  hasCustomAge,
+  withAgePreset,
+  withCustomAge,
   type DiscoveryFilterState,
 } from '../lib/discoveryFilters';
 
@@ -27,7 +34,7 @@ export function DiscoveryFilterPanel({
   className = '',
 }: DiscoveryFilterPanelProps) {
   const [open, setOpen] = useState(variant === 'inline');
-  const [activeCategory, setActiveCategory] = useState<string>(DISCOVERY_FILTER_CATEGORIES[0].id);
+  const [activeCategory, setActiveCategory] = useState<string>(PRIMARY_DISCOVERY_FILTER_CATEGORIES[0].id);
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const activeCount = countActiveDiscoveryFilters(value);
@@ -62,20 +69,28 @@ export function DiscoveryFilterPanel({
   };
 
   const clearAll = () => {
-    onChange({
-      intent: 'All',
-      interests: [],
-      agePreset: 'any',
-      status: [],
-      mood: undefined,
-    });
+    onChange({ ...DEFAULT_DISCOVERY_FILTERS });
   };
 
-  const category = DISCOVERY_FILTER_CATEGORIES.find((c) => c.id === activeCategory);
+  const parseAgeInput = (raw: string): number | undefined => {
+    const trimmed = raw.trim();
+    if (trimmed === '') return undefined;
+    const n = Number.parseInt(trimmed, 10);
+    return Number.isFinite(n) ? n : undefined;
+  };
+
+  const category = PRIMARY_DISCOVERY_FILTER_CATEGORIES.find((c) => c.id === activeCategory);
+
+  const ageInputClass =
+    'w-16 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)]/70 px-2 py-1.5 text-[16px] font-semibold text-[var(--cream)] outline-none focus:border-[var(--copper)]';
 
   return (
-    <div ref={rootRef} className={`relative ${className}`} data-testid="discovery-filter-panel">
-      <div className="flex flex-wrap items-center gap-2">
+    <div
+      ref={rootRef}
+      className={`relative min-w-0 max-w-full ${className}`}
+      data-testid="discovery-filter-panel"
+    >
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         {variant === 'compact' ? (
           <button
             type="button"
@@ -119,8 +134,8 @@ export function DiscoveryFilterPanel({
               : 'mt-3 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]'
           }
         >
-          <div className="flex gap-1 overflow-x-auto border-b border-[var(--border-default)] px-2 py-2">
-            {DISCOVERY_FILTER_CATEGORIES.map((cat) => {
+          <div className="flex max-w-full gap-1 overflow-x-auto overscroll-x-contain border-b border-[var(--border-default)] px-2 py-2 [-webkit-overflow-scrolling:touch]">
+            {PRIMARY_DISCOVERY_FILTER_CATEGORIES.map((cat) => {
               const selectedInCategory =
                 cat.id === 'looking_for'
                   ? value.intent !== 'All'
@@ -152,7 +167,7 @@ export function DiscoveryFilterPanel({
                   : 'bg-[var(--bg-primary)]/60 text-[var(--cream-muted)] hover:text-[var(--cream)]'
               }`}
             >
-              Age{value.agePreset !== 'any' ? ' · 1' : ''}
+              Age{hasActiveAgeFilter(value) ? ' · 1' : ''}
             </button>
             <button
               type="button"
@@ -180,18 +195,73 @@ export function DiscoveryFilterPanel({
 
           <div className="max-h-[min(40vh,280px)] overflow-y-auto px-3 py-3">
             {activeCategory === 'age' ? (
-              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Age range">
-                {AGE_PRESETS.map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    aria-pressed={value.agePreset === preset.id}
-                    onClick={() => onChange({ ...value, agePreset: preset.id })}
-                    className={pillClass(value.agePreset === preset.id)}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
+              <div className="space-y-3" data-testid="discovery-age-filters">
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Age range">
+                  {AGE_PRESETS.map((preset) => {
+                    const active = !hasCustomAge(value) && value.agePreset === preset.id;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => onChange(withAgePreset(value, preset.id))}
+                        className={pillClass(active)}
+                        data-testid={`age-preset-${preset.id}`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div
+                  className="flex flex-wrap items-end gap-2 border-t border-[var(--border-default)]/60 pt-3"
+                  role="group"
+                  aria-label="Custom age range"
+                >
+                  <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--cream-muted)]">
+                    Min
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={AGE_CLAMP_MIN}
+                      max={AGE_CLAMP_MAX}
+                      placeholder="18"
+                      value={value.customAgeMin ?? ''}
+                      data-testid="custom-age-min"
+                      onChange={(event) =>
+                        onChange(withCustomAge(value, parseAgeInput(event.target.value), value.customAgeMax))
+                      }
+                      className={ageInputClass}
+                    />
+                  </label>
+                  <span className="pb-2 text-xs text-[var(--cream-muted)]">–</span>
+                  <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--cream-muted)]">
+                    Max
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={AGE_CLAMP_MIN}
+                      max={AGE_CLAMP_MAX}
+                      placeholder="99"
+                      value={value.customAgeMax ?? ''}
+                      data-testid="custom-age-max"
+                      onChange={(event) =>
+                        onChange(withCustomAge(value, value.customAgeMin, parseAgeInput(event.target.value)))
+                      }
+                      className={ageInputClass}
+                    />
+                  </label>
+                  {hasCustomAge(value) ? (
+                    <button
+                      type="button"
+                      onClick={() => onChange(withAgePreset(value, 'any'))}
+                      className="pb-2 text-[11px] font-semibold text-[var(--cream-muted)] hover:text-[var(--copper)]"
+                      data-testid="custom-age-clear"
+                    >
+                      Clear custom
+                    </button>
+                  ) : null}
+                </div>
               </div>
             ) : null}
 
@@ -203,6 +273,7 @@ export function DiscoveryFilterPanel({
                     type="button"
                     aria-pressed={value.status.includes(option.id)}
                     onClick={() => toggleStatus(option.id)}
+                    data-testid={`status-filter-${option.id}`}
                     className={pillClass(value.status.includes(option.id))}
                   >
                     {option.label}

@@ -80,19 +80,14 @@ The full app is not yet deployed. `App.tsx` currently renders only `<ComingSoon 
 - Advanced filters (body type, relationship type, kinks)
 - Access to premium-only rooms and experiences
 
-**Verification is layered and optional above the mandatory age-assurance baseline:**
+**Verification is free and optional. Veriff is the only badge provider.**
 
-| Trust tier | What it means | Who gets it |
-|---|---|---|
-| Adult confirmed | Passed 18+ age-assurance check | Every user — mandatory baseline |
-| Authentic person | Passed a live randomised challenge (liveness, no ID required) | Optional — earns a badge |
-| Identity checked | Government ID privately matched to live person | Optional — earns a stronger badge |
-
-- Verified badges are available to ALL users, free or paid — verification is NOT a premium feature.
-- Premium membership is a separate axis (features/limits), not a trust level.
-- Anti-scammer/bot measures (rate limits, disposable-email detection, device fingerprinting, behavioural scoring) operate independently of the badge tiers and apply to all accounts.
-- Raw biometric data (selfie, ID image) is deleted within 72 hours; only the verification result is retained.
-- In-house verification stack (built with Grok CLI assistance) — not Yoti, not Stripe Identity.
+- Profile has one Get verified button that opens Veriff ID + live selfie capture directly.
+- Only an approved, authenticated Veriff decision awards the copper Verified badge.
+- Pending and action-needed states appear on Profile. Trust Centre and manual capture routes are retired.
+- No in-house review or standalone liveness badge. Provider review configuration must match this policy.
+- Never promise document deletion timing or employee access restrictions without checking the actual provider configuration.
+- Premium membership and ordinary app access are independent of verification.
 
 ---
 

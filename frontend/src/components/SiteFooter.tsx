@@ -11,7 +11,7 @@ type SiteFooterProps = {
 export const SiteFooter: React.FC<SiteFooterProps> = ({ className = '' }) => {
   return (
     <footer
-      className={`border-t border-[#3D2B0E]/35 bg-[#0a0805] py-5 px-4 sm:py-6 ${className}`.trim()}
+      className={`max-w-full overflow-x-clip border-t border-[#3D2B0E]/35 bg-[#0a0805] py-5 px-4 sm:py-6 ${className}`.trim()}
       role="contentinfo"
     >
       <nav
@@ -38,6 +38,12 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ className = '' }) => {
         </span>
         <Link to="/help" className="transition-colors hover:text-[#c8861c]">
           Help
+        </Link>
+        <span className="hidden text-[#3D2B0E] sm:inline" aria-hidden>
+          ·
+        </span>
+        <Link to="/get-the-app" className="transition-colors hover:text-[#c8861c]">
+          Get the app
         </Link>
         <span className="hidden text-[#3D2B0E] sm:inline" aria-hidden>
           ·

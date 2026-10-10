@@ -92,6 +92,11 @@ export const notificationService = {
     const result = await query(
       `${LIST_SELECT}
        WHERE n.user_id = $1
+         AND (n.actor_id IS NULL OR NOT EXISTS (
+           SELECT 1 FROM blocks b
+           WHERE (b.blocker_id = $1 AND b.blocked_id = n.actor_id)
+              OR (b.blocker_id = n.actor_id AND b.blocked_id = $1)
+         ))
        ORDER BY n.created_at DESC
        LIMIT $2`,
       [userId, limit],
@@ -101,7 +106,13 @@ export const notificationService = {
 
   async unreadCount(userId: string): Promise<number> {
     const result = await query(
-      `SELECT COUNT(*)::int AS total FROM notifications WHERE user_id = $1 AND read = FALSE`,
+      `SELECT COUNT(*)::int AS total FROM notifications n
+       WHERE n.user_id = $1 AND n.read = FALSE
+         AND (n.actor_id IS NULL OR NOT EXISTS (
+           SELECT 1 FROM blocks b
+           WHERE (b.blocker_id = $1 AND b.blocked_id = n.actor_id)
+              OR (b.blocker_id = n.actor_id AND b.blocked_id = $1)
+         ))`,
       [userId],
     );
     return (result.rows[0]?.total as number) ?? 0;
@@ -127,6 +138,22 @@ export const notificationService = {
     return result.rowCount ?? 0;
   },
 
+  /** Clear notifications from a specific actor (e.g. when opening conversation or reading messages) */
+  async clearForActor(userId: string, actorId: string, types?: NotificationType[]): Promise<number> {
+    const typeClause = types && types.length > 0 ? `AND type = ANY($3::text[])` : '';
+    const params: unknown[] = [userId, actorId];
+    if (types && types.length > 0) {
+      params.push(types);
+    }
+    const result = await query(
+      `UPDATE notifications SET read = TRUE
+       WHERE user_id = $1 AND actor_id = $2 AND read = FALSE ${typeClause}
+       RETURNING id`,
+      params,
+    );
+    return result.rowCount ?? 0;
+  },
+
   /** #74 — user-initiated delete (distinct from expiry/retention, if any exists elsewhere). */
   async remove(userId: string, notificationId: string): Promise<boolean> {
     const result = await query(
@@ -134,6 +161,14 @@ export const notificationService = {
       [notificationId, userId],
     );
     return (result.rowCount ?? 0) > 0;
+  },
+
+  async removeAll(userId: string): Promise<number> {
+    const result = await query(
+      `DELETE FROM notifications WHERE user_id = $1 RETURNING id`,
+      [userId],
+    );
+    return result.rowCount ?? 0;
   },
 
   async removeAllRead(userId: string): Promise<number> {
@@ -161,6 +196,19 @@ export const notificationService = {
   },
 
   async notify(io: { to: (room: string) => { emit: (event: string, data: unknown) => void } } | null, params: CreateParams) {
+    if (params.actorId) {
+      const blockedCheck = await query(
+        `SELECT 1 FROM blocks
+         WHERE (blocker_id = $1 AND blocked_id = $2)
+            OR (blocker_id = $2 AND blocked_id = $1)
+         LIMIT 1`,
+        [params.userId, params.actorId],
+      );
+      if (blockedCheck.rows.length > 0) {
+        // Blocked: do not create notification or emit to socket
+        return null;
+      }
+    }
     const row = await this.create(params);
     io?.to(`user:${params.userId}`).emit('notification', this.toSocketPayload(row));
     return row;

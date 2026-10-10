@@ -230,9 +230,24 @@ function resendConfigured(): boolean {
 }
 
 /** Account emails (password reset, etc.): prefer Resend, fall back to Zoho SMTP. */
+type TransactionalSender = (
+  params: SendEmailParams,
+) => Promise<{ id: string; provider: 'resend' | 'zoho' }>;
+
+/** Test-only hook so gate/welcome checks can run without Resend/Zoho. */
+let transactionalEmailOverride: TransactionalSender | null = null;
+
+export function setTransactionalEmailOverride(fn: TransactionalSender | null): void {
+  transactionalEmailOverride = fn;
+}
+
 export async function sendTransactionalEmail(
   params: SendEmailParams,
 ): Promise<{ id: string; provider: 'resend' | 'zoho' }> {
+  if (transactionalEmailOverride) {
+    return transactionalEmailOverride(params);
+  }
+
   if (resendConfigured()) {
     try {
       const result = await sendEmail(params);

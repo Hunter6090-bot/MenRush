@@ -25,13 +25,20 @@ export const Notifications = () => {
   const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
   const deleteNotification = useNotificationStore((s) => s.deleteNotification);
   const deleteAllRead = useNotificationStore((s) => s.deleteAllRead);
+  const deleteAllNotifications = useNotificationStore((s) => s.deleteAllNotifications);
   const setUnreadCount = useNotificationStore((s) => s.setUnreadCount);
 
   // #74: badge-only on launch, tap opens this page; read items drop out of the
   // default (unread) view rather than piling up — "All" is one tap away, so
   // history isn't lost, just not the default.
   const [filter, setFilter] = useState<Filter>('unread');
-  const readCount = notifications.length - unreadCount;
+  // Prefer loaded rows over (length - unreadCount): the list API is capped
+  // (e.g. 50) while unread_count is global, so length - unread can go negative
+  // and hide "Delete read" even when read items are on screen.
+  const readCount = useMemo(
+    () => notifications.filter((n) => n.read).length,
+    [notifications],
+  );
   const visibleNotifications = useMemo(
     () => (filter === 'unread' ? notifications.filter((n) => !n.read) : notifications),
     [notifications, filter],
@@ -43,6 +50,12 @@ export const Notifications = () => {
 
   const handleOpen = useCallback(
     async (notification: Notification) => {
+      // Navigate first. Marking read before navigate made unread-filter rows
+      // vanish in place ("cleared/deleted") while the chat never opened if
+      // routing was delayed or blocked.
+      const dest = notificationDestination(notification);
+      navigate(dest);
+
       if (!notification.read) {
         markAsRead(notification.id);
         try {
@@ -52,7 +65,6 @@ export const Notifications = () => {
           /* local state already updated */
         }
       }
-      navigate(notificationDestination(notification));
     },
     [markAsRead, navigate, setUnreadCount],
   );
@@ -89,6 +101,15 @@ export const Notifications = () => {
     }
   };
 
+  const handleDeleteAll = async () => {
+    deleteAllNotifications();
+    try {
+      await notificationsAPI.deleteAll();
+    } catch {
+      /* ignore */
+    }
+  };
+
   return (
     <Layout>
       <div className="mx-auto flex min-h-0 max-w-xl flex-col gap-4 px-4 py-4 pb-10 lg:max-w-6xl lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] lg:items-start lg:gap-8 lg:px-8 lg:py-8">
@@ -109,13 +130,13 @@ export const Notifications = () => {
                 Mark all read
               </button>
             )}
-            {readCount > 0 && (
+            {notifications.length > 0 && (
               <button
                 type="button"
-                onClick={() => void handleDeleteAllRead()}
+                onClick={() => void (readCount > 0 && filter === 'unread' ? handleDeleteAllRead() : handleDeleteAll())}
                 className="rounded-xl px-3 py-1 text-[11px] font-semibold text-[var(--cream-muted)] hover:text-[var(--cream)]"
               >
-                Delete read
+                {readCount > 0 && filter === 'unread' ? 'Delete read' : 'Delete all'}
               </button>
             )}
           </div>
@@ -128,13 +149,13 @@ export const Notifications = () => {
               <p className="text-sm text-[var(--cream-muted)]">Recent alerts from your network.</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              {readCount > 0 && (
+              {notifications.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => void handleDeleteAllRead()}
+                  onClick={() => void (readCount > 0 && filter === 'unread' ? handleDeleteAllRead() : handleDeleteAll())}
                   className="rounded-xl px-3 py-2 text-[11px] font-semibold text-[var(--cream-muted)] hover:text-[var(--cream)]"
                 >
-                  Delete read
+                  {readCount > 0 && filter === 'unread' ? 'Delete read' : 'Delete all'}
                 </button>
               )}
               {unreadCount > 0 && (
@@ -237,7 +258,7 @@ export const Notifications = () => {
                   to="/stream"
                   className="rounded-full border border-[rgba(196,131,42,0.5)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
                 >
-                  Live list
+                  Community
                 </Link>
                 <Link
                   to="/matches"
@@ -260,17 +281,21 @@ export const Notifications = () => {
                 <button
                   type="button"
                   onClick={() => void handleOpen(notification)}
+                  data-testid={`notification-open-${notification.id}`}
+                  data-notification-type={notification.type}
                   className={`flex w-full items-start gap-3 rounded-2xl border py-3.5 pl-4 pr-11 text-left transition-colors ${
                     notification.read
                       ? 'border-[var(--border-default)] bg-[var(--bg-card)]/70 hover:border-[#C4832A]/30'
                       : 'border-[#C4832A]/35 bg-[var(--bg-card)] shadow-[0_0_0_1px_rgba(196,131,42,0.08)] hover:border-[#C4832A]/50'
                   }`}
                 >
-                  <div className="relative shrink-0">
+                  <div className="relative shrink-0 pointer-events-none">
                     {notification.userId ? (
                       <UserAvatar
                         name={notification.actorName ?? notification.message}
                         photoUrl={notification.actorPhotoUrl}
+                        userId={notification.userId}
+                        linkToProfile={false}
                         size="sm"
                         showStatus={false}
                       />
@@ -284,7 +309,7 @@ export const Notifications = () => {
                     )}
                   </div>
 
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 text-left">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-semibold text-[var(--cream)] leading-snug">
                         {notification.message}
@@ -306,7 +331,7 @@ export const Notifications = () => {
                   aria-label="Delete notification"
                   data-testid={`notification-delete-${notification.id}`}
                   onClick={(e) => void handleDelete(e, notification)}
-                  className="absolute right-2.5 top-3 flex h-7 w-7 items-center justify-center rounded-full text-[var(--cream-muted)] opacity-60 transition-opacity hover:bg-[var(--bg-elevated)] hover:text-[var(--cream)] hover:opacity-100 focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
+                  className="absolute right-2.5 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-full text-[var(--cream-muted)] opacity-60 transition-opacity hover:bg-[var(--bg-elevated)] hover:text-[var(--cream)] hover:opacity-100 focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
                 >
                   <IconClose size={14} />
                 </button>

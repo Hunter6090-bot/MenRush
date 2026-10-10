@@ -122,8 +122,8 @@ function RadiusSelectShell({
           data-testid="radius-miles-select"
           className={`appearance-none rounded-full border border-nn-border bg-nn-card font-bold text-nn-text transition-colors hover:border-nn-copper/40 focus:border-nn-copper/50 focus:outline-none focus:ring-2 focus:ring-nn-copper/20 ${
             compact
-              ? 'h-9 min-w-[108px] pl-3 pr-8 text-[12px]'
-              : 'h-10 min-w-[128px] pl-4 pr-9 text-[13px]'
+              ? 'h-9 min-w-[108px] pl-3 pr-8 text-[16px]'
+              : 'h-10 min-w-[128px] pl-4 pr-9 text-[16px]'
           }`}
         >
           {children}

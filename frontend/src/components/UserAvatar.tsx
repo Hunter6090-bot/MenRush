@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
-  fallbackAvatarForAge,
-  isUploadPath,
   resolveAssetUrl,
+  resolveDisplayThumbCandidates,
   resolveUploadUrlCandidates,
 } from '../lib/assetUrl';
+import { profilePathForUser } from '../lib/profileLinks';
+import { useAuthStore } from '../hooks/store';
+import { realAvatarUrl } from '../lib/avatarFallback';
+import { FadedBrandFace } from './FadedBrandFace';
 
 type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
@@ -16,6 +20,15 @@ interface UserAvatarProps {
   size?: Size;
   showStatus?: boolean;
   className?: string;
+  /**
+   * When set, the avatar links to that user's profile (/profile for self,
+   * /profile/:id otherwise). New surfaces inherit the product rule by passing userId.
+   */
+  userId?: string;
+  /** Override auto-linking when userId is set (e.g. already wrapped in a Link). */
+  linkToProfile?: boolean;
+  onClick?: (event: React.MouseEvent) => void;
+  'data-testid'?: string;
 }
 
 const sizes: Record<Size, { outer: string; text: string; dot: string; dotPos: string }> = {
@@ -28,48 +41,63 @@ const sizes: Record<Size, { outer: string; text: string; dot: string; dotPos: st
 
 export const getPhotoUrl = (url?: string) => resolveAssetUrl(url);
 
+export type ResolvingPhotoOptions = {
+  /** Prefer `/api/media/display` thumbs (Nearby / Matches grids — iPhone decode). */
+  displayWidth?: number;
+};
+
 /**
- * Walk upload URL candidates (API host ↔ same-origin rewrite) before generic fallback.
+ * Walk upload URL candidates (API host ↔ same-origin rewrite) before giving up.
  * Keeps real /uploads photos visible when Vercel rewrite and VITE_API_URL disagree.
+ *
+ * Empty / legacy default (generic `/avatars/*`, logo plates) → `src` undefined.
+ * Every candidate failed → `src` undefined. Callers then render the ONE Brand
+ * placeholder (`FadedBrandFace`). No generic SVG / initials fallback (Pete lock).
+ * Media lock: the stored photo path is never rewritten — this is display-only.
  */
 export function useResolvingPhotoSrc(
   photoUrl?: string | null,
-  age?: number,
+  _age?: number,
+  options?: ResolvingPhotoOptions,
 ): { src: string | undefined; onError: () => void } {
   const [candidateIdx, setCandidateIdx] = useState(0);
-  const [phase, setPhase] = useState<'candidates' | 'generic' | 'empty'>('candidates');
+  const [failed, setFailed] = useState(false);
+  const displayWidth = options?.displayWidth;
+  const realUrl = realAvatarUrl(photoUrl);
 
-  const candidates = resolveUploadUrlCandidates(photoUrl);
+  const candidates =
+    realUrl == null
+      ? []
+      : displayWidth != null
+        ? resolveDisplayThumbCandidates(realUrl, displayWidth)
+        : resolveUploadUrlCandidates(realUrl);
 
   useEffect(() => {
     setCandidateIdx(0);
-    setPhase('candidates');
-  }, [photoUrl]);
+    setFailed(false);
+  }, [realUrl, displayWidth]);
 
   let src: string | undefined;
-  if (phase === 'empty') src = undefined;
-  else if (phase === 'generic') src = resolveAssetUrl(fallbackAvatarForAge(age));
-  else src = candidates[candidateIdx] ?? resolveAssetUrl(photoUrl);
+  if (failed || realUrl == null) src = undefined;
+  else src = candidates[candidateIdx] ?? resolveAssetUrl(realUrl);
 
   const onError = () => {
-    if (phase === 'candidates' && candidateIdx + 1 < candidates.length) {
+    if (candidateIdx + 1 < candidates.length) {
       setCandidateIdx((i) => i + 1);
       return;
     }
-    // Broken /uploads (volume wipe, 404) → age-based generic face so the map
-    // and list still show a person pin, not a blank hole.
-    if (phase === 'candidates' && photoUrl) {
-      setPhase('generic');
-      return;
-    }
-    if (phase === 'generic') {
-      setPhase('empty');
-      return;
-    }
-    setPhase('empty');
+    // Broken /uploads (volume wipe, 404) → Brand placeholder, never a legacy default.
+    setFailed(true);
   };
 
   return { src, onError };
+}
+
+/** Resolves the href for a face/photo tap (self → /profile, else /profile/:id). */
+export function useProfilePhotoHref(userId?: string | null): string | null {
+  const authUserId = useAuthStore((s) => s.user?.id);
+  if (!userId) return null;
+  return profilePathForUser(userId, authUserId);
 }
 
 export const UserAvatar: React.FC<UserAvatarProps> = ({
@@ -80,31 +108,72 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   size = 'md',
   showStatus = true,
   className = '',
+  userId,
+  linkToProfile,
+  onClick,
+  'data-testid': testId,
 }) => {
   const s = sizes[size];
-  const initial = name?.[0]?.toUpperCase() ?? '?';
   const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
+  const href = useProfilePhotoHref(userId);
+  const shouldLink = Boolean(href) && linkToProfile !== false;
 
-  return (
-    <div className={`relative flex-shrink-0 ${className}`}>
+  // Size + rounded-full live on the relative wrapper so className overrides
+  // (e.g. !w-[52px]) and rings follow the circle — not a square chrome box.
+  const content = (
+    <div className={`relative flex-shrink-0 ${s.outer} rounded-full ${className}`}>
       <div
-        className={`${s.outer} rounded-full overflow-hidden bg-gradient-to-br from-[#C4832A]/30 to-[#C4832A]/10 border border-[var(--border-default)] flex items-center justify-center font-semibold text-[var(--cream)]`}
+        className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-[var(--border-default)] bg-gradient-to-br from-[#C4832A]/30 to-[#C4832A]/10 font-semibold text-[var(--cream)]"
       >
         {src ? (
           <img
             src={src}
             alt={name}
-            className="w-full h-full object-cover"
+            className="h-full w-full object-cover"
             onError={onError}
             loading="lazy"
           />
         ) : (
-          <span className={s.text}>{initial}</span>
+          <FadedBrandFace variant="profile" label={name || 'MenRush'} />
         )}
       </div>
       {showStatus && online !== undefined && (
         <StatusDot online={online} className={`absolute ${s.dotPos} ${s.dot}`} />
       )}
+    </div>
+  );
+
+  if (shouldLink && href) {
+    return (
+      <Link
+        to={href}
+        onClick={onClick}
+        aria-label={`Open ${name}'s profile`}
+        data-testid={testId ?? 'user-avatar-profile-link'}
+        className="inline-flex shrink-0 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)]"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={`Open ${name}'s profile`}
+        data-testid={testId}
+        className="inline-flex shrink-0 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)]"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div data-testid={testId} className="inline-flex shrink-0">
+      {content}
     </div>
   );
 };

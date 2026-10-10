@@ -2,9 +2,31 @@ import fs from 'fs';
 import path from 'path';
 import pool from '../db';
 
-const MIGRATIONS_DIR = path.resolve(__dirname, '../../database/migrations');
+// Migrations are canonical at the repository root (`database/migrations`), but
+// the production image (build context `./backend`) only contains
+// `backend/database/migrations` at `/app/database/migrations` — the repo-root
+// `database/` directory is never copied in. Resolving *only* to the repo root
+// therefore breaks migrations inside the container (ENOENT -> exit 1).
+//
+// Prefer the canonical repo-root copy when present (local checkouts), and fall
+// back to the in-image `backend/database/migrations` copy otherwise. Both copies
+// are kept in sync so the container always has the full migration set.
+function resolveMigrationsDir(): string {
+  const candidates = [
+    path.resolve(__dirname, '../../../database/migrations'), // repo-root (local)
+    path.resolve(__dirname, '../../database/migrations'), // backend copy (container)
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(dir)) return dir;
+  }
+  // Nothing found — return the first candidate so the error message is useful.
+  return candidates[0];
+}
 
-async function main() {
+const MIGRATIONS_DIR = resolveMigrationsDir();
+
+/** Idempotent. Safe to call on every boot. Does not close the pool. */
+export async function runPendingMigrations(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version TEXT PRIMARY KEY,
@@ -52,9 +74,16 @@ async function main() {
   else console.log(`Applied ${ran} migration(s).`);
 }
 
-main()
-  .then(() => pool.end())
-  .catch((err) => {
-    console.error(err);
-    pool.end().finally(() => process.exit(1));
-  });
+function isDirectRun(): boolean {
+  const entry = process.argv[1];
+  return Boolean(entry && /migrate\.(js|ts)$/.test(entry));
+}
+
+if (isDirectRun()) {
+  runPendingMigrations()
+    .then(() => pool.end())
+    .catch((err) => {
+      console.error(err);
+      pool.end().finally(() => process.exit(1));
+    });
+}

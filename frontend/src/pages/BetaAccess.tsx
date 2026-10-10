@@ -2,12 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { betaAPI } from '../api/client';
 import {
-  AUTH_BACKGROUNDS,
   PublicAuthHero,
   PublicAuthShell,
 } from '../components/PublicAuthShell';
 import { PulseRing } from '../components/PulseRing';
-import { BETA_INVITE_REQUIRED, storeInviteCode } from '../lib/betaInvite';
+import { storeInviteCode, BETA_INVITE_REQUIRED } from '../lib/betaInvite';
 import {
   publicCodeInputClass,
   publicErrorClass,
@@ -29,10 +28,6 @@ export const BetaAccess = () => {
   const submittingRef = useRef(false);
 
   useEffect(() => {
-    if (!BETA_INVITE_REQUIRED) {
-      navigate('/register', { replace: true });
-      return;
-    }
     // Prefill from waitlist welcome / invite email deep links.
     try {
       const params = new URLSearchParams(window.location.search);
@@ -43,7 +38,7 @@ export const BetaAccess = () => {
     } catch {
       /* ignore */
     }
-  }, [navigate]);
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -52,14 +47,14 @@ export const BetaAccess = () => {
 
     const trimmed = code.trim();
     if (!trimmed) {
-      setError('Enter the invite code from your beta email.');
+      setError('Enter the invite code from your email.');
       return;
     }
 
     const normalized = normalizeClientInviteCode(trimmed);
     // Codes look like MENRUSHXXXXXXXX (15 chars) after stripping hyphens/spaces.
     if (!normalized.startsWith('MENRUSH') || normalized.length !== 15) {
-      setError('Use the full code from your email (e.g. MENRUSH-XXXX-XXXX). 18+ beta only.');
+      setError('Use the full code from your email (e.g. MENRUSH-XXXX-XXXX). 18+ only.');
       return;
     }
 
@@ -79,7 +74,7 @@ export const BetaAccess = () => {
       } else {
         setError(
           apiError ||
-            'That invite code is invalid, expired, or already used. Check the email or join the waitlist.',
+            'That invite code is invalid, expired, or already used. Check the email or sign up free.',
         );
       }
     } finally {
@@ -89,18 +84,18 @@ export const BetaAccess = () => {
   };
 
   return (
-    <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.beta} showFooter>
+    <PublicAuthShell showFooter>
       <PublicAuthHero
-        title="You're in the"
-        accent="MenRush beta."
-        copy="Enter the invite code from your email to create your account and start meeting nearby."
+        title="Have an invite?"
+        accent="Enter your code."
+        copy="Optional. If you have a MENRUSH invite from email, enter it here. Otherwise sign up free. No code needed."
       />
 
       <div className={publicPanelClass}>
         <form onSubmit={handleSubmit} className="flex flex-col gap-[18px]">
           <div className="flex flex-col gap-2.5">
             <label htmlFor="beta-invite-code" className={publicLabelCopperClass}>
-              Beta invite code
+              Invite code
             </label>
             <input
               id="beta-invite-code"
@@ -110,7 +105,7 @@ export const BetaAccess = () => {
                 setCode(e.target.value.toUpperCase());
                 setError('');
               }}
-              placeholder="E.g. MR-BETA-XXXX"
+              placeholder="E.g. MENRUSH-XXXX-XXXX"
               autoComplete="off"
               spellCheck={false}
               required
@@ -122,8 +117,8 @@ export const BetaAccess = () => {
 
           <p className="m-0 text-sm leading-[1.55] text-[var(--cream-muted)]">
             Codes are single-use and tied to selected waitlist members. No code?{' '}
-            <Link to="/coming-soon#waitlist" className={publicLinkClass}>
-              Join the waitlist
+            <Link to="/register" className={publicLinkClass}>
+              Sign up free
             </Link>
             .
           </p>

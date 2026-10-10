@@ -1,10 +1,26 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserAvatar } from './UserAvatar';
-import { NotificationDot } from './NotificationDot';
+import { StatusDot, UserAvatar } from './UserAvatar';
+import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { MissedCallIcon } from './MissedCallIcon';
 import { ChatSafetyMenu } from './ChatSafetyMenu';
+import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
 import { MISSED_CALL_PREVIEW } from '../lib/missedCall';
+import { useAuthStore } from '../hooks/store';
+import { rememberInboxThread } from '../lib/conversationHistoryCache';
+
+/** Thread-list face — circle only, slightly larger than UserAvatar md (44px). */
+const THREAD_AVATAR_PX = 52;
+
+export type ThreadOpenState = {
+  threadPreview?: {
+    peerId: string;
+    lastMessage?: string;
+    lastMessageTime?: string;
+    name?: string;
+    photoUrl?: string;
+  };
+};
 
 interface ConversationItemProps {
   userId: string;
@@ -19,7 +35,7 @@ interface ConversationItemProps {
   variant?: 'default' | 'sidebar';
 }
 
-export const ConversationItem: React.FC<ConversationItemProps> = ({
+export const ConversationItem = memo(function ConversationItem({
   userId,
   name,
   photoUrl,
@@ -30,15 +46,35 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   onBlocked,
   isActive = false,
   variant = 'default',
-}) => {
+}: ConversationItemProps) {
   const navigate = useNavigate();
+  const selfId = useAuthStore((s) => s.user?.id);
   const isMissedCall = lastMessage === MISSED_CALL_PREVIEW;
   const isSidebar = variant === 'sidebar';
+  const useBrandEmptyFace = isNearbyPlaceholderFace(photoUrl);
+
+  const openThread = () => {
+    // Seed cache synchronously on tap so Messages first paint has last-known text.
+    rememberInboxThread(userId, {
+      lastMessage,
+      lastMessageTime,
+      selfId,
+    });
+    const state: ThreadOpenState = {
+      threadPreview: {
+        peerId: userId,
+        lastMessage,
+        lastMessageTime,
+        name,
+        photoUrl,
+      },
+    };
+    navigate(`/messages/${userId}`, { state });
+  };
 
   return (
     <div className="flex items-center gap-1">
-      <button
-        onClick={() => navigate(`/messages/${userId}`)}
+      <div
         className={`group flex min-w-0 flex-1 items-center gap-3 text-left transition-all duration-200 ${
           isSidebar
             ? `rounded-[14px] px-3 py-3 ${
@@ -47,57 +83,91 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
             : 'rounded-2xl border border-nn-border bg-nn-card px-4 py-3.5 hover:border-nn-copper/30 hover:bg-nn-elevated'
         }`}
       >
-      <div className="relative shrink-0">
-        <UserAvatar
+        <ProfilePhotoLink
+          userId={userId}
           name={name}
-          photoUrl={photoUrl}
-          online={online}
-          size="md"
-          className={isSidebar ? '!w-[46px] !h-[46px] ring-2 ring-[rgba(196,131,42,0.35)]' : undefined}
-        />
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-2">
-          <p className="truncate text-sm font-bold text-nn-text">{name}</p>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {lastMessageTime ? (
-              <span className="text-[11px] text-nn-faint">{formatRelative(lastMessageTime)}</span>
-            ) : null}
-            {unreadCount ? (
-              <span className="h-[9px] w-[9px] rounded-full bg-nn-copper" aria-label="Unread" />
-            ) : null}
-          </div>
-        </div>
-        <p
-          className={`mt-0.5 truncate text-[13px] flex items-center gap-1 ${
-            isMissedCall
-              ? 'font-semibold text-nn-danger-light'
-              : unreadCount
-                ? 'font-medium text-nn-muted'
-                : 'text-nn-muted'
-          }`}
+          className="relative shrink-0"
+          data-testid={`conversation-avatar-${userId}`}
         >
-          {isMissedCall && <MissedCallIcon size={12} className="shrink-0" />}
-          {lastMessage ?? (online ? 'Active now' : 'Tap to open chat')}
-        </p>
+          {useBrandEmptyFace ? (
+            <span
+              className="relative inline-flex shrink-0 overflow-hidden rounded-full"
+              style={{ width: THREAD_AVATAR_PX, height: THREAD_AVATAR_PX }}
+            >
+              <FadedBrandFace variant="profile" size={THREAD_AVATAR_PX} label={name} />
+              {online !== undefined ? (
+                <StatusDot
+                  online={online}
+                  className="absolute bottom-0.5 right-0.5 h-3 w-3"
+                />
+              ) : null}
+            </span>
+          ) : (
+            <UserAvatar
+              name={name}
+              photoUrl={photoUrl}
+              online={online}
+              size="md"
+              linkToProfile={false}
+              className="!h-[52px] !w-[52px]"
+            />
+          )}
+        </ProfilePhotoLink>
+
+        <button
+          type="button"
+          onClick={openThread}
+          data-testid={`conversation-open-chat-${userId}`}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          aria-label={`Open chat with ${name}`}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <p className="truncate text-base font-bold text-nn-text">{name}</p>
+              <div className="flex shrink-0 items-center gap-1.5">
+                {lastMessageTime ? (
+                  <span className="text-xs text-nn-faint">{formatRelative(lastMessageTime)}</span>
+                ) : null}
+                {unreadCount ? (
+                  <span className="h-[9px] w-[9px] rounded-full bg-nn-copper" aria-label="Unread" />
+                ) : null}
+              </div>
+            </div>
+            <p
+              className={`mt-0.5 truncate text-[15px] flex items-center gap-1 ${
+                isMissedCall
+                  ? 'font-semibold text-nn-danger-light'
+                  : unreadCount
+                    ? 'font-medium text-nn-muted'
+                    : 'text-nn-muted'
+              }`}
+            >
+              {isMissedCall && <MissedCallIcon size={12} className="shrink-0" />}
+              {lastMessage ?? (online ? 'Active now' : 'Tap to open chat')}
+            </p>
+          </div>
+
+          <ChevronIcon
+            className={`h-4 w-4 flex-shrink-0 transition-colors ${
+              isSidebar
+                ? isActive
+                  ? 'text-[var(--copper)]/70'
+                  : 'text-[var(--cream-muted)]/30 group-hover:text-[#C4832A]/50'
+                : 'text-[var(--cream-muted)]/40 group-hover:text-[#C4832A]/60'
+            }`}
+          />
+        </button>
       </div>
 
-      <ChevronIcon
-        className={`h-4 w-4 flex-shrink-0 transition-colors ${
-          isSidebar
-            ? isActive
-              ? 'text-[var(--copper)]/70'
-              : 'text-[var(--cream-muted)]/30 group-hover:text-[#C4832A]/50'
-            : 'text-[var(--cream-muted)]/40 group-hover:text-[#C4832A]/60'
-        }`}
+      <ChatSafetyMenu
+        peerId={userId}
+        peerName={name}
+        threadId={selfId ? `dm:${[selfId, userId].sort().join('_')}` : `dm:${userId}`}
+        onBlocked={onBlocked}
       />
-      </button>
-
-      <ChatSafetyMenu peerId={userId} peerName={name} onBlocked={onBlocked} />
     </div>
   );
-};
+});
 
 function formatRelative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();

@@ -6,7 +6,9 @@
 export type CallMetricEvent =
   | 'call_initiate'
   | 'call_offline'
+  | 'call_offline_ringing'
   | 'call_incoming_emitted'
+  | 'call_no_answer'
   | 'call_answer'
   | 'call_reject'
   | 'call_end'

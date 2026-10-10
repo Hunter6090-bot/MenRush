@@ -192,7 +192,7 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
               value={pasteValue}
               onChange={(event) => setPasteValue(event.target.value)}
               placeholder="Profile link or ID"
-              className="mt-3 w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2.5 text-sm text-[var(--cream)] placeholder:text-[var(--cream-muted)]/70 focus:border-[#C4832A]/50 focus:outline-none"
+              className="mt-3 w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2.5 text-[16px] text-[var(--cream)] placeholder:text-[var(--cream-muted)]/70 focus:border-[#C4832A]/50 focus:outline-none"
             />
             <button
               type="button"

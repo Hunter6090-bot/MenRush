@@ -1,6 +1,120 @@
-// MenRush Service Worker — handles background push notifications.
+// MenRush Service Worker — background push for messages and incoming calls, with deep-link recovery.
+// SW_VERSION=2026-09-10-call-ring-trim-hook-v6 — bump to force clients onto new click/call logic.
+//
+// Incoming call sound (Legal GREEN interim):
+// - Default: OS notification sound (`silent: false`) — no Trim/Nokia file shipped.
+// - Once Brand drops a cleared marker at /audio/call-ring.trim.cleared.json + licensed
+//   MP3, call pushes may set Notification `sound` to that same-origin path (Android;
+//   iOS ignores custom sound). Mirror of frontend/src/lib/callRingAsset.ts — keep in sync.
+
+const CALL_RING_TRIM_CLEARED_MARKER = '/audio/call-ring.trim.cleared.json';
+const CALL_RING_TRIM_SRC_DEFAULT = '/audio/call-ring.trim.mp3';
+
+async function resolveCallNotificationSound() {
+  try {
+    const res = await fetch(CALL_RING_TRIM_CLEARED_MARKER, {
+      cache: 'no-store',
+      credentials: 'same-origin',
+    });
+    if (!res.ok) return undefined;
+    const meta = await res.json();
+    if (!meta || meta.cleared !== true) return undefined;
+    const src =
+      typeof meta.src === 'string' && meta.src.trim()
+        ? meta.src.trim()
+        : CALL_RING_TRIM_SRC_DEFAULT;
+    if (!src.startsWith('/audio/') || src.includes('..')) return undefined;
+    return src;
+  } catch {
+    return undefined;
+  }
+}
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+
+// Keep a fetch listener for installability heuristics, but NEVER call
+// respondWith. Proxying every request through the SW added multi-second lag
+// on mobile Safari/Chrome (phones parse a heavy SPA; SW double-hop made every
+// API + Mapbox + asset fetch worse). Browser handles network natively.
+// (#158 notificationclick / tag recovery lives below — do not remove.)
+self.addEventListener('fetch', () => {
+  /* no-op — do not intercept */
+});
+
+function resolveNotificationHref(raw, fallbackPath) {
+  const origin = self.location.origin;
+  const fallback = new URL(fallbackPath || '/discover', origin).href;
+  if (!raw || typeof raw !== 'string') return fallback;
+  try {
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      const abs = new URL(raw);
+      if (abs.origin !== origin) return fallback;
+      return abs.href;
+    }
+    return new URL(raw.startsWith('/') ? raw : '/' + raw, origin).href;
+  } catch {
+    return fallback;
+  }
+}
+
+function peerIdFromMessagesHref(href) {
+  try {
+    const match = new URL(href).pathname.match(/^\/messages\/([^/?#]+)/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+function pathFromHref(href) {
+  try {
+    const u = new URL(href);
+    return u.pathname + u.search + u.hash;
+  } catch {
+    return '/discover';
+  }
+}
+
+function isLikelyIOS() {
+  const ua = (self.navigator && self.navigator.userAgent) || '';
+  if (/iPad|iPhone|iPod/i.test(ua)) return true;
+  return Boolean(
+    self.navigator &&
+      self.navigator.platform === 'MacIntel' &&
+      (self.navigator.maxTouchPoints || 0) > 1,
+  );
+}
+
+/** Recover /messages/:id when iOS drops notification.data but keeps tag. */
+function hrefFromNotification(notification) {
+  const data = notification && notification.data ? notification.data : {};
+  const fromData = data.url || data.path || null;
+  if (fromData) return resolveNotificationHref(fromData, '/discover');
+
+  const tag = notification && notification.tag ? String(notification.tag) : '';
+  if (tag.startsWith('msg-') && tag.length > 4) {
+    return resolveNotificationHref('/messages/' + tag.slice(4), '/discover');
+  }
+  if (tag.startsWith('call-') && tag.length > 5) {
+    return resolveNotificationHref('/messages/' + tag.slice(5), '/discover');
+  }
+  if (data.otherId) {
+    return resolveNotificationHref('/messages/' + data.otherId, '/discover');
+  }
+  return resolveNotificationHref(null, '/discover');
+}
+
+/**
+ * Mirror of frontend/src/lib/swPushPolicy.ts — keep in sync.
+ * Incoming calls ALWAYS show a notification. A frozen/background PWA can still
+ * look "visible" while the socket is dead; suppressing the ring drops the call.
+ */
+function shouldShowPushNotification(kind, hasFocusedVisibleClient, clientPath, notifPath) {
+  if (kind === 'call') return true;
+  if (!hasFocusedVisibleClient) return true;
+  if (clientPath && notifPath && clientPath === notifPath) return false;
+  return true;
+}
 
 self.addEventListener('push', (event) => {
   let data = {};
@@ -8,54 +122,121 @@ self.addEventListener('push', (event) => {
     if (event.data) data = event.data.json();
   } catch {}
 
-  const title = data.title || 'MenRush';
-  const url = data.url || '/discover';
-  const options = {
-    body: data.body || 'New activity on MenRush',
-    icon: data.icon || '/brand/icon-192.png',
-    badge: '/brand/icon-48.png',
-    // Per-conversation tag collapses repeats so a chat doesn't spam the tray.
-    tag: data.tag || 'menrush',
-    renotify: true,
-    data: { url },
-  };
-
+  const href = resolveNotificationHref(data.url, '/discover');
+  const path = pathFromHref(href);
+  const otherId = peerIdFromMessagesHref(href) || null;
+  const kind = data.kind || (String(data.tag || '').startsWith('call-') ? 'call' : 'message');
+  const isCall = kind === 'call';
+  const title = data.title || (isCall ? 'Incoming call' : 'MenRush');
+  // tag encodes peer id so notificationclick can recover if data is stripped.
+  const tag = data.tag || (otherId ? 'msg-' + otherId : isCall ? 'menrush-call' : 'menrush');
   event.waitUntil(
     (async () => {
-      // Dedupe with the foreground app: skip push only when a visible, focused tab
-      // is already on the target conversation — not for every focused tab.
+      const options = {
+        body: data.body || (isCall ? 'Incoming video call' : 'New activity on MenRush'),
+        icon: data.icon || '/brand/icon-192.png',
+        badge: '/brand/icon-48.png',
+        tag,
+        renotify: true,
+        silent: false,
+        requireInteraction: isCall,
+        vibrate: isCall ? [300, 120, 300, 120, 300, 120, 400] : [180, 80, 180],
+        data: { url: href, path, otherId, kind },
+        actions: isCall
+          ? [
+              { action: 'answer', title: 'Answer' },
+              { action: 'dismiss', title: 'Decline' },
+            ]
+          : [],
+      };
+
+      // Custom sound only when Legal/Brand clearance marker is present. Otherwise
+      // leave undefined so the OS plays its default notification tone.
+      if (isCall) {
+        const sound = await resolveCallNotificationSound();
+        if (sound) options.sound = sound;
+      }
+
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      const active = windows.find((c) => c.visibilityState === 'visible' && c.focused);
-      if (active) {
+      for (const client of windows) {
         try {
-          if (new URL(active.url).pathname === url) return;
+          client.postMessage({
+            type: 'MENRUSH_CHAT_HINT',
+            url: path,
+            otherId: otherId || undefined,
+            kind,
+          });
         } catch {
-          /* compare failed — show the notification */
+          /* ignore */
         }
       }
+
+      const active = windows.find((c) => c.visibilityState === 'visible' && c.focused);
+      let clientPath = null;
+      if (active) {
+        try {
+          clientPath = pathFromHref(active.url);
+        } catch {
+          clientPath = null;
+        }
+      }
+      const show = shouldShowPushNotification(
+        kind,
+        Boolean(active),
+        clientPath,
+        path,
+      );
+      if (!show) return;
       await self.registration.showNotification(title, options);
     })(),
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
+  const action = event.action;
   event.notification.close();
-  const url = event.notification.data?.url || '/discover';
+  if (action === 'dismiss') return;
+  const href = hrefFromNotification(event.notification);
+  const path = pathFromHref(href);
+  const ios = isLikelyIOS();
+
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       for (const client of windows) {
-        if (client.url.includes(self.location.origin)) {
-          await client.focus();
-          if ('navigate' in client) {
-            try {
-              await client.navigate(url);
-            } catch {}
-          }
-          return;
+        if (!client.url || !client.url.startsWith(self.location.origin)) continue;
+        try {
+          client.postMessage({ type: 'MENRUSH_NOTIFICATION_NAVIGATE', url: path });
+        } catch {
+          /* ignore */
         }
       }
-      await self.clients.openWindow(url);
+
+      // iPhone Home Screen PWAs: focus()+navigate() often no-ops after close().
+      // openWindow(absolute) is required to surface the deep link.
+      if (ios) {
+        const opened = await self.clients.openWindow(href);
+        if (opened) return;
+      }
+
+      for (const client of windows) {
+        if (!client.url || !client.url.startsWith(self.location.origin)) continue;
+        try {
+          if (typeof client.focus === 'function') await client.focus();
+        } catch {
+          /* ignore */
+        }
+        if ('navigate' in client && typeof client.navigate === 'function') {
+          try {
+            await client.navigate(href);
+          } catch {
+            /* ignore */
+          }
+        }
+        return;
+      }
+
+      await self.clients.openWindow(href);
     })(),
   );
 });

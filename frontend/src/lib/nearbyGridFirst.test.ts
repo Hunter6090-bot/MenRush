@@ -1,0 +1,88 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+describe('Nearby Grid-first Brand lock', () => {
+  it('phone PROFILE_TILE_GRID_CLASS stays three-up', async () => {
+    const { PROFILE_TILE_GRID_CLASS } = await import('./profileTileGrid.ts');
+    assert.match(PROFILE_TILE_GRID_CLASS, /\bgrid-cols-3\b/);
+    assert.doesNotMatch(PROFILE_TILE_GRID_CLASS, /\bgrid-cols-2\b/);
+  });
+
+  it('Map/Grid toggle never says MODE', () => {
+    const src = readFileSync(join(root, 'components/NearbyMapGridToggle.tsx'), 'utf8');
+    assert.doesNotMatch(src, /GRID MODE|MAP MODE|\bMODE\b/);
+    assert.match(src, /'Map'/);
+    assert.match(src, /'Grid'/);
+  });
+
+  it('Nearest/Latest sort labels stay Brand-safe (no dating-coded words)', () => {
+    const toggle = readFileSync(join(root, 'components/NearbySortToggle.tsx'), 'utf8');
+    const sortLib = readFileSync(join(root, 'lib/nearbySort.ts'), 'utf8');
+    // Assert on the exported label map + default — ignore prose comments.
+    const labelsBlock = sortLib.match(/NEARBY_SORT_LABELS[\s\S]*?};/);
+    assert.ok(labelsBlock);
+    assert.doesNotMatch(labelsBlock[0], /\bDate\b|\bDating\b|\bFriends\b|\bRomantic\b/i);
+    assert.match(labelsBlock[0], /Nearest/);
+    assert.match(labelsBlock[0], /Latest/);
+    assert.match(sortLib, /DEFAULT_NEARBY_SORT:\s*NearbySortMode\s*=\s*'nearest'/);
+    assert.match(toggle, /nearby-sort-toggle/);
+    assert.match(toggle, /NEARBY_SORT_LABELS/);
+  });
+
+  it('Layout discover mark has no MENRUSH type wordmark', () => {
+    const src = readFileSync(join(root, 'components/Layout.tsx'), 'utf8');
+    assert.doesNotMatch(src, />\s*MENRUSH\s*</);
+  });
+
+  it('MAP | COMMUNITY segmented control is gone', () => {
+    let missing = false;
+    try {
+      readFileSync(join(root, 'components/DiscoverySurfaceToggle.tsx'), 'utf8');
+    } catch {
+      missing = true;
+    }
+    assert.equal(missing, true);
+    const discover = readFileSync(join(root, 'pages/Discover.tsx'), 'utf8');
+    assert.doesNotMatch(discover, /DiscoverySurfaceToggle|MAP \| COMMUNITY/);
+    const feed = readFileSync(join(root, 'components/CommunityFeed.tsx'), 'utf8');
+    assert.doesNotMatch(feed, /DiscoverySurfaceToggle|showSurfaceToggle/);
+  });
+
+  it('Community is an own nav item at /stream between Nearby and Chat', () => {
+    const src = readFileSync(join(root, 'lib/navConfig.ts'), 'utf8');
+    assert.match(src, /to:\s*'\/stream'/);
+    assert.match(src, /IconCommunity/);
+    assert.match(src, /mobileTab:\s*true/);
+    assert.match(src, /desktopNav:\s*true/);
+    // Order in source: discover, then stream, then conversations (Chat).
+    const discoverAt = src.indexOf("to: '/discover'");
+    const streamAt = src.indexOf("to: '/stream'");
+    const chatAt = src.indexOf("to: '/conversations'");
+    assert.ok(discoverAt >= 0 && streamAt > discoverAt && chatAt > streamAt);
+  });
+
+  it('hides exact nearby count digits in public app UI', () => {
+    const discover = readFileSync(join(root, 'pages/Discover.tsx'), 'utf8');
+    assert.doesNotMatch(discover, /\$\{nearbyCount\}\s+\$\{nearbyCount === 1/);
+    assert.doesNotMatch(discover, /\{nearbyCount\}\s*(?:man|men)\s+nearby/);
+    assert.doesNotMatch(discover, /<span[^>]*>\{nearbyCount\}<\/span>/);
+    assert.match(discover, /'Men nearby'/);
+
+    const mapStatus = readFileSync(join(root, 'components/MapLiveStatus.tsx'), 'utf8');
+    assert.doesNotMatch(mapStatus, /\{nearbyCount\}\s+nearby/);
+    assert.match(mapStatus, /Men nearby/);
+
+    const layout = readFileSync(join(root, 'components/Layout.tsx'), 'utf8');
+    assert.doesNotMatch(layout, /\{discoveryShell\.nearbyCount\}\s+in your radius/);
+    assert.match(layout, /Men nearby/);
+
+    const grid = readFileSync(join(root, 'components/NearbyProfileGrid.tsx'), 'utf8');
+    assert.doesNotMatch(grid, /\$\{beyondRadiusCount\}\s+men are farther out/);
+    assert.match(grid, /Men are farther out/);
+  });
+});

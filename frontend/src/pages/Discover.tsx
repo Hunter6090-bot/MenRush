@@ -1,29 +1,49 @@
-import React, { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { EventDTO, HotSpotDTO, Mood, hotSpotsAPI, profileMetaAPI, pulseAPI, usersAPI } from '../api/client';
+import { readCachedMatches, refreshMatches } from '../lib/tabListCache';
 import { useLocationStore, useAuthStore } from '../hooks/store';
 import { NearbyUser } from '../components/ProfileCard';
 import { Layout } from '../components/Layout';
 import { PulseFab } from '../components/PulseFab';
+import { DiscoverChatDock, readDockOpen } from '../components/DiscoverChatDock';
 import { MoodPicker } from '../components/MoodPicker';
 import {
   DEFAULT_RADIUS_KM,
   MAX_RADIUS_KM,
-  clampRadiusKm,
+  RADIUS_ALL_KM,
+  formatRadiusControlLabel,
+  isDiscoveryAllScope,
+  migrateStoredRadiusKm,
+  normalizeRadiusKm,
+  radiusStepOptionsKm,
 } from '../lib/discoveryFormat';
+import { nearbyRosterFingerprint } from '../lib/nearbyRoster';
 import { ProfileDrawer } from '../components/ProfileDrawer';
 import { HotSpotSheet } from '../components/HotSpotSheet';
+import { HotSpotReviewsModal } from '../components/HotSpotReviewsModal';
+import { CruisingSearchBar } from '../components/CruisingSearchBar';
+import { CruisingSearchSheet } from '../components/CruisingSearchSheet';
 import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
 import { createHotSpotPinElement, HotSpotPin } from '../components/HotSpotPin';
 
 import { ActivationBanner } from '../components/ActivationBanner';
 import { DiscoveryFilterPills } from '../components/DiscoveryFilterPills';
 import { DiscoveryFilterPanel } from '../components/DiscoveryFilterPanel';
+import { MoreFiltersDrawer } from '../components/MoreFiltersDrawer';
 import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
+import { NearbyMapGridToggle, readNearbyView, writeNearbyView, type NearbyView } from '../components/NearbyMapGridToggle';
+import { NearbySortToggle } from '../components/NearbySortToggle';
 import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
-import { formatRadiusMiles } from '../lib/discoveryFormat';
 import type { ProfileSetupSnapshot } from '../lib/profileSetup';
+import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
+import { profileFieldBlockers } from '../lib/profileSetup';
+import {
+  LOCATION_DENIED_NOT_INCOMPLETE,
+  SAFARI_LOCATION_HOW_TO,
+} from '../lib/deviceLocation';
+import { resolveDistanceUnitSystem } from '../lib/localeUnits';
 import {
   DEFAULT_DISCOVERY_FILTERS,
   applyDiscoveryClientFilters,
@@ -31,9 +51,24 @@ import {
   type DiscoveryFilterState,
 } from '../lib/discoveryFilters';
 import { EventsRail } from '../components/EventsRail';
-import { isUserPulsing, distanceMeters } from '../lib/discovery';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
+import { countLiveOnline, isUserOnlineNow, isUserPulsing, distanceMeters } from '../lib/discovery';
+import { isFreshFaceNearby } from '../lib/newJoiner';
+import {
+  readNearbySort,
+  sortNearbyUsers,
+  writeNearbySort,
+  type NearbySortMode,
+} from '../lib/nearbySort';
+import type mapboxgl from 'mapbox-gl';
+import { loadMapbox, getLoadedMapbox } from '../lib/mapboxLazy';
+import {
+  cycleHitTestMapPins,
+  markMarkerCanvasPassThrough,
+  peoplePinHitRadiusPx,
+  hotSpotPinHitRadiusPx,
+  selfPinHitRadiusPx,
+  type HitCandidate,
+} from '../lib/mapMarkerHitTest';
 import {
   discoveryResultBucket,
   trackEventOnce,
@@ -43,12 +78,27 @@ import {
   RADIUS_CIRCLE_LAYER,
   RADIUS_CIRCLE_SOURCE,
 } from '../lib/mapRadiusCircle';
-import { ROUTE_LABELS } from '../lib/routeLabels';
 import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../lib/mapTheme';
 import { readLayerVisible, writeLayerVisible } from '../lib/discoveryLayers';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
-import { ProximitySlider } from '../components/ProximitySlider';
+import { MapDiscretionSlider } from '../components/MapDiscretionSlider';
 import { IconMapExpand, IconDiscover, IconHotSpots } from '../components/icons';
+import {
+  mapPinZIndex,
+  shouldShowHotSpotLabel,
+} from '../lib/mapPinOverlap';
+import { HOT_SPOTS_CHIP_LABEL, HOT_SPOTS_MAP_BANNER } from '../lib/cruiseCopy';
+import {
+  dismissHotSpotsMapBanner,
+  isHotSpotsMapBannerDismissed,
+} from '../lib/hotSpotsMapBanner';
+import {
+  formatFuzzPrivacyNote,
+  MAP_PIN_FUZZ_DEFAULT_M,
+  nearestMapPinFuzzStep,
+  privateMapPointAround,
+} from '../lib/mapPinFuzz';
+import { adjustHotSpotLiveCount, isHotSpotActive } from '../lib/hotSpotCounts';
 
 /** Map panel: swipe up to hide, swipe down to show, expand for large map. */
 type MapPanelMode = 'hidden' | 'default' | 'expanded';
@@ -56,14 +106,10 @@ const MAP_PANEL_STORAGE_KEY = 'menrush_nearby_map_panel';
 const DESKTOP_MAP_EXPAND_KEY = 'menrush_desktop_map_expanded';
 const DISCOVER_RADIUS_KEY = 'menrush_default_radius_km';
 
-function readMapPanelMode(): MapPanelMode {
-  try {
-    const raw = localStorage.getItem(MAP_PANEL_STORAGE_KEY);
-    if (raw === 'hidden' || raw === 'default' || raw === 'expanded') return raw;
-  } catch {
-    /* ignore */
-  }
-  return 'default';
+/** Cruise/hot-spot fetch stays a radius even when people All is UK+Ireland. */
+function cruiseSearchRadiusKm(discoveryKm: number): number {
+  const nearbyKm = isDiscoveryAllScope(discoveryKm) ? MAX_RADIUS_KM : discoveryKm;
+  return Math.max(nearbyKm, 25);
 }
 
 function readDesktopMapExpanded(): boolean {
@@ -74,12 +120,14 @@ function readDesktopMapExpanded(): boolean {
   }
 }
 
-/** Mobile heights — expanded is near-fullscreen clean map (NordVPN-style). */
+/**
+ * Mobile heights — expanded fills the Discover flex shell (not 100dvh).
+ * Using 100dvh inside main (already padded for header/tab) overflowed the
+ * viewport, reintroduced page rubber-band, and stole pan momentum after #216.
+ */
 function mapPanelHeightCss(mode: MapPanelMode): string {
   if (mode === 'hidden') return '0px';
-  if (mode === 'expanded') {
-    return 'calc(100dvh - var(--mobile-header-height) - var(--mobile-tab-bar-height) - 8px)';
-  }
+  if (mode === 'expanded') return '100%';
   return 'min(38vh, 360px)';
 }
 
@@ -88,55 +136,58 @@ function desktopMapHeightCss(expanded: boolean): string {
 }
 
 const mapChromeBtnClass =
-  'flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] text-[#3D2B0E] shadow-md backdrop-blur-md transition-transform active:scale-95';
+  'flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] text-[#3D2B0E] shadow-md backdrop-blur-md transition-transform active:scale-95 touch-manipulation pointer-events-auto';
 
-const mapStatusCardClass =
-  'pointer-events-none absolute bottom-3 left-3 z-10 flex items-center gap-2.5 rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[color-mix(in_srgb,#FFF8F0_94%,transparent)] px-3.5 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-md';
-
-/** Shared NordVPN-style map chrome — identical on desktop and mobile. */
+/**
+ * Shared map chrome — one control cluster per corner.
+ * TL: Discretion (pin randomization) · TR: layers + expand · BL: Chat FAB (dock).
+ * BR: Mapbox locate (+ zoom on desktop only; phone uses pinch).
+ * Search radius lives only in the list "All" miles dropdown (not duplicated here).
+ * Nearby/live count lives in the list pill only (no map status card).
+ */
 function MapFloatingChrome({
   expanded,
-  nearbyCount,
-  radiusLabel,
-  radiusKm,
+  mapPinFuzzM,
+  onMapPinFuzzChange,
   onToggleExpand,
-  onRadiusChange,
-  onExpandRadius,
   showHide = false,
   onHide,
-  statusBottomClass = 'bottom-3',
   peopleLayerOn,
   hotSpotsLayerOn,
   onTogglePeopleLayer,
   onToggleHotSpotsLayer,
+  onOpenCruisingSearch,
 }: {
   expanded: boolean;
-  nearbyCount: number;
-  radiusLabel: string;
-  radiusKm: number;
+  mapPinFuzzM: number;
+  onMapPinFuzzChange: (meters: number) => void;
   onToggleExpand: () => void;
-  onRadiusChange: (km: number) => void;
-  onExpandRadius: () => void;
   showHide?: boolean;
   onHide?: () => void;
-  statusBottomClass?: string;
   peopleLayerOn: boolean;
   hotSpotsLayerOn: boolean;
   onTogglePeopleLayer: () => void;
   onToggleHotSpotsLayer: () => void;
+  onOpenCruisingSearch?: () => void;
 }) {
+  // One-time Legal quiet-face dismiss — same localStorage pattern as match coach.
+  const [mapBannerDismissed, setMapBannerDismissed] = useState(isHotSpotsMapBannerDismissed);
+
   return (
     <>
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3">
         {!expanded ? (
-          <div className="pointer-events-auto">
-            <ProximitySlider value={radiusKm} onChange={onRadiusChange} variant="map" />
+          <div className="pointer-events-auto" data-map-chrome-corner="top-left">
+            <MapDiscretionSlider valueM={mapPinFuzzM} onChange={onMapPinFuzzChange} />
           </div>
         ) : (
           <span />
         )}
-        <div className="pointer-events-auto flex items-center gap-1.5">
-          {/* #67: compact independent People / Hot Spots layer control. */}
+        <div
+          className="pointer-events-auto flex items-center gap-1.5"
+          data-map-chrome-corner="top-right"
+        >
+          {/* #67: compact independent People / Cruise (Hot Spots) layer control. */}
           <button
             type="button"
             onClick={onTogglePeopleLayer}
@@ -152,12 +203,15 @@ function MapFloatingChrome({
             type="button"
             onClick={onToggleHotSpotsLayer}
             data-testid="layer-toggle-hotspots"
-            aria-label={hotSpotsLayerOn ? 'Hide Hot Spots' : 'Show Hot Spots'}
+            aria-label={hotSpotsLayerOn ? `Hide ${HOT_SPOTS_CHIP_LABEL}` : `Show ${HOT_SPOTS_CHIP_LABEL}`}
             aria-pressed={hotSpotsLayerOn}
-            title={hotSpotsLayerOn ? 'Hide Hot Spots' : 'Show Hot Spots'}
-            className={`${mapChromeBtnClass} ${hotSpotsLayerOn ? '' : 'opacity-45'}`}
+            title={hotSpotsLayerOn ? `Hide ${HOT_SPOTS_CHIP_LABEL}` : `Show ${HOT_SPOTS_CHIP_LABEL}`}
+            className={`${mapChromeBtnClass} ${hotSpotsLayerOn ? '' : 'opacity-45'} gap-1 px-2.5`}
           >
             <IconHotSpots size={18} />
+            <span className="hidden text-xs font-extrabold tracking-wide sm:inline">
+              {HOT_SPOTS_CHIP_LABEL}
+            </span>
           </button>
           <button
             type="button"
@@ -165,10 +219,11 @@ function MapFloatingChrome({
             data-testid="map-expand-toggle"
             aria-label={expanded ? 'Shrink map' : 'Expand map'}
             title={expanded ? 'Shrink map' : 'Expand map'}
-            className={mapChromeBtnClass}
+            className={`${mapChromeBtnClass} z-20 cursor-pointer`}
           >
             <IconMapExpand size={18} collapse={expanded} />
           </button>
+
           {showHide && !expanded && onHide ? (
             <button
               type="button"
@@ -185,29 +240,54 @@ function MapFloatingChrome({
           ) : null}
         </div>
       </div>
-      <div className={`${mapStatusCardClass} ${statusBottomClass}`}>
-        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[#3D7A2E]" />
-        <div className="min-w-0">
-          <p className="text-[13px] font-bold leading-tight text-[#1A1208]">{nearbyCount} nearby</p>
-          <p className="text-[11px] font-semibold text-[#3D7A2E]">
-            Live · {radiusLabel}
-            {nearbyCount === 0 && radiusKm < MAX_RADIUS_KM - 0.5 ? (
-              <button
-                type="button"
-                className="pointer-events-auto ml-1.5 font-extrabold text-[#B8732A] underline-offset-2 hover:underline"
-                onClick={onExpandRadius}
-              >
-                Expand radius
-              </button>
-            ) : null}
-          </p>
+      {onOpenCruisingSearch ? (
+        <div className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center px-3">
+          <div className="pointer-events-auto">
+            <CruisingSearchBar onOpen={onOpenCruisingSearch} />
+          </div>
         </div>
-      </div>
+      ) : null}
+      {hotSpotsLayerOn && !mapBannerDismissed ? (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-24 z-10 flex justify-center px-3"
+          data-testid="hotspots-map-helper"
+        >
+          <div
+            className="pointer-events-auto relative max-w-sm rounded-lg border py-1 pl-2.5 pr-6"
+            style={{
+              background: 'rgba(13,10,6,0.82)',
+              borderColor: 'rgba(196,131,42,0.28)',
+            }}
+            role="status"
+          >
+            <p
+              className="text-center text-xs font-semibold leading-snug tracking-wide"
+              style={{ color: 'rgba(240,224,192,0.82)' }}
+              data-testid="hotspots-map-helper-copy"
+            >
+              {HOT_SPOTS_MAP_BANNER}
+            </p>
+            <button
+              type="button"
+              data-testid="hotspots-map-helper-dismiss"
+              aria-label="Dismiss map disclaimer"
+              title="Dismiss"
+              onClick={() => {
+                setMapBannerDismissed(true);
+                dismissHotSpotsMapBanner();
+              }}
+              className="absolute -right-0.5 -top-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[15px] leading-none text-[rgba(240,224,192,0.85)] transition-colors hover:bg-[rgba(196,131,42,0.18)] hover:text-[rgba(240,224,192,1)]"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
 
-const INJECT_ID = '__discover_styles_v2__';
+const INJECT_ID = '__discover_styles_v3__';
 if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
   document.querySelectorAll('style[id^="__discover_styles"]').forEach((el) => el.remove());
   const s = document.createElement('style');
@@ -215,24 +295,72 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
   s.textContent = `
     .mapboxgl-popup-content { background: transparent !important; border: none !important; padding: 0 !important; box-shadow: none !important; }
     .mapboxgl-popup-tip { display: none !important; }
-    .mapboxgl-map,
-    .mapboxgl-canvas-container,
-    .mapboxgl-canvas {
+    .mapboxgl-map {
       width: 100% !important;
       height: 100% !important;
     }
-    /* Keep pan / pinch / wheel on the map — parent scroll must not steal gestures. */
+    .mapboxgl-canvas-container {
+      width: 100% !important;
+      height: 100% !important;
+    }
+    /* Do not override canvas.style.width / canvas.style.height with 100% !important.
+       Mapbox GL computes canvas.width = dpr * clientWidth and sets canvas.style.width = clientWidth px.
+       Overriding canvas with 100% distorts the WebGL aspect ratio and tile rendering,
+       causing stretched textures and stripe/glitch artifacts across device pixel ratios. */
+    /* Keep pan / pinch / wheel on the map — parent scroll must not steal gestures.
+       Mapbox sets touch-action via .mapboxgl-touch-* classes; force none so phone
+       web never falls back to pan-x/pan-y (which blocks JS pinch). */
     .discover-map-surface,
     .discover-map-surface .mapboxgl-map,
     .discover-map-surface .mapboxgl-canvas-container,
-    .discover-map-surface .mapboxgl-canvas,
     .discover-map-host {
       touch-action: none !important;
       overscroll-behavior: contain;
       pointer-events: auto !important;
     }
+    .discover-map-surface .mapboxgl-canvas {
+      touch-action: none !important;
+      pointer-events: auto !important;
+    }
     .discover-map-host {
       z-index: 0;
+    }
+    /* Soft continuous pan/pinch: HTML pins must NEVER capture touches.
+       Descendants can re-enable pointer-events even when the parent is none —
+       force the whole subtree off so the GL canvas owns drag/pinch + inertia.
+       Taps open profiles via map click hit-test (mapMarkerHitTest.ts). */
+    .discover-map-surface .mapboxgl-marker,
+    .discover-map-surface .mapboxgl-marker * {
+      pointer-events: none !important;
+      touch-action: none !important;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+    /* Geographic placement lock: Mapbox positions markers with transform on an
+       absolutely-positioned root. Never let app CSS/Tailwind override that to
+       relative/static — that stacks Cruise/people pins in a vertical column when
+       zoomed out (Al P0 / Mapbox #4048). */
+    .discover-map-surface .mapboxgl-marker {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+    }
+    /* While a finger is on the map, kill rubber-band / parent scroll steal
+       (Android Chrome + iPhone — same parent-scroll fight on both). */
+    html.discover-map-gesturing,
+    html.discover-map-gesturing body {
+      overscroll-behavior: none;
+    }
+    html.discover-map-gesturing .discover-map-surface {
+      overscroll-behavior: none;
+    }
+    /* Chrome overlays never steal map drag/pinch (except explicit buttons). */
+    .discover-map-surface .mapboxgl-ctrl-group {
+      pointer-events: auto;
+    }
+    .discover-map-surface .mapboxgl-ctrl-attrib {
+      pointer-events: none;
     }
     .discover-map-surface .mapboxgl-canvas-container.mapboxgl-interactive,
     .discover-map-surface .mapboxgl-canvas.mapboxgl-interactive {
@@ -241,6 +369,54 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
     .discover-map-surface .mapboxgl-canvas-container.mapboxgl-interactive:active,
     .discover-map-surface .mapboxgl-canvas.mapboxgl-interactive:active {
       cursor: grabbing;
+    }
+    /* BR cluster: Mapbox geolocate (+ zoom on desktop). Chat lives BL — never overlaps. */
+    .discover-map-surface .mapboxgl-ctrl-bottom-right {
+      bottom: 12px;
+      right: 12px;
+      z-index: 5;
+      display: flex;
+      flex-direction: column-reverse;
+      align-items: flex-end;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .discover-map-surface .mapboxgl-ctrl-bottom-right > * {
+      pointer-events: auto;
+      margin: 0 !important;
+    }
+    /* Single visual stack: zoom group then locate (no orphan under Chat). */
+    .discover-map-surface .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-group,
+    .discover-map-surface .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-geolocate {
+      box-shadow: 0 2px 8px rgba(0,0,0,0.28);
+    }
+    /* Al LOCK: phone pinch is enough — hide Mapbox ± zoom below lg; keep geolocate.
+       CSS (not init-time matchMedia) so resize/orientation never leaves orphan ±. */
+    @media (max-width: 1023px) {
+      .discover-map-surface .mapboxgl-ctrl-zoom-in,
+      .discover-map-surface .mapboxgl-ctrl-zoom-out {
+        display: none !important;
+      }
+      .discover-map-surface .mapboxgl-ctrl-group:has(.mapboxgl-ctrl-zoom-in) {
+        display: none !important;
+      }
+    }
+    .discover-map-surface[data-map-mode='expanded'] .mapboxgl-ctrl-bottom-right,
+    .discover-map-surface[data-map-expanded='1'] .mapboxgl-ctrl-bottom-right {
+      bottom: max(12px, env(safe-area-inset-bottom, 0px));
+      right: 12px;
+    }
+    .discover-map-surface .mapboxgl-ctrl-bottom-left {
+      bottom: 8px;
+      left: 8px;
+      z-index: 2;
+      max-width: calc(100% - 120px);
+      /* Stay under Chat FAB (bottom-12 left-3) — never fight BL chrome. */
+      transform: translateY(0);
+    }
+    .discover-map-surface .mapboxgl-ctrl-attrib {
+      margin: 0 !important;
+      opacity: 0.75;
     }
     /* Height handle: only the chip captures input — never a full-width veil. */
     .discover-map-drag-handle {
@@ -288,7 +464,67 @@ const INSECURE_GPS_NOTICE =
   'Live location on your phone needs a secure (HTTPS) link. Open menrush.com (HTTPS), then allow location in your browser.';
 
 const BROWSER_GPS_DENIED_NOTICE =
-  'Location is blocked. Allow it in browser or phone settings, then tap Allow location. Your exact pin is not shown publicly — only approximate distance.';
+  `${LOCATION_DENIED_NOT_INCOMPLETE} Location is blocked. ${SAFARI_LOCATION_HOW_TO}`;
+
+/**
+ * Re-assert Mapbox gesture handlers after layout thrash.
+ * Pinch zoom must stay enabled on phone web; disableRotation keeps pinch as zoom-only
+ * (rotation fighting the gesture feels like "pinch does nothing" on small screens).
+ * Never call while the map is mid-pan/zoom — re-enable resets inertia and feels sticky.
+ *
+ * dragPan options tune phone inertia (Android Chrome + iPhone) toward soft continuous.
+ */
+function assertMapGestures(map: mapboxgl.Map) {
+  try {
+    if (typeof map.isMoving === 'function' && map.isMoving()) return;
+  } catch {
+    /* map mid-teardown */
+  }
+  // Soft continuous phone pan — slightly lower deceleration than Mapbox defaults
+  // so a flick keeps rolling on Android and iPhone (HTML pins no longer steal).
+  try {
+    map.dragPan.enable({
+      linearity: 0.35,
+      easing: (t: number) => t * (2 - t),
+      maxSpeed: 1600,
+      deceleration: 2200,
+    });
+  } catch {
+    map.dragPan.enable();
+  }
+  map.scrollZoom.enable();
+  map.touchZoomRotate.enable();
+  map.touchZoomRotate.disableRotation();
+  map.doubleClickZoom.enable();
+  map.boxZoom.enable();
+  map.keyboard.enable();
+  const canvas = map.getCanvas();
+  const container = map.getCanvasContainer();
+  if (canvas) {
+    canvas.style.pointerEvents = 'auto';
+    canvas.style.touchAction = 'none';
+  }
+  if (container) {
+    container.style.pointerEvents = 'auto';
+    container.style.touchAction = 'none';
+    container.classList.add('mapboxgl-touch-zoom-rotate', 'mapboxgl-touch-drag-pan');
+  }
+}
+
+/** Lock document overscroll while a touch is active on the map surface (phone web). */
+function bindMapOverscrollLock(surface: HTMLElement): () => void {
+  const start = () => document.documentElement.classList.add('discover-map-gesturing');
+  const end = () => document.documentElement.classList.remove('discover-map-gesturing');
+  surface.addEventListener('touchstart', start, { passive: true });
+  surface.addEventListener('touchend', end, { passive: true });
+  surface.addEventListener('touchcancel', end, { passive: true });
+  return () => {
+    surface.removeEventListener('touchstart', start);
+    surface.removeEventListener('touchend', end);
+    surface.removeEventListener('touchcancel', end);
+    end();
+  };
+}
 
 /** Min interval between nearby roster API calls during live GPS. */
 const NEARBY_FETCH_MIN_MS = 20_000;
@@ -297,9 +533,39 @@ const MAP_PAN_MIN_METERS = 50;
 /** Min movement before re-querying nearby users on GPS drift. */
 const NEARBY_REFETCH_MIN_METERS = 80;
 
+function unpackNearbyResponse(data: unknown, headers?: Record<string, any>): {
+  users: NearbyUser[];
+  total: number;
+  hasMore: boolean;
+  page: number;
+} {
+  if (Array.isArray(data)) {
+    const totalFromHeader = Number(headers?.['x-total-count']);
+    return {
+      users: data,
+      total: Number.isFinite(totalFromHeader) && totalFromHeader >= data.length ? totalFromHeader : data.length,
+      hasMore: false,
+      page: 1,
+    };
+  }
+  if (data && typeof data === 'object' && Array.isArray((data as any).users)) {
+    const obj = data as any;
+    const users = obj.users as NearbyUser[];
+    const total = typeof obj.total === 'number' ? obj.total : users.length;
+    const hasMore = typeof obj.has_more === 'boolean' ? obj.has_more : false;
+    const page = typeof obj.page === 'number' ? obj.page : 1;
+    return { users, total, hasMore, page };
+  }
+  return { users: [], total: 0, hasMore: false, page: 1 };
+}
+
 export const Discover = () => {
   const authUser = useAuthStore((s) => s.user);
   const [users, setUsers] = useState<NearbyUser[]>([]);
+  const [totalNearbyCount, setTotalNearbyCount] = useState<number>(0);
+  const [nearbyPage, setNearbyPage] = useState<number>(1);
+  const [hasMoreNearby, setHasMoreNearby] = useState<boolean>(false);
+  const [loadingMoreNearby, setLoadingMoreNearby] = useState<boolean>(false);
   const [likedUsers, setLikedUsers] = useState<Set<string>>(new Set());
   /** Mutual only — messaging requires match both ways. */
   const [matchedUsers, setMatchedUsers] = useState<Set<string>>(new Set());
@@ -309,27 +575,58 @@ export const Discover = () => {
   const [radius, setRadius] = useState<number>(() => {
     try {
       const saved = Number(localStorage.getItem(DISCOVER_RADIUS_KEY));
-      if (Number.isFinite(saved) && saved > 0) return clampRadiusKm(saved);
+      if (Number.isFinite(saved) && saved > 0) {
+        return normalizeRadiusKm(migrateStoredRadiusKm(saved), resolveDistanceUnitSystem());
+      }
     } catch {
       /* ignore */
     }
     return DEFAULT_RADIUS_KM;
   });
-  const [mapPanelMode, setMapPanelMode] = useState<MapPanelMode>(() => readMapPanelMode());
+  const allScope = isDiscoveryAllScope(radius);
+  /** How far others see your pin — profiles.map_pin_fuzz_m (not search radius). */
+  const [mapPinFuzzM, setMapPinFuzzM] = useState<number>(MAP_PIN_FUZZ_DEFAULT_M);
+  const [nearbyView, setNearbyView] = useState<NearbyView>(() => readNearbyView());
+  const [nearbySort, setNearbySort] = useState<NearbySortMode>(() => readNearbySort());
+  const handleNearbySortChange = useCallback((next: NearbySortMode) => {
+    setNearbySort(next);
+    writeNearbySort(next);
+  }, []);
+  const [mapPanelMode, setMapPanelMode] = useState<MapPanelMode>(() => {
+    // Keep Grid/Map surface and map panel height in sync on first paint.
+    if (readNearbyView() === 'grid') return 'hidden';
+    const saved = (() => {
+      try {
+        const raw = localStorage.getItem(MAP_PANEL_STORAGE_KEY);
+        if (raw === 'hidden' || raw === 'default' || raw === 'expanded') return raw;
+      } catch {
+        /* ignore */
+      }
+      return 'default' as MapPanelMode;
+    })();
+    return saved === 'hidden' ? 'default' : saved;
+  });
   const [desktopMapExpanded, setDesktopMapExpanded] = useState(readDesktopMapExpanded);
+  const [chatDockOpen, setChatDockOpen] = useState(readDockOpen);
   const mapDragRef = useRef<{ startY: number; mode: MapPanelMode } | null>(null);
   const [discoveryFilters, setDiscoveryFilters] = useState<DiscoveryFilterState>(DEFAULT_DISCOVERY_FILTERS);
   const [pulseUntil, setPulseUntil] = useState<Date | null>(null);
   const [nextPulseAllowedAt, setNextPulseAllowedAt] = useState<string | null>(null);
   const [pulseIsPremium, setPulseIsPremium] = useState(false);
   const [pulseError, setPulseError] = useState('');
+  const [pulseOpenRequestId, setPulseOpenRequestId] = useState(0);
   const [selectedUser, setSelectedUser] = useState<NearbyUser | null>(null);
-  const { lat, lng, setLocation } = useLocationStore();
+  // Selectors — avoid re-rendering Discover on unrelated store writes.
+  const lat = useLocationStore((s) => s.lat);
+  const lng = useLocationStore((s) => s.lng);
+  const setLocation = useLocationStore((s) => s.setLocation);
   /** Seed from last known pin so returning to Nearby never jumps to a fake city. */
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(() =>
     lat != null && lng != null ? [lat, lng] : null,
   );
   const [mapLoaded, setMapLoaded] = useState(false);
+  /** Defer Mapbox init until Nearby list has painted (or timed out) so list/photos win the first paint. */
+  const [mapInitAllowed, setMapInitAllowed] = useState(false);
   /** Bumped whenever the basemap style is swapped so GL sources/layers (wiped by setStyle) re-add. */
   const [mapStyleVersion, setMapStyleVersion] = useState(0);
   const [locationNotice, setLocationNotice] = useState('');
@@ -370,6 +667,13 @@ export const Discover = () => {
   const fallbackTimerRef = useRef<number | null>(null);
   const usingFallbackLocationRef = useRef(false);
   const hasLiveGpsRef = useRef(false);
+  /** Stabilize GPS watch — do not recreate applyLiveGps when mapCenter/filters change. */
+  const mapCenterRef = useRef(mapCenter);
+  mapCenterRef.current = mapCenter;
+  const radiusRef = useRef(radius);
+  radiusRef.current = radius;
+  const discoveryFiltersRef = useRef(discoveryFilters);
+  discoveryFiltersRef.current = discoveryFilters;
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Map<string, { marker: mapboxgl.Marker; root: Root; user: NearbyUser }>>(new Map());
@@ -377,10 +681,13 @@ export const Discover = () => {
     Map<string, { marker: mapboxgl.Marker; root: Root; spot: HotSpotDTO }>
   >(new Map());
   const selfMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  /** Cycle through overlap piles on repeated taps (true lng/lat — no spiderfy). */
+  const lastPinHitIdRef = useRef<string | null>(null);
+  const [mapZoom, setMapZoom] = useState(12);
   const selfDotRef = useRef<HTMLDivElement | null>(null);
   const selfRootRef = useRef<Root | null>(null);
   const [hotSpots, setHotSpots] = useState<HotSpotDTO[]>([]);
-  // #67: independent People / Hot Spots layer toggles, session-only persistence.
+  // #67: independent People / Cruise layer toggles, session-only persistence.
   const [peopleLayerOn, setPeopleLayerOnState] = useState(() => readLayerVisible('people', true));
   const [hotSpotsLayerOn, setHotSpotsLayerOnState] = useState(() => readLayerVisible('hotSpots', true));
   const setPeopleLayerOn = useCallback((visible: boolean) => {
@@ -392,10 +699,31 @@ export const Discover = () => {
     writeLayerVisible('hotSpots', visible);
   }, []);
   const [selectedHotSpot, setSelectedHotSpot] = useState<HotSpotDTO | null>(null);
+  const [reviewsSpot, setReviewsSpot] = useState<HotSpotDTO | null>(null);
+  const [cruisingSearchOpen, setCruisingSearchOpen] = useState(false);
   const [hotSpotActing, setHotSpotActing] = useState(false);
+  const [actingCruisingSpotId, setActingCruisingSpotId] = useState<string | null>(null);
   const [hotSpotActionError, setHotSpotActionError] = useState('');
   const navigate = useNavigate();
   const isDesktopLayout = useIsDesktopLayout();
+
+  const handleCruisingSpotSelect = useCallback(
+    (spot: HotSpotDTO) => {
+      setSelectedHotSpot(spot);
+      if (!hotSpotsLayerOn) {
+        setHotSpotsLayerOn(true);
+      }
+      const map = mapRef.current;
+      if (map && Number.isFinite(spot.latitude) && Number.isFinite(spot.longitude)) {
+        map.flyTo({
+          center: [spot.longitude, spot.latitude],
+          zoom: Math.max(map.getZoom(), 13),
+          essential: true,
+        });
+      }
+    },
+    [hotSpotsLayerOn, setHotSpotsLayerOn],
+  );
 
   const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
   const tokenMissing = !mapboxToken || mapboxToken === '__SET_ME__';
@@ -406,10 +734,16 @@ export const Discover = () => {
       .then((res) => {
         setActivationProfile(res.data as ProfileSetupSnapshot);
         if (res.data?.mood) setMood(res.data.mood as Mood);
-        const d = res.data as { name?: string; photo_url?: string | null; age?: number };
+        const d = res.data as {
+          name?: string;
+          photo_url?: string | null;
+          map_photo_url?: string | null;
+          age?: number;
+        };
         useAuthStore.getState().patchUser({
           name: d.name,
           photo_url: d.photo_url ?? undefined,
+          map_photo_url: d.map_photo_url ?? null,
           age: d.age,
         });
       })
@@ -418,14 +752,19 @@ export const Discover = () => {
       .getMood()
       .then((res) => setMood(res.data.mood ?? null))
       .catch(() => {});
+    profileMetaAPI
+      .getMapPinFuzz()
+      .then((res) => setMapPinFuzzM(nearestMapPinFuzzStep(res.data.map_pin_fuzz_m)))
+      .catch(() => {});
     // Hydrate Match CTA after reload — outbound likes + mutual matches (separate).
+    // Also warm the shared Matches tab cache so /matches is never a cold start from Nearby.
     Promise.all([
       usersAPI.getSentLikes().catch(() => ({ data: { ids: [] as string[] } })),
-      usersAPI.getMatches().catch(() => ({ data: [] as Array<{ id: string }> })),
+      refreshMatches().catch(() => readCachedMatches() ?? { matches: [], likes: [] }),
     ])
-      .then(([sentRes, matchesRes]) => {
+      .then(([sentRes, matchesSnap]) => {
         const sent = sentRes.data?.ids ?? [];
-        const mutual = (matchesRes.data ?? []).map((m: { id: string }) => m.id).filter(Boolean);
+        const mutual = (matchesSnap.matches ?? []).map((m) => m.id).filter(Boolean);
         setMatchedUsers((prev) => new Set([...prev, ...mutual]));
         const likedIds = [...sent, ...mutual];
         if (likedIds.length > 0) {
@@ -453,19 +792,61 @@ export const Discover = () => {
       longitude: number,
       r: number,
       filters: DiscoveryFilterState,
-      options?: { background?: boolean },
+      options?: { background?: boolean; page?: number; append?: boolean },
     ) => {
-      if (!options?.background) setLoading(true);
+      const isAppend = Boolean(options?.append);
+      const targetPage = options?.page ?? (isAppend ? 2 : 1);
+      if (isAppend) {
+        setLoadingMoreNearby(true);
+      } else if (!options?.background) {
+        setLoading(true);
+      }
       try {
-        await usersAPI.updateLocation(latitude, longitude).catch(() => {});
-        const apiFilters = buildNearbyApiFilters(filters);
-        const res = await usersAPI.getNearby(latitude, longitude, r, apiFilters);
-        setUsers(res.data);
+        // getNearby already persists lat/lng — skip a redundant updateLocation RTT.
+        const apiFilters = {
+          ...buildNearbyApiFilters(filters),
+          page: targetPage,
+          scope: isDiscoveryAllScope(r) ? ('uk_ie' as const) : undefined,
+        };
+        const requestRadius = isDiscoveryAllScope(r) ? MAX_RADIUS_KM : r;
+        const res = await usersAPI.getNearby(latitude, longitude, requestRadius, apiFilters);
+        const { users: incomingUsers, total: incomingTotal, hasMore: incomingHasMore, page: incomingPage } =
+          unpackNearbyResponse(res.data, (res as any).headers);
+
+        setTotalNearbyCount(incomingTotal);
+        setHasMoreNearby(incomingHasMore);
+        setNearbyPage(incomingPage);
+
+        if (isAppend) {
+          setUsers((prev) => {
+            const existingIds = new Set(prev.map((u) => u.id));
+            const newItems = incomingUsers.filter((u) => !existingIds.has(u.id));
+            return newItems.length > 0 ? [...prev, ...newItems] : prev;
+          });
+        } else {
+          setUsers((prev) => {
+            if (prev.length <= incomingUsers.length) {
+              return nearbyRosterFingerprint(prev) === nearbyRosterFingerprint(incomingUsers) ? prev : incomingUsers;
+            }
+            // Preserve accumulated pages on background refresh while updating page 1 items in place
+            const incomingMap = new Map(incomingUsers.map((u) => [u.id, u]));
+            const updated = prev.map((u) => incomingMap.get(u.id) ?? u);
+            const prevIds = new Set(prev.map((u) => u.id));
+            const newItems = incomingUsers.filter((u) => !prevIds.has(u.id));
+            const merged = newItems.length > 0 ? [...newItems, ...updated] : updated;
+            return nearbyRosterFingerprint(prev) === nearbyRosterFingerprint(merged) ? prev : merged;
+          });
+        }
+
         // Cold density: count men outside current radius so Expand is intentional.
-        if (res.data.length === 0 && r < MAX_RADIUS_KM - 0.5) {
+        if (incomingTotal === 0 && !isDiscoveryAllScope(r)) {
           try {
-            const wider = await usersAPI.getNearby(latitude, longitude, MAX_RADIUS_KM, apiFilters);
-            setBeyondRadiusCount(wider.data?.length ?? 0);
+            const wider = await usersAPI.getNearby(latitude, longitude, MAX_RADIUS_KM, {
+              ...apiFilters,
+              scope: 'uk_ie',
+            });
+            const unpackedWider = unpackNearbyResponse(wider.data, (wider as any).headers);
+            setBeyondRadiusCount(unpackedWider.total);
           } catch {
             setBeyondRadiusCount(0);
           }
@@ -474,24 +855,48 @@ export const Discover = () => {
         }
         trackEventOnce(
           'first_discovery_load',
-          { outcome: 'succeeded', result_bucket: discoveryResultBucket(res.data.length) },
+          { outcome: 'succeeded', result_bucket: discoveryResultBucket(incomingTotal) },
           'first_discovery_load',
         );
         setError('');
       } catch {
-        setBeyondRadiusCount(0);
-        trackEventOnce(
-          'first_discovery_load',
-          { outcome: 'failed', result_bucket: 'unknown' },
-          'first_discovery_load',
-        );
-        setError('Could not load nearby users.');
+        if (!isAppend) {
+          setBeyondRadiusCount(0);
+          trackEventOnce(
+            'first_discovery_load',
+            { outcome: 'failed', result_bucket: 'unknown' },
+            'first_discovery_load',
+          );
+          setError('Could not load nearby users.');
+        }
       } finally {
-        setLoading(false);
+        if (isAppend) {
+          setLoadingMoreNearby(false);
+        } else {
+          setLoading(false);
+        }
+        // Allow Mapbox after the list request settles (success or fail).
+        setMapInitAllowed(true);
       }
     },
     [],
   );
+
+  const handleLoadMore = useCallback(() => {
+    if (loading || loadingMoreNearby || !hasMoreNearby || lat == null || lng == null) return;
+    const nextPage = nearbyPage + 1;
+    void fetchNearbyUsers(lat, lng, radius, discoveryFilters, {
+      page: nextPage,
+      append: true,
+    });
+  }, [loading, loadingMoreNearby, hasMoreNearby, lat, lng, radius, discoveryFilters, nearbyPage, fetchNearbyUsers]);
+
+  // Safety: if Nearby never runs (no GPS), still allow map after a short idle.
+  useEffect(() => {
+    if (mapInitAllowed) return;
+    const t = window.setTimeout(() => setMapInitAllowed(true), 2500);
+    return () => window.clearTimeout(t);
+  }, [mapInitAllowed]);
 
   /** Drop every "allow location" surface the moment we have a usable pin. */
   const clearLocationPrompts = useCallback((latitude: number, longitude: number) => {
@@ -532,23 +937,25 @@ export const Discover = () => {
       hasLiveGpsRef.current = true;
       clearLocationPrompts(latitude, longitude);
 
+      // Store gates sub-15m jitter; self marker still tracks every tick below.
       setLocation(latitude, longitude);
 
+      const currentCenter = mapCenterRef.current;
       const farFromPin =
-        mapCenter != null &&
-        distanceMeters(mapCenter[0], mapCenter[1], latitude, longitude) >= MAP_PAN_MIN_METERS;
+        currentCenter != null &&
+        distanceMeters(currentCenter[0], currentCenter[1], latitude, longitude) >= MAP_PAN_MIN_METERS;
       // Never steal the camera after the user has navigated the map themselves.
       const shouldRecenter =
         recoveringFromFallback ||
         options?.force ||
         (!userMovedMapRef.current && (!mapRef.current || farFromPin));
 
-      if (!mapCenter || shouldRecenter) {
+      if (!currentCenter || shouldRecenter) {
         setMapCenter([latitude, longitude]);
       }
 
       if (mapRef.current) {
-        selfMarkerRef.current?.setLngLat([longitude, latitude]);
+        // Self pin position is owned by the discretion-fuzz effect (what others see).
         if (shouldRecenter) {
           if (options?.force || recoveringFromFallback) {
             userMovedMapRef.current = false;
@@ -575,12 +982,18 @@ export const Discover = () => {
       const isBackground = lastFetch != null && !recoveringFromFallback;
       hasFetchedRef.current = true;
       lastGpsFetchRef.current = { lat: latitude, lng: longitude, at: now };
-      fetchNearbyUsers(latitude, longitude, radius, discoveryFilters, { background: isBackground });
+      fetchNearbyUsers(
+        latitude,
+        longitude,
+        radiusRef.current,
+        discoveryFiltersRef.current,
+        { background: isBackground },
+      );
     },
-    [clearLocationPrompts, fetchNearbyUsers, mapCenter, radius, setLocation, discoveryFilters],
+    [clearLocationPrompts, fetchNearbyUsers, setLocation],
   );
 
-  // Customer-facing "enable location" — high accuracy then low-accuracy fallback.
+  // Customer-facing "enable location" — persist pin even if Nearby fetch fails.
   const handleEnableLocation = useCallback(() => {
     void (async () => {
       setLocationNotice('');
@@ -589,7 +1002,19 @@ export const Discover = () => {
       const result = await requestDeviceLocation();
       if (!result.ok) {
         setNeedsLocationGate(true);
-        setLocationNotice(result.message);
+        setLocationNotice(
+          result.error === 'denied'
+            ? BROWSER_GPS_DENIED_NOTICE
+            : result.message,
+        );
+        setLoading(false);
+        return;
+      }
+      try {
+        await usersAPI.updateLocation(result.lat, result.lng);
+      } catch {
+        setNeedsLocationGate(true);
+        setLocationNotice('Got your position but could not save it. Check your connection and try again.');
         setLoading(false);
         return;
       }
@@ -618,7 +1043,7 @@ export const Discover = () => {
         saved.lat,
         saved.lng,
         window.isSecureContext
-          ? 'Using your last saved location — refreshing GPS…'
+          ? 'Using your last saved location. Refreshing GPS…'
           : INSECURE_GPS_NOTICE,
         true,
       );
@@ -690,12 +1115,13 @@ export const Discover = () => {
 
   useEffect(() => {
     if (!pulseUntil) return;
-    const id = window.setInterval(() => {
-      if (pulseUntil.getTime() <= Date.now()) {
-        setPulseUntil(null);
-      }
-    }, 1000);
-    return () => window.clearInterval(id);
+    const ms = Math.max(250, pulseUntil.getTime() - Date.now());
+    const id = window.setTimeout(() => {
+      setPulseUntil((current) =>
+        current && current.getTime() <= Date.now() ? null : current,
+      );
+    }, ms);
+    return () => window.clearTimeout(id);
   }, [pulseUntil]);
 
   useEffect(() => {
@@ -794,7 +1220,7 @@ export const Discover = () => {
 
   const handleRadiusChange = useCallback(
     (next: number) => {
-      const clamped = clampRadiusKm(next);
+      const clamped = normalizeRadiusKm(migrateStoredRadiusKm(next), resolveDistanceUnitSystem());
       setRadius(clamped);
       try {
         localStorage.setItem(DISCOVER_RADIUS_KEY, String(clamped));
@@ -808,32 +1234,50 @@ export const Discover = () => {
     [lat, lng, discoveryFilters, fetchNearbyUsers],
   );
 
+  const handleMapPinFuzzChange = useCallback((next: number) => {
+    const snapped = nearestMapPinFuzzStep(next);
+    setMapPinFuzzM(snapped);
+    void profileMetaAPI.setMapPinFuzz(snapped).catch(() => {
+      /* keep optimistic UI; next hydrate corrects */
+    });
+  }, []);
+
   /**
    * Expand search radius — was stepping one tiny mile tier (felt broken).
    * If we already know men exist farther out, jump to max. Otherwise big steps.
    */
   const handleRadiusCycle = useCallback(() => {
-    if (radius >= MAX_RADIUS_KM - 0.5) return;
+    if (isDiscoveryAllScope(radius)) return;
 
     if (beyondRadiusCount > 0) {
-      handleRadiusChange(MAX_RADIUS_KM);
+      handleRadiusChange(RADIUS_ALL_KM);
       return;
     }
 
-    // Big, noticeable jumps: ~5 → 25 → 50 → 100 mi (API max)
-    const stepsKm = [5, 10, 25, 50, 80, MAX_RADIUS_KM];
-    const next = stepsKm.find((km) => km > radius + 0.4) ?? MAX_RADIUS_KM;
+    const stepsKm = radiusStepOptionsKm(resolveDistanceUnitSystem());
+    const next = stepsKm.find((km) => km > radius + 0.4) ?? RADIUS_ALL_KM;
     handleRadiusChange(next);
   }, [radius, beyondRadiusCount, handleRadiusChange]);
 
   const setMapPanel = useCallback((mode: MapPanelMode) => {
     setMapPanelMode(mode);
+    const view: NearbyView = mode === 'hidden' ? 'grid' : 'map';
+    setNearbyView(view);
+    writeNearbyView(view);
     try {
       localStorage.setItem(MAP_PANEL_STORAGE_KEY, mode);
     } catch {
       /* ignore */
     }
   }, []);
+
+  const setNearbySurface = useCallback(
+    (view: NearbyView) => {
+      if (view === 'grid') setMapPanel('hidden');
+      else setMapPanel(mapPanelMode === 'expanded' ? 'expanded' : 'default');
+    },
+    [mapPanelMode, setMapPanel],
+  );
 
   const toggleDesktopMapExpanded = useCallback(() => {
     setDesktopMapExpanded((prev) => {
@@ -874,46 +1318,44 @@ export const Discover = () => {
   );
 
   // Mapbox needs resize when the collapsible panel / breakpoint / sidebar changes.
-  // Also re-assert interaction handlers — some layout thrash left Mapbox "dead".
+  // Re-assert gestures only when idle — never mid-pan (kills inertia / feels sticky).
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    let cancelled = false;
+    let raf2 = 0;
     const revive = () => {
+      if (cancelled) return;
       try {
         map.resize();
-        map.dragPan.enable();
-        map.scrollZoom.enable();
-        map.touchZoomRotate.enable();
-        map.doubleClickZoom.enable();
-        map.boxZoom.enable();
-        map.keyboard.enable();
-        const canvas = map.getCanvas();
-        const container = map.getCanvasContainer();
-        if (canvas) {
-          canvas.style.pointerEvents = 'auto';
-          canvas.style.touchAction = 'none';
-        }
-        if (container) {
-          container.style.pointerEvents = 'auto';
-          container.style.touchAction = 'none';
-        }
+        assertMapGestures(map);
       } catch {
         /* map mid-teardown */
       }
     };
-    const t1 = window.setTimeout(revive, 50);
-    const t2 = window.setTimeout(revive, 320);
+    const raf1 = window.requestAnimationFrame(() => {
+      revive();
+      raf2 = window.requestAnimationFrame(revive);
+    });
     const onShellResize = () => {
-      window.setTimeout(revive, 50);
-      window.setTimeout(revive, 320);
+      window.requestAnimationFrame(revive);
     };
     window.addEventListener('menrush:shell-resize', onShellResize);
     return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
+      cancelled = true;
+      window.cancelAnimationFrame(raf1);
+      if (raf2) window.cancelAnimationFrame(raf2);
       window.removeEventListener('menrush:shell-resize', onShellResize);
     };
   }, [mapPanelMode, desktopMapExpanded, isDesktopLayout, mapLoaded]);
+
+  // Phone web (Android + iPhone): while touching the map, suppress document rubber-band.
+  useEffect(() => {
+    if (!mapLoaded) return;
+    const surfaces = document.querySelectorAll<HTMLElement>('.discover-map-surface');
+    const cleanups = Array.from(surfaces).map((el) => bindMapOverscrollLock(el));
+    return () => cleanups.forEach((fn) => fn());
+  }, [mapLoaded, mapPanelMode, desktopMapExpanded, isDesktopLayout, nearbyView]);
 
   const handleDiscoveryFiltersChange = useCallback(
     (next: DiscoveryFilterState) => {
@@ -959,29 +1401,46 @@ export const Discover = () => {
     }
   }, [lat, lng, radius, discoveryFilters, fetchNearbyUsers]);
 
-  // #67: check-in/out from the in-map Hot Spot sheet — same hotSpotsAPI calls as the
+  // #67: check-in/out from the in-map Cruise sheet — same hotSpotsAPI calls as the
   // standalone HotSpots page, refreshing this map's own hotSpots list on success.
   const handleHotSpotCheckIn = useCallback(
     async (spot: HotSpotDTO, anonymous: boolean) => {
       setHotSpotActing(true);
+      setActingCruisingSpotId(spot.id);
       setHotSpotActionError('');
       try {
+        let updatedSpot: HotSpotDTO | undefined;
         if (spot.is_checked_in) {
           await hotSpotsAPI.checkOut(spot.id);
+          updatedSpot = {
+            ...spot,
+            is_checked_in: false,
+            ...adjustHotSpotLiveCount(spot, -1),
+          };
         } else {
-          await hotSpotsAPI.checkIn(spot.id, anonymous);
+          const res = await hotSpotsAPI.checkIn(spot.id, anonymous);
+          updatedSpot = res.data?.spot ?? {
+            ...spot,
+            is_checked_in: true,
+            my_checkin_anonymous: anonymous,
+            ...adjustHotSpotLiveCount(spot, 1),
+          };
+        }
+        if (selectedHotSpot && selectedHotSpot.id === spot.id && updatedSpot) {
+          setSelectedHotSpot(updatedSpot);
         }
         if (lat != null && lng != null) {
-          const res = await hotSpotsAPI.listNearby(lat, lng, Math.max(radius, 25));
+          const res = await hotSpotsAPI.listNearby(lat, lng, cruiseSearchRadiusKm(radius));
           setHotSpots(res.data.spots ?? []);
         }
       } catch {
         setHotSpotActionError('Check-in failed. Try again.');
       } finally {
         setHotSpotActing(false);
+        setActingCruisingSpotId(null);
       }
     },
-    [lat, lng, radius],
+    [lat, lng, radius, selectedHotSpot],
   );
 
   const handleLike = useCallback(
@@ -1044,107 +1503,124 @@ export const Discover = () => {
     if (mapRef.current) return;
     // Never open Mapbox on a fake city. Wait for last-known or live GPS.
     if (mapCenter == null) return;
+    // Let Nearby list + thumbs paint before Mapbox competes for main-thread / bandwidth.
+    if (!mapInitAllowed) return;
 
     const startCenter = mapCenter;
-    mapboxgl.accessToken = mapboxToken!;
-    userMovedMapRef.current = false;
-    const map = new mapboxgl.Map({
-      container: host,
-      style: mapboxStyleForTheme(resolvedThemeNow()),
-      center: [startCenter[1], startCenter[0]],
-      zoom: 14,
-      attributionControl: false,
-      // Explicit — never inherit a broken/disabled handler state from prior mounts.
-      interactive: true,
-      dragPan: true,
-      dragRotate: false,
-      scrollZoom: true,
-      boxZoom: true,
-      doubleClickZoom: true,
-      touchZoomRotate: true,
-      touchPitch: false,
-      keyboard: true,
-      // One-finger pan + wheel zoom must work; page scroll is handled outside the map.
-      cooperativeGestures: false,
-    });
-    map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
-    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
-    const geolocate = new mapboxgl.GeolocateControl({
-      positionOptions: { enableHighAccuracy: true, maximumAge: 15_000 },
-      trackUserLocation: false,
-      showUserHeading: false,
-    });
-    map.addControl(geolocate, 'bottom-right');
-    geolocate.on('geolocate', () => {
+    let cancelled = false;
+    let map: mapboxgl.Map | null = null;
+    let guardPinch: ((e: TouchEvent) => void) | null = null;
+    let resizeMap: (() => void) | null = null;
+
+    void (async () => {
+      const mapboxgl = await loadMapbox();
+      if (cancelled || !mapContainerRef.current || mapRef.current) return;
+
+      mapboxgl.accessToken = mapboxToken!;
       userMovedMapRef.current = false;
-    });
-    map.on('dragstart', () => {
-      userMovedMapRef.current = true;
-    });
-    map.on('zoomstart', (e: mapboxgl.MapEvent | Event) => {
-      // Only user gestures (wheel / buttons / pinch) — not style load.
-      if (e && typeof e === 'object' && 'originalEvent' in e && (e as { originalEvent?: Event }).originalEvent) {
+      map = new mapboxgl.Map({
+        container: host,
+        style: mapboxStyleForTheme(resolvedThemeNow()),
+        center: [startCenter[1], startCenter[0]],
+        zoom: 14,
+        // Mercator only — globe at mid-zoom can drift HTML markers off lng/lat.
+        projection: 'mercator',
+        attributionControl: false,
+        interactive: true,
+        dragPan: true,
+        dragRotate: false,
+        scrollZoom: true,
+        boxZoom: true,
+        doubleClickZoom: true,
+        touchZoomRotate: true,
+        touchPitch: false,
+        keyboard: true,
+        cooperativeGestures: false,
+      });
+      map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
+      // Always register Mapbox ±; CSS hides it below lg so phone pinch is enough
+      // and desktop→mobile resize does not leave orphan zoom chrome.
+      map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
+      const geolocate = new mapboxgl.GeolocateControl({
+        positionOptions: { enableHighAccuracy: true, maximumAge: 15_000 },
+        trackUserLocation: false,
+        showUserHeading: false,
+      });
+      map.addControl(geolocate, 'bottom-right');
+      geolocate.on('geolocate', () => {
+        userMovedMapRef.current = false;
+      });
+      map.on('dragstart', () => {
         userMovedMapRef.current = true;
-      }
-    });
-    map.on('rotatestart', (e: mapboxgl.MapEvent | Event) => {
-      if (e && typeof e === 'object' && 'originalEvent' in e && (e as { originalEvent?: Event }).originalEvent) {
-        userMovedMapRef.current = true;
-      }
-    });
-    const resizeMap = () => map.resize();
-    map.on('load', () => {
-      // Re-assert handlers in case a prior layout left Mapbox in a dead state.
-      map.dragPan.enable();
-      map.scrollZoom.enable();
-      map.touchZoomRotate.enable();
-      map.doubleClickZoom.enable();
-      map.boxZoom.enable();
-      map.keyboard.enable();
-      const canvas = map.getCanvas();
-      const container = map.getCanvasContainer();
-      if (canvas) {
-        canvas.style.pointerEvents = 'auto';
-        canvas.style.touchAction = 'none';
-      }
-      if (container) {
-        container.style.pointerEvents = 'auto';
-        container.style.touchAction = 'none';
-      }
-      resizeMap();
-      setMapLoaded(true);
-    });
-    window.addEventListener('resize', resizeMap);
-    requestAnimationFrame(resizeMap);
-    window.setTimeout(resizeMap, 100);
-    window.setTimeout(resizeMap, 500);
+      });
+      map.on('zoomstart', (e: mapboxgl.MapEvent | Event) => {
+        if (e && typeof e === 'object' && 'originalEvent' in e && (e as { originalEvent?: Event }).originalEvent) {
+          userMovedMapRef.current = true;
+        }
+      });
+      map.on('rotatestart', (e: mapboxgl.MapEvent | Event) => {
+        if (e && typeof e === 'object' && 'originalEvent' in e && (e as { originalEvent?: Event }).originalEvent) {
+          userMovedMapRef.current = true;
+        }
+      });
+      resizeMap = () => map?.resize();
+      map.on('load', () => {
+        if (!map) return;
+        assertMapGestures(map);
+        resizeMap?.();
+        setMapZoom(map.getZoom());
+        setMapLoaded(true);
+      });
+      map.on('zoomend', () => {
+        if (!map) return;
+        setMapZoom(map.getZoom());
+      });
+      guardPinch = (e: TouchEvent) => {
+        if (e.touches.length >= 2) e.preventDefault();
+      };
+      host.addEventListener('touchmove', guardPinch, { passive: false });
+      window.addEventListener('resize', resizeMap);
+      requestAnimationFrame(resizeMap);
+      window.setTimeout(resizeMap, 100);
+      window.setTimeout(resizeMap, 500);
 
-    const selfEl = document.createElement('div');
-    selfEl.style.width = '48px';
-    selfEl.style.height = '48px';
-    selfDotRef.current = selfEl;
-    const selfRoot = createRoot(selfEl);
-    selfRootRef.current = selfRoot;
-    const selfUser = useAuthStore.getState().user;
-    selfRoot.render(
-      <MapMarker
-        user={{
-          id: selfUser?.id ?? 'self',
-          name: selfUser?.name ?? 'You',
-          photo_url: selfUser?.photo_url,
-          age: selfUser?.age,
-          isPulsing: false,
-        }}
-        size={48}
-      />,
-    );
-    selfMarkerRef.current = new mapboxgl.Marker({ element: selfEl })
-      .setLngLat([startCenter[1], startCenter[0]])
-      .addTo(map);
+      const selfEl = document.createElement('div');
+      selfEl.style.width = '48px';
+      selfEl.style.height = '48px';
+      selfDotRef.current = selfEl;
+      const selfRoot = createRoot(selfEl);
+      selfRootRef.current = selfRoot;
+      const selfUser = useAuthStore.getState().user;
+      selfRoot.render(
+        <MapMarker
+          user={{
+            id: selfUser?.id ?? 'self',
+            name: selfUser?.name ?? 'You',
+            photo_url:
+              discoveryPhotoUrl(selfUser?.map_photo_url, selfUser?.photo_url) ?? undefined,
+            age: selfUser?.age,
+            isPulsing: false,
+          }}
+          size={48}
+        />,
+      );
+      selfEl.style.cursor = 'pointer';
+      markMarkerCanvasPassThrough(selfEl);
+      selfEl.setAttribute('aria-label', 'Open your profile');
+      selfMarkerRef.current = new mapboxgl.Marker({ element: selfEl })
+        .setLngLat([startCenter[1], startCenter[0]])
+        .addTo(map);
+      markMarkerCanvasPassThrough(selfEl);
 
-    mapRef.current = map;
+      mapRef.current = map;
+      // E2E / BOA90 tooling: read center+zoom after touch pan across pins.
+      (window as unknown as { __menrushDiscoverMap?: mapboxgl.Map }).__menrushDiscoverMap = map;
+    })();
+
     return () => {
-      window.removeEventListener('resize', resizeMap);
+      cancelled = true;
+      if (guardPinch) host.removeEventListener('touchmove', guardPinch);
+      if (resizeMap) window.removeEventListener('resize', resizeMap);
       markersRef.current.forEach(({ marker, root }) => {
         marker.remove();
         setTimeout(() => root.unmount(), 0);
@@ -1155,10 +1631,18 @@ export const Discover = () => {
         setTimeout(() => root.unmount(), 0);
       });
       hotSpotMarkersRef.current.clear();
-      if (map.getLayer(RADIUS_CIRCLE_LAYER)) map.removeLayer(RADIUS_CIRCLE_LAYER);
-      if (map.getSource(RADIUS_CIRCLE_SOURCE)) map.removeSource(RADIUS_CIRCLE_SOURCE);
-      map.remove();
+      const live = mapRef.current;
+      if (live) {
+        if (live.getLayer(RADIUS_CIRCLE_LAYER)) live.removeLayer(RADIUS_CIRCLE_LAYER);
+        if (live.getSource(RADIUS_CIRCLE_SOURCE)) live.removeSource(RADIUS_CIRCLE_SOURCE);
+        live.remove();
+      }
       mapRef.current = null;
+      try {
+        delete (window as unknown as { __menrushDiscoverMap?: mapboxgl.Map }).__menrushDiscoverMap;
+      } catch {
+        /* ignore */
+      }
       selfMarkerRef.current = null;
       selfDotRef.current = null;
       const root = selfRootRef.current;
@@ -1168,8 +1652,16 @@ export const Discover = () => {
     };
     // Depend on "has center" not every GPS tick — later moves use easeTo in applyLiveGps.
     // useLayoutEffect + isDesktopLayout: host is in the DOM before we construct Mapbox.
+    // Desktop Grid-first: map host only mounts when nearbyView === 'map'.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mapCenter coords intentionally excluded
-  }, [mapboxToken, tokenMissing, isDesktopLayout, mapCenter != null]);
+  }, [
+    mapboxToken,
+    tokenMissing,
+    isDesktopLayout,
+    mapCenter != null,
+    mapInitAllowed,
+    isDesktopLayout ? nearbyView === 'map' : true,
+  ]);
 
   // Keep the basemap in sync with explicit theme toggles while Discover stays mounted.
   // setStyle wipes GL sources/layers (not DOM markers) — bump mapStyleVersion on style.load
@@ -1186,18 +1678,69 @@ export const Discover = () => {
     return () => window.removeEventListener(THEME_CHANGED_EVENT, onThemeChanged);
   }, []);
 
+  // Explicit Nearest (distance-first) vs Latest (fresh faces / newest first).
+  const sortedUsers = useMemo(
+    () => sortNearbyUsers(users, nearbySort),
+    [users, nearbySort],
+  );
+
+  const displayUsers = useMemo(
+    () => applyDiscoveryClientFilters(sortedUsers, discoveryFilters),
+    [sortedUsers, discoveryFilters],
+  );
+  const nearbyCount = totalNearbyCount > 0 ? Math.max(totalNearbyCount, displayUsers.length) : displayUsers.length;
+  /** Online-now presence among the filtered nearby roster — never radius "All". */
+  const liveCount = useMemo(() => countLiveOnline(displayUsers), [displayUsers]);
+
+  // Requirement 4: Map pins accumulate all pages so the map is not stuck at first page only.
+  useEffect(() => {
+    if (!hasMoreNearby || loading || loadingMoreNearby) return;
+    if (lat == null || lng == null) return;
+    const isMapActive = isDesktopLayout
+      ? nearbyView === 'map' || desktopMapExpanded
+      : mapPanelMode !== 'hidden';
+    if (!isMapActive) return;
+
+    const timer = window.setTimeout(() => {
+      void fetchNearbyUsers(lat, lng, radius, discoveryFilters, {
+        page: nearbyPage + 1,
+        append: true,
+        background: true,
+      });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [
+    hasMoreNearby,
+    loading,
+    loadingMoreNearby,
+    lat,
+    lng,
+    radius,
+    discoveryFilters,
+    nearbyPage,
+    isDesktopLayout,
+    nearbyView,
+    desktopMapExpanded,
+    mapPanelMode,
+    fetchNearbyUsers,
+  ]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
 
     const visibleIds = new Set<string>();
+    // Reuse the memoized filtered roster — do not re-run client filters on every paint.
+    // Roster identity is gated in fetchNearbyUsers via nearbyRosterFingerprint.
+    const mapUsers = displayUsers;
 
     // People layer off: leave visibleIds empty so the cleanup loop below removes every
     // existing marker. Self marker is independent (selfMarkerRef) and stays regardless.
-    if (peopleLayerOn) users.forEach((user) => {
+    if (peopleLayerOn) mapUsers.forEach((user) => {
       if (user.lat == null || user.lng == null) return;
       visibleIds.add(user.id);
       const isPulsing = isUserPulsing(user);
+      const isNew = isFreshFaceNearby(user);
       const markerUser = {
         id: user.id,
         name: user.name,
@@ -1205,6 +1748,9 @@ export const Discover = () => {
         age: user.age,
         isPulsing,
         isVerified: !!(user as any).is_verified,
+        isNew,
+        online: isUserOnlineNow(user),
+        last_seen: user.last_seen,
       };
       const lngLat: [number, number] = [Number(user.lng), Number(user.lat)];
       const existing = markersRef.current.get(user.id);
@@ -1226,13 +1772,18 @@ export const Discover = () => {
           prev.name !== user.name ||
           prev.photo_url !== user.photo_url ||
           isUserPulsing(prev) !== isPulsing ||
-          !!(prev as any).is_verified !== !!(user as any).is_verified;
+          !!(prev as any).is_verified !== !!(user as any).is_verified ||
+          isFreshFaceNearby(prev) !== isNew ||
+          isUserOnlineNow(prev) !== isUserOnlineNow(user);
         if (visualChanged) {
           const markerSize = isPulsing ? 52 : 44;
           existing.root.render(<MapMarker user={markerUser} size={markerSize} />);
           const el = existing.marker.getElement();
           el.style.width = `${markerSize}px`;
           el.style.height = `${markerSize}px`;
+          el.style.zIndex = String(mapPinZIndex('person'));
+          // React re-render can restore pointer-events on <img> — re-lock pass-through.
+          markMarkerCanvasPassThrough(el);
         }
         existing.user = user;
         return;
@@ -1244,9 +1795,14 @@ export const Discover = () => {
         isPulsing ? 52 : 44,
       );
 
+      const mapboxgl = getLoadedMapbox();
+      if (!mapboxgl) return;
+      markMarkerCanvasPassThrough(element);
       const marker = new mapboxgl.Marker({ element })
         .setLngLat(lngLat)
         .addTo(map);
+      markMarkerCanvasPassThrough(element);
+      element.style.zIndex = String(mapPinZIndex('person'));
 
       markersRef.current.set(user.id, { marker, root, user });
     });
@@ -1257,10 +1813,10 @@ export const Discover = () => {
       setTimeout(() => root.unmount(), 0);
       markersRef.current.delete(userId);
     });
-  }, [users, mapLoaded, peopleLayerOn]);
+  }, [displayUsers, mapLoaded, peopleLayerOn]);
 
-  // Hot Spot pins (dim when empty, solid when check-ins present) — hidden entirely
-  // when the Hot Spots layer is off, same visibleIds-empty-set pattern as People above.
+  // Cruise pins (dim when empty, solid when check-ins present) — hidden entirely
+  // when the Cruise layer is off, same visibleIds-empty-set pattern as People above.
   useEffect(() => {
     if (lat == null || lng == null) {
       setHotSpots([]);
@@ -1269,7 +1825,7 @@ export const Discover = () => {
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await hotSpotsAPI.listNearby(lat, lng, Math.max(radius, 25));
+        const res = await hotSpotsAPI.listNearby(lat, lng, cruiseSearchRadiusKm(radius));
         if (!cancelled) setHotSpots(res.data.spots ?? []);
       } catch {
         if (!cancelled) setHotSpots([]);
@@ -1288,6 +1844,7 @@ export const Discover = () => {
     if (!map || !mapLoaded) return;
 
     const visibleIds = new Set<string>();
+    const showLabel = shouldShowHotSpotLabel(mapZoom);
 
     if (hotSpotsLayerOn) hotSpots.forEach((spot) => {
       if (!Number.isFinite(spot.latitude) || !Number.isFinite(spot.longitude)) return;
@@ -1299,29 +1856,59 @@ export const Discover = () => {
         name: spot.name,
         category_icon: spot.category_icon,
         live_count_exact: spot.live_count_exact,
+        live_count: spot.live_count,
+        has_active_checkins: spot.has_active_checkins,
       };
+      const occupied = isHotSpotActive(spot);
 
       if (existing) {
-        existing.marker.setLngLat(lngLat);
-        const prevOccupied = existing.spot.live_count_exact > 0;
-        const nextOccupied = spot.live_count_exact > 0;
+        const prevLat = Number(existing.spot.latitude);
+        const prevLng = Number(existing.spot.longitude);
+        if (prevLat !== spot.latitude || prevLng !== spot.longitude) {
+          // Keep true lng/lat — never spiderfy into a vertical column (#254).
+          existing.marker.setLngLat(lngLat);
+        }
+        const prevOccupied = isHotSpotActive(existing.spot);
+        const nextOccupied = occupied;
+        const el = existing.marker.getElement();
+        const labelChanged = el.dataset.showLabel !== (showLabel ? '1' : '0');
         if (
           prevOccupied !== nextOccupied ||
           existing.spot.live_count_exact !== spot.live_count_exact ||
+          existing.spot.live_count !== spot.live_count ||
           existing.spot.name !== spot.name ||
-          existing.spot.category_icon !== spot.category_icon
+          existing.spot.category_icon !== spot.category_icon ||
+          labelChanged
         ) {
-          existing.root.render(<HotSpotPin spot={pinData} size={52} />);
+          existing.root.render(<HotSpotPin spot={pinData} size={52} showLabel={showLabel} />);
+          const labelPad = showLabel ? 28 : 4;
+          const widthPad = showLabel ? (occupied ? 104 : 72) : 52;
+          el.style.width = `${Math.max(52, widthPad)}px`;
+          el.style.height = `${52 + labelPad}px`;
+          el.dataset.showLabel = showLabel ? '1' : '0';
+          el.style.zIndex = String(mapPinZIndex('hotspot', occupied));
+          markMarkerCanvasPassThrough(el);
         }
         existing.spot = spot;
         return;
       }
 
       // Opens the in-map sheet (no navigation away) — see #67 acceptance criteria.
-      const { element, root } = createHotSpotPinElement(pinData, () => setSelectedHotSpot(spot), 52);
+      const { element, root } = createHotSpotPinElement(
+        pinData,
+        () => setSelectedHotSpot(spot),
+        52,
+        showLabel,
+      );
+      const mapboxgl = getLoadedMapbox();
+      if (!mapboxgl) return;
+      markMarkerCanvasPassThrough(element);
+      element.dataset.showLabel = showLabel ? '1' : '0';
+      element.style.zIndex = String(mapPinZIndex('hotspot', occupied));
       const marker = new mapboxgl.Marker({ element, anchor: 'center' })
         .setLngLat(lngLat)
         .addTo(map);
+      markMarkerCanvasPassThrough(element);
       hotSpotMarkersRef.current.set(spot.id, { marker, root, spot });
     });
 
@@ -1331,7 +1918,7 @@ export const Discover = () => {
       setTimeout(() => root.unmount(), 0);
       hotSpotMarkersRef.current.delete(spotId);
     });
-  }, [hotSpots, mapLoaded, hotSpotsLayerOn]);
+  }, [hotSpots, mapLoaded, hotSpotsLayerOn, mapZoom]);
 
   // Keep the open sheet's data fresh as hotSpots re-polls (mirrors selectedUser above).
   useEffect(() => {
@@ -1342,8 +1929,16 @@ export const Discover = () => {
 
   useEffect(() => {
     if (!mapLoaded || lat == null || lng == null) return;
-    selfMarkerRef.current?.setLngLat([lng, lat]);
-  }, [mapLoaded, lat, lng]);
+    let cancelled = false;
+    const seed = `map:${authUser?.id ?? 'self'}`;
+    void privateMapPointAround(lat, lng, seed, mapPinFuzzM).then((point) => {
+      if (cancelled) return;
+      selfMarkerRef.current?.setLngLat([point.lng, point.lat]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mapLoaded, lat, lng, mapPinFuzzM, authUser?.id]);
 
   useEffect(() => {
     const root = selfRootRef.current;
@@ -1359,18 +1954,105 @@ export const Discover = () => {
         user={{
           id: authUser?.id ?? 'self',
           name: authUser?.name ?? 'You',
-          photo_url: authUser?.photo_url,
+          photo_url:
+            discoveryPhotoUrl(authUser?.map_photo_url, authUser?.photo_url) ?? undefined,
           age: authUser?.age,
           isPulsing: !!pulseUntil,
         }}
         size={size}
       />,
     );
-  }, [mapLoaded, pulseUntil, authUser?.id, authUser?.name, authUser?.photo_url, authUser?.age]);
+    if (el) markMarkerCanvasPassThrough(el);
+  }, [
+    mapLoaded,
+    pulseUntil,
+    authUser?.id,
+    authUser?.name,
+    authUser?.photo_url,
+    authUser?.map_photo_url,
+    authUser?.age,
+  ]);
+
+  // Pins are pointer-events:none so the canvas owns soft continuous pan/pinch.
+  // Taps land on the map → hit-test projected pin positions (people / Cruise / self).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+
+    const onClick = (e: mapboxgl.MapMouseEvent) => {
+      type PinKind = 'self' | 'person' | 'hotspot';
+      const candidates: Array<HitCandidate<PinKind>> = [];
+
+      const selfMarker = selfMarkerRef.current;
+      if (selfMarker) {
+        const ll = selfMarker.getLngLat();
+        candidates.push({
+          kind: 'self',
+          id: 'self',
+          lng: ll.lng,
+          lat: ll.lat,
+          radiusPx: selfPinHitRadiusPx(!!pulseUntil),
+        });
+      }
+
+      markersRef.current.forEach(({ user }, id) => {
+        if (user.lat == null || user.lng == null) return;
+        candidates.push({
+          kind: 'person',
+          id,
+          lng: Number(user.lng),
+          lat: Number(user.lat),
+          radiusPx: peoplePinHitRadiusPx(isUserPulsing(user)),
+        });
+      });
+
+      hotSpotMarkersRef.current.forEach(({ spot }, id) => {
+        candidates.push({
+          kind: 'hotspot',
+          id,
+          lng: spot.longitude,
+          lat: spot.latitude,
+          radiusPx: hotSpotPinHitRadiusPx(isHotSpotActive(spot)),
+        });
+      });
+
+      const hit = cycleHitTestMapPins(map, e.point, candidates, lastPinHitIdRef.current);
+      if (!hit) {
+        lastPinHitIdRef.current = null;
+        return;
+      }
+      lastPinHitIdRef.current = hit.id;
+
+      if (hit.kind === 'self') {
+        navigate('/profile');
+        return;
+      }
+      if (hit.kind === 'person') {
+        const entry = markersRef.current.get(hit.id);
+        if (entry) setSelectedUser(entry.user);
+        return;
+      }
+      if (hit.kind === 'hotspot') {
+        const entry = hotSpotMarkersRef.current.get(hit.id);
+        if (entry) setSelectedHotSpot(entry.spot);
+      }
+    };
+
+    map.on('click', onClick);
+    return () => {
+      map.off('click', onClick);
+    };
+  }, [mapLoaded, pulseUntil, navigate]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || lat == null || lng == null) return;
+
+    if (isDiscoveryAllScope(radius)) {
+      if (map.getLayer(RADIUS_CIRCLE_LAYER)) map.removeLayer(RADIUS_CIRCLE_LAYER);
+      if (map.getSource(RADIUS_CIRCLE_SOURCE)) map.removeSource(RADIUS_CIRCLE_SOURCE);
+      return;
+    }
 
     const data = geoJsonCircle(lng, lat, radius);
     const existing = map.getSource(RADIUS_CIRCLE_SOURCE) as mapboxgl.GeoJSONSource | undefined;
@@ -1395,39 +2077,52 @@ export const Discover = () => {
     // mapStyleVersion: setStyle() (theme swap) wipes this GL source/layer — re-add it.
   }, [mapLoaded, lat, lng, radius, mapStyleVersion]);
 
-  const onlineCount = users.filter((u) => u.online).length;
-  const nearbyCount = users.length;
-  const sortedUsers = [...users].sort((a, b) => {
-    const ap = isUserPulsing(a) ? 1 : 0;
-    const bp = isUserPulsing(b) ? 1 : 0;
-    if (ap !== bp) return bp - ap;
-    return parseFloat(String(a.distance_km)) - parseFloat(String(b.distance_km));
-  });
-
-  const displayUsers = applyDiscoveryClientFilters(sortedUsers, discoveryFilters);
-
   // Expanded mobile map must be near-fullscreen — dismissible banners above it push
   // the map past the viewport, which reintroduces page-level scroll that fights the
   // map's own pan/pinch handling. Hide them while expanded, restore on shrink.
   const mobileMapExpanded =
-    !isDesktopLayout && mapPanelMode === 'expanded' && !needsLocationGate && mapCenter != null;
+    !isDesktopLayout && mapPanelMode === 'expanded';
+  /** Fullscreen/enlarged map: keep Pulse FAB off the Mapbox zoom/geolocate cluster. */
+  const hidePulseFab = isDesktopLayout || mobileMapExpanded || desktopMapExpanded;
+
+  const requestOpenPulse = useCallback(() => {
+    setPulseOpenRequestId((n) => n + 1);
+  }, []);
+
+  const pulseBlockedReason = (() => {
+    if (pulseUntil || pulseIsPremium || !nextPulseAllowedAt) return null;
+    const ms = new Date(nextPulseAllowedAt).getTime() - Date.now();
+    if (ms <= 0) return null;
+    const mins = Math.max(1, Math.ceil(ms / 60000));
+    const hours = Math.ceil(mins / 60);
+    return `Pulse is on cooldown (~${hours}h left). Free members get one every 24 hours.`;
+  })();
 
   const togglePulseHeader = useCallback(async () => {
     if (pulseUntil) await handleStopPulse();
-    else await handleStartPulse(90);
-  }, [pulseUntil, handleStartPulse, handleStopPulse]);
+    else requestOpenPulse();
+  }, [pulseUntil, handleStopPulse, requestOpenPulse]);
+
+  // Fields-complete users must not be dumped onto /profile/setup for missing GPS.
+  const showFinishProfileEmptyCta =
+    activationProfile != null && profileFieldBlockers(activationProfile).length > 0;
 
   return (
     <Layout>
       <DiscoveryShellPublisher
         nearbyCount={nearbyCount}
-        radiusLabel={formatRadiusMiles(radius)}
+        radiusLabel={formatRadiusControlLabel(radius)}
         pulseOn={!!pulseUntil}
-        togglePulse={() => void togglePulseHeader()}
+        togglePulse={togglePulseHeader}
       />
       <h1 className="sr-only">Nearby discovery map</h1>
 
+      {/* Contain Discover in the viewport so body scroll cannot steal phone pinch-zoom.
+          Match Rooms/Conversations: explicit shell height — h-full alone does not resolve
+          inside Layout's flex + overflow page-enter, which left expanded map ~minHeight. */}
+      <div className="flex h-[calc(100dvh-var(--mobile-header-height)-var(--mobile-tab-bar-height))] min-h-0 min-w-0 max-w-full flex-col overflow-x-clip overflow-hidden overscroll-none lg:h-full" data-testid="discover-shell">
       {!mobileMapExpanded ? (
+      <div className="shrink-0">
       <>
       {activationProfile ? (
         <ActivationBanner
@@ -1455,12 +2150,11 @@ export const Discover = () => {
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-extrabold text-[var(--cream)]">
-                Men nearby — tap Match on a card
+              <p className="text-base font-extrabold text-[var(--cream)]">
+                Tap Match on a card
               </p>
-              <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
-                No swiping. Tap Match to show interest. Chat and calling unlock when it&apos;s mutual · consent
-               .
+              <p className="mt-1 text-sm text-[var(--cream-muted)]">
+                Both tap. Chat opens. Consent first.
               </p>
             </div>
             <button
@@ -1504,10 +2198,8 @@ export const Discover = () => {
           className="mx-3 mb-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] px-4 py-3 shadow-[0_12px_28px_rgba(0,0,0,0.4)]"
         >
           <div>
-            <p className="text-[14px] font-extrabold text-[var(--cream)]">Match with {matchToast.name}</p>
-            <p className="mt-0.5 text-[12px] text-[var(--cream-muted)]">
-              You both said yes. Chat when ready — consent first. Pulse to get seen by more men nearby.
-            </p>
+            <p className="text-base font-extrabold text-[var(--cream)]">Match with {matchToast.name}</p>
+            <p className="mt-0.5 text-sm text-[var(--cream-muted)]">Consent first.</p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <button
@@ -1527,7 +2219,7 @@ export const Discover = () => {
                 data-testid="match-toast-pulse"
                 onClick={() => {
                   setMatchToast(null);
-                  void handleStartPulse(90).catch(() => {});
+                  requestOpenPulse();
                 }}
                 className="rounded-full border border-[rgba(196,131,42,0.55)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
               >
@@ -1552,15 +2244,14 @@ export const Discover = () => {
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-extrabold text-[var(--cream)]">Quiet map? Start Pulse</p>
-              <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
-                Get 90 minutes of priority visibility and appear first to men nearby.
-              </p>
+              <p className="text-base font-extrabold text-[var(--cream)]">Quiet map? Start Pulse</p>
+              <p className="mt-1 text-sm text-[var(--cream-muted)]">Seen first for 90 minutes.</p>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => void handleStartPulse(90).catch(() => {})}
+                data-testid="pulse-nudge-start"
+                onClick={requestOpenPulse}
                 className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
               >
                 Start Pulse
@@ -1594,10 +2285,8 @@ export const Discover = () => {
           <p id="location-gate-title" className="text-[17px] font-extrabold text-[var(--cream)]">
             Allow location to unlock Nearby
           </p>
-          <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--cream-muted)]">
-            We need your device location to show men near you. Your exact pin is not shown to others
-            — they only see approximate distance. You can adjust your search radius once location is
-            on. Shared only while you use the app.
+          <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-[var(--cream-muted)]">
+            We use your location to show who&apos;s nearby.
           </p>
           <button
             type="button"
@@ -1607,23 +2296,31 @@ export const Discover = () => {
             Allow location
           </button>
           {locationNotice ? (
-            <p className="mt-3 text-[11px] text-[var(--cream-muted)]">{locationNotice}</p>
+            <p className="mt-3 text-[15px] leading-snug text-[var(--cream-muted)]">{locationNotice}</p>
           ) : null}
         </div>
       ) : null}
       </>
+      </div>
       ) : null}
 
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Desktop: only mount when layout matches — never attach Mapbox to a display:none node. */}
       {isDesktopLayout ? (
       <div className="flex h-full min-h-0 flex-col px-6 py-5">
-        {!desktopMapExpanded ? (
-          <div className="mb-3 flex shrink-0 flex-wrap items-center gap-3">
-            <h2 className="flex-1 text-2xl font-extrabold text-[var(--cream)]">Nearby</h2>
-            <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
-          </div>
-        ) : null}
-        {!desktopMapExpanded && !needsLocationGate ? (
+        <div className="mb-3 flex shrink-0 flex-wrap items-center gap-3">
+          <h2 className="flex-1 text-2xl font-extrabold text-[var(--cream)]">
+            {loading && nearbyCount === 0
+              ? 'Nearby'
+              : nearbyCount === 0
+                ? 'Nearby'
+                : 'Men nearby'}
+          </h2>
+          <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
+          <NearbySortToggle mode={nearbySort} onChange={handleNearbySortChange} />
+          <NearbyMapGridToggle view={nearbyView} onChange={setNearbySurface} />
+        </div>
+        {nearbyView === 'grid' && !needsLocationGate ? (
           <details className="mb-3 shrink-0 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/70 px-4 py-2.5">
             <summary className="cursor-pointer text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]">
               Mood & filters
@@ -1631,6 +2328,9 @@ export const Discover = () => {
             <div className="mt-3 space-y-3" data-testid="discover-mood-strip">
               <div className={moodSaving ? 'pointer-events-none opacity-60' : ''}>
                 <MoodPicker current={mood} onSelect={handleMoodSelect} />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <MoreFiltersDrawer value={discoveryFilters} onChange={handleDiscoveryFiltersChange} />
               </div>
               <DiscoveryFilterPanel
                 variant="inline"
@@ -1640,7 +2340,8 @@ export const Discover = () => {
             </div>
           </details>
         ) : null}
-        {/* Map grows on expand; profile grid stays visible below (NordVPN desktop pattern). */}
+        {/* Map is the other Nearby view — not the default home. */}
+        {nearbyView === 'map' ? (
         <div
           className="discover-map-surface relative mb-3 min-h-[280px] shrink-0 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[#11100E] shadow-[var(--shadow-md)] transition-[height] duration-300 ease-[var(--ease-out)]"
           style={{ height: desktopMapHeightCss(desktopMapExpanded) }}
@@ -1655,61 +2356,112 @@ export const Discover = () => {
           />
           <MapFloatingChrome
             expanded={desktopMapExpanded}
-            nearbyCount={nearbyCount}
-            radiusLabel={formatRadiusMiles(radius)}
-            radiusKm={radius}
+            mapPinFuzzM={mapPinFuzzM}
+            onMapPinFuzzChange={handleMapPinFuzzChange}
             onToggleExpand={toggleDesktopMapExpanded}
-            onRadiusChange={handleRadiusChange}
-            onExpandRadius={handleRadiusCycle}
             peopleLayerOn={peopleLayerOn}
             hotSpotsLayerOn={hotSpotsLayerOn}
             onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
             onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
+            onOpenCruisingSearch={() => setCruisingSearchOpen(true)}
           />
+          <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
           {!needsLocationGate && !tokenMissing ? (
             <p
-              className="pointer-events-none absolute bottom-2 left-1/2 z-[4] max-w-[90%] -translate-x-1/2 rounded-full px-3 py-1 text-center text-[10px] font-medium leading-snug"
+              className="pointer-events-none absolute top-[4.75rem] left-1/2 z-[4] max-w-[min(78%,280px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-[15px] font-medium leading-snug"
               style={{
-                background: 'rgba(13,10,6,0.72)',
-                color: 'rgba(240,224,192,0.72)',
-                border: '1px solid rgba(196,131,42,0.22)',
+                background: 'rgba(13,10,6,0.55)',
+                color: 'rgba(240,224,192,0.65)',
+                border: '1px solid rgba(196,131,42,0.18)',
               }}
               data-testid="map-privacy-note"
             >
-              Map pins are approximate (~100–300 m) for privacy
+              {formatFuzzPrivacyNote(mapPinFuzzM)}
             </p>
           ) : null}
         </div>
+        ) : null}
         <div className="min-h-0 flex-1 overflow-y-auto">
           {!needsLocationGate ? (
-            <NearbyProfileGrid
-              users={displayUsers}
-              loading={loading}
-              onSelect={setSelectedUser}
-              onMatch={handleLike}
-              likedUserIds={likedUsers}
-              mutualUserIds={matchedUsers}
-              matchingUserId={matchingUserId}
-              onExpandRadius={handleRadiusCycle}
-              onFinishProfile={() => navigate('/profile/setup')}
-              onStartPulse={() => void handleStartPulse(90)}
-              pulseOn={!!pulseUntil}
-              onOpenHotSpots={() => navigate('/hot-spots')}
-              radiusLabel={formatRadiusMiles(radius)}
-              beyondRadiusCount={beyondRadiusCount}
-            />
+            <div data-testid="discover-nearby-panel">
+              <div
+                data-testid="nearby-counts"
+                data-nearby-count={nearbyCount}
+                data-live-count={liveCount}
+                className="mb-3 inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
+              >
+                <p className="text-[13px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
+                  {loading && nearbyCount === 0 ? (
+                    <span className="text-[var(--cream-muted)]">Scanning…</span>
+                  ) : nearbyCount === 0 && allScope ? (
+                    <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
+                  ) : nearbyCount === 0 ? (
+                    <button
+                      type="button"
+                      onClick={handleRadiusCycle}
+                      data-testid="expand-radius-chip"
+                      className="text-[var(--copper)]"
+                    >
+                      Expand your radius →
+                    </button>
+                  ) : (
+                    <>
+                      <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
+                      {liveCount > 0 ? (
+                        <span className="ml-1.5 font-semibold text-[#8FC773]" data-testid="nearby-live-count">
+                          · {liveCount} live
+                        </span>
+                      ) : nearbyCount > 0 ? (
+                        <span className="ml-1.5 font-semibold text-[var(--cream-muted)]" data-testid="nearby-live-count">
+                          · none live
+                        </span>
+                      ) : null}
+                    </>
+                  )}
+                </p>
+              </div>
+              <NearbyProfileGrid
+                users={displayUsers}
+                loading={loading}
+                hasMore={hasMoreNearby}
+                loadingMore={loadingMoreNearby}
+                onLoadMore={handleLoadMore}
+                onSelect={setSelectedUser}
+                onMatch={handleLike}
+                likedUserIds={likedUsers}
+                mutualUserIds={matchedUsers}
+                matchingUserId={matchingUserId}
+                onExpandRadius={handleRadiusCycle}
+                canExpandRadius={!allScope && radius < MAX_RADIUS_KM - 0.5}
+                hideExpandRadius={allScope}
+                onFinishProfile={
+                  showFinishProfileEmptyCta ? () => navigate('/profile/setup') : undefined
+                }
+                onStartPulse={requestOpenPulse}
+                pulseOn={!!pulseUntil}
+                pulseBlockedReason={pulseBlockedReason}
+                onOpenHotSpots={() => navigate('/hot-spots')}
+                radiusLabel={formatRadiusControlLabel(radius)}
+                beyondRadiusCount={beyondRadiusCount}
+              />
+              <EventsRail
+                lat={lat}
+                lng={lng}
+                onSelect={(ev: EventDTO) => navigate(`/rooms/${ev.id}`)}
+              />
+            </div>
           ) : null}
         </div>
       </div>
       ) : (
-      <div className="relative flex h-full min-h-0 flex-col">
+      <div className="relative flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden overscroll-none">
         {/* Map outside the scroll region so pan/pinch aren't stolen by page scroll. */}
         <div
-          className={`discover-map-panel discover-map-surface relative w-full shrink-0 overflow-hidden border-b border-[var(--border-default)] bg-[#11100E] ${
+          className={`discover-map-panel discover-map-surface relative w-full overflow-hidden border-b border-[var(--border-default)] bg-[#11100E] ${
             mapPanelMode === 'hidden' ? 'is-hidden' : ''
-          }`}
+          } ${mapPanelMode === 'expanded' ? 'min-h-0 flex-1' : 'shrink-0'}`}
           style={{
-            height: mapPanelHeightCss(mapPanelMode),
+            height: mapPanelMode === 'expanded' ? undefined : mapPanelHeightCss(mapPanelMode),
             minHeight: mapPanelMode === 'hidden' ? 0 : 120,
           }}
           data-testid="discover-map-panel"
@@ -1734,10 +2486,7 @@ export const Discover = () => {
             <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center bg-[var(--bg-primary)]/90 px-5 text-center backdrop-blur-sm">
               {needsLocationGate ? (
                 <>
-                  <p className="text-sm font-extrabold text-[var(--cream)]">Location required</p>
-                  <p className="mt-2 max-w-xs text-xs leading-relaxed text-[var(--cream-muted)]">
-                    Grant location to load the map around you.
-                  </p>
+                  <p className="text-base font-extrabold text-[var(--cream)]">Location required</p>
                   <button
                     type="button"
                     onClick={handleEnableLocation}
@@ -1757,36 +2506,36 @@ export const Discover = () => {
           {mapPanelMode !== 'hidden' ? (
             <MapFloatingChrome
               expanded={mapPanelMode === 'expanded'}
-              nearbyCount={nearbyCount}
-              radiusLabel={formatRadiusMiles(radius)}
-              radiusKm={radius}
+              mapPinFuzzM={mapPinFuzzM}
+              onMapPinFuzzChange={handleMapPinFuzzChange}
               onToggleExpand={() =>
                 setMapPanel(mapPanelMode === 'expanded' ? 'default' : 'expanded')
               }
-              onRadiusChange={handleRadiusChange}
-              onExpandRadius={handleRadiusCycle}
               showHide
               onHide={() => setMapPanel('hidden')}
-              statusBottomClass={mapPanelMode === 'expanded' ? 'bottom-4' : 'bottom-8'}
               peopleLayerOn={peopleLayerOn}
               hotSpotsLayerOn={hotSpotsLayerOn}
               onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
               onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
+              onOpenCruisingSearch={() => setCruisingSearchOpen(true)}
             />
+          ) : null}
+          {mapPanelMode !== 'hidden' ? (
+            <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
           ) : null}
 
           {mapPanelMode !== 'hidden' && !needsLocationGate && !tokenMissing ? (
             <p
-              className="pointer-events-none absolute left-1/2 z-[4] max-w-[92%] -translate-x-1/2 rounded-full px-3 py-1 text-center text-[10px] font-medium leading-snug"
+              className="pointer-events-none absolute left-1/2 z-[4] max-w-[min(78%,260px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-[15px] font-medium leading-snug"
               style={{
-                bottom: mapPanelMode === 'expanded' ? 16 : 36,
-                background: 'rgba(13,10,6,0.72)',
-                color: 'rgba(240,224,192,0.72)',
-                border: '1px solid rgba(196,131,42,0.22)',
+                top: hotSpotsLayerOn ? '4.75rem' : '3.25rem',
+                background: 'rgba(13,10,6,0.55)',
+                color: 'rgba(240,224,192,0.65)',
+                border: '1px solid rgba(196,131,42,0.18)',
               }}
               data-testid="map-privacy-note"
             >
-              Pins approximate (~100–300 m) for privacy
+              {formatFuzzPrivacyNote(mapPinFuzzM)}
             </p>
           ) : null}
 
@@ -1804,47 +2553,41 @@ export const Discover = () => {
                 aria-valuenow={mapPanelMode === 'default' ? 1 : 2}
                 tabIndex={0}
                 data-testid="map-drag-handle"
+                onClick={() => setMapPanel('expanded')}
                 onPointerDown={onMapHandlePointerDown}
                 onPointerUp={onMapHandlePointerUp}
                 onPointerCancel={() => {
                   mapDragRef.current = null;
                 }}
-                className="flex cursor-grab touch-none flex-col items-center px-6 pb-2.5 pt-3 active:cursor-grabbing"
+                className="flex cursor-grab touch-none flex-col items-center px-8 py-3.5 min-h-[44px] active:cursor-grabbing"
                 style={{ touchAction: 'none' }}
               >
                 {/* var(--cream) inverts with theme (light text on dark map, dark text on light map) — stays visible on either basemap. */}
-                <span className="h-1.5 w-10 rounded-full bg-[var(--cream)]/85 shadow-sm" />
+                <span className="h-1.5 w-12 rounded-full bg-[var(--cream)]/85 shadow-sm" />
               </div>
             </div>
           ) : null}
+
         </div>
 
         {/* When map hidden: show bar to pull it back */}
-        {mapPanelMode === 'hidden' ? (
-          <button
-            type="button"
-            data-testid="map-show-bar"
-            onClick={() => setMapPanel('default')}
-            onPointerDown={onMapHandlePointerDown}
-            onPointerUp={onMapHandlePointerUp}
-            className="flex w-full shrink-0 items-center justify-center gap-2 border-b border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-4 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[var(--copper)]"
-          >
-            <span className="h-1 w-8 rounded-full bg-[var(--copper)]/60" aria-hidden />
-            Show map
-            <span className="h-1 w-8 rounded-full bg-[var(--copper)]/60" aria-hidden />
-          </button>
-        ) : null}
-
-        <div className="min-h-0 flex-1 overflow-y-auto pb-24">
-          <div className="space-y-3 px-4 pt-3">
-            <div className="flex flex-wrap items-center gap-2">
+        {/* List / filters — unmount scroll region while map is expanded so nothing
+            below can capture residual touch / rubber-band against the map. */}
+        {mapPanelMode !== 'expanded' ? (
+        <div className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-clip overflow-y-auto overscroll-y-contain pb-24">
+          <div className="min-w-0 space-y-3 px-4 pt-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <div
                 data-testid="nearby-counts"
-                className="inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
+                data-nearby-count={nearbyCount}
+                data-live-count={liveCount}
+                className="inline-flex min-h-[36px] max-w-full items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
               >
-                <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
+                <p className="text-[13px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
                   {loading && nearbyCount === 0 ? (
                     <span className="text-[var(--cream-muted)]">Scanning…</span>
+                  ) : nearbyCount === 0 && allScope ? (
+                    <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
                   ) : nearbyCount === 0 ? (
                     <button
                       type="button"
@@ -1852,39 +2595,28 @@ export const Discover = () => {
                       data-testid="expand-radius-chip"
                       className="text-[var(--copper)]"
                     >
-                      EXPAND YOUR RADIUS →
+                      Expand radius →
                     </button>
                   ) : (
                     <>
-                      <span className="font-black text-[var(--copper)]">{nearbyCount}</span> NEARBY
-                      <span className="mx-1.5 text-[var(--cream-muted)]">·</span>
-                      <span className="font-black text-[var(--copper)]">{onlineCount}</span> ONLINE
+                      <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
+                      {liveCount > 0 ? (
+                        <span className="ml-1.5 font-semibold text-[#8FC773]" data-testid="nearby-live-count">
+                          · {liveCount} live
+                        </span>
+                      ) : nearbyCount > 0 ? (
+                        <span className="ml-1.5 font-semibold text-[var(--cream-muted)]" data-testid="nearby-live-count">
+                          · none live
+                        </span>
+                      ) : null}
                     </>
                   )}
                 </p>
               </div>
               <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
-              <div
-                className="ml-auto flex items-center overflow-hidden rounded-full border bg-[var(--bg-elevated)]/85 backdrop-blur-sm"
-                style={{ borderColor: 'var(--border-default)' }}
-                role="group"
-                aria-label="Discovery surface"
-              >
-                <span
-                  className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em]"
-                  style={{ background: 'var(--copper)', color: 'var(--bg-primary)' }}
-                  aria-current="page"
-                >
-                  {ROUTE_LABELS.map}
-                </span>
-                <Link
-                  to="/stream"
-                  className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] transition-colors hover:text-[var(--copper)]"
-                  style={{ color: 'var(--cream-soft)' }}
-                  aria-label={`Switch to ${ROUTE_LABELS.liveProfileList}`}
-                >
-                  {ROUTE_LABELS.liveProfileList}
-                </Link>
+              <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+                <NearbySortToggle mode={nearbySort} onChange={handleNearbySortChange} />
+                <NearbyMapGridToggle view={nearbyView} onChange={setNearbySurface} />
               </div>
             </div>
 
@@ -1892,14 +2624,14 @@ export const Discover = () => {
               <div
                 role="status"
                 data-testid="location-notice"
-                className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-3 py-2 text-[11px] font-medium leading-snug text-[var(--cream-soft)] shadow-md backdrop-blur-sm"
+                className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-3.5 py-2.5 text-[15px] font-medium leading-snug text-[var(--cream-soft)] shadow-md backdrop-blur-sm"
               >
                 <p>{locationNotice}</p>
                 <button
                   type="button"
                   onClick={handleEnableLocation}
                   data-testid="enable-location"
-                  className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-2.5 py-1 text-[11px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
+                  className="mt-2 inline-flex min-h-[44px] items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-4 py-2 text-[15px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
                 >
                   {locationNotice.startsWith('Using your last saved location') ||
                   locationNotice === INSECURE_GPS_NOTICE
@@ -1926,6 +2658,9 @@ export const Discover = () => {
                     <MoodPicker current={mood} onSelect={handleMoodSelect} />
                   </div>
                 ) : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  <MoreFiltersDrawer value={discoveryFilters} onChange={handleDiscoveryFiltersChange} />
+                </div>
                 <DiscoveryFilterPanel
                   variant="inline"
                   value={discoveryFilters}
@@ -1934,23 +2669,31 @@ export const Discover = () => {
               </div>
             </details>
 
-            {/* Profiles: two squares per row, directly under map */}
+            {/* Profiles: denser grid from tablet up (see PROFILE_TILE_GRID_CLASS) */}
             {!needsLocationGate ? (
               <>
                 <NearbyProfileGrid
                   users={displayUsers}
                   loading={loading}
+                  hasMore={hasMoreNearby}
+                  loadingMore={loadingMoreNearby}
+                  onLoadMore={handleLoadMore}
                   onSelect={setSelectedUser}
                   onMatch={handleLike}
                   likedUserIds={likedUsers}
                   mutualUserIds={matchedUsers}
                   matchingUserId={matchingUserId}
                   onExpandRadius={handleRadiusCycle}
-                  onFinishProfile={() => navigate('/profile/setup')}
-                  onStartPulse={() => void handleStartPulse(90)}
+                  canExpandRadius={!allScope && radius < MAX_RADIUS_KM - 0.5}
+                  hideExpandRadius={allScope}
+                  onFinishProfile={
+                    showFinishProfileEmptyCta ? () => navigate('/profile/setup') : undefined
+                  }
+                  onStartPulse={requestOpenPulse}
                   pulseOn={!!pulseUntil}
+                  pulseBlockedReason={pulseBlockedReason}
                   onOpenHotSpots={() => navigate('/hot-spots')}
-                  radiusLabel={formatRadiusMiles(radius)}
+                  radiusLabel={formatRadiusControlLabel(radius)}
                   beyondRadiusCount={beyondRadiusCount}
                 />
                 <EventsRail
@@ -1962,17 +2705,23 @@ export const Discover = () => {
             ) : null}
           </div>
         </div>
-
-        <PulseFab
-          isPulsing={!!pulseUntil}
-          pulseExpiresAt={pulseUntil ? pulseUntil.toISOString() : undefined}
-          nextPulseAllowedAt={nextPulseAllowedAt ?? undefined}
-          isPremium={pulseIsPremium}
-          onStartPulse={handleStartPulse}
-          onStopPulse={handleStopPulse}
-        />
+        ) : null}
       </div>
       )}
+      </div>
+      </div>
+
+      <PulseFab
+        isPulsing={!!pulseUntil}
+        pulseExpiresAt={pulseUntil ? pulseUntil.toISOString() : undefined}
+        nextPulseAllowedAt={nextPulseAllowedAt ?? undefined}
+        isPremium={pulseIsPremium}
+        radiusKm={radius}
+        onStartPulse={handleStartPulse}
+        onStopPulse={handleStopPulse}
+        openRequestId={pulseOpenRequestId}
+        hideFab={hidePulseFab}
+      />
 
       <ProfileDrawer
         user={selectedUser}
@@ -1983,18 +2732,46 @@ export const Discover = () => {
           if (!selectedUser) return;
           await handleLike(selectedUser);
         }}
+        onUnmatch={async () => {
+          if (!selectedUser) return;
+          const confirmed = window.confirm(
+            `Unmatch with ${selectedUser.name}? Chat locks again until you both match.`,
+          );
+          if (!confirmed) return;
+          try {
+            await usersAPI.unmatchUser(selectedUser.id);
+            setMatchedUsers((prev) => {
+              const next = new Set(prev);
+              next.delete(selectedUser.id);
+              return next;
+            });
+            setLikedUsers((prev) => {
+              const next = new Set(prev);
+              next.delete(selectedUser.id);
+              return next;
+            });
+            setSafetyNotice({ msg: `Unmatched with ${selectedUser.name}.`, tone: 'success' });
+            window.setTimeout(() => setSafetyNotice(null), 4000);
+            setSelectedUser(null);
+          } catch {
+            setSafetyNotice({ msg: 'Could not unmatch. Try again.', tone: 'error' });
+            window.setTimeout(() => setSafetyNotice(null), 4000);
+          }
+        }}
+
         onMessage={() => {
           if (!selectedUser) return;
           navigate(`/messages/${selectedUser.id}`);
         }}
-        onPass={() => setSelectedUser(null)}
         onSafetyNotice={(msg, tone) => {
           setSafetyNotice({ msg, tone: tone ?? 'success' });
           window.setTimeout(() => setSafetyNotice(null), 4000);
         }}
+
         onBlocked={() => {
           if (!selectedUser) return;
           setUsers((prev) => prev.filter((u) => u.id !== selectedUser.id));
+          setTotalNearbyCount((prev) => Math.max(0, prev - 1));
           setSelectedUser(null);
         }}
       />
@@ -2009,6 +2786,30 @@ export const Discover = () => {
           setHotSpotActionError('');
         }}
         onCheckIn={handleHotSpotCheckIn}
+        onOpenReviews={(spot) => setReviewsSpot(spot)}
+      />
+
+      <CruisingSearchSheet
+        open={cruisingSearchOpen}
+        onClose={() => setCruisingSearchOpen(false)}
+        lat={lat}
+        lng={lng}
+        onSelectSpot={handleCruisingSpotSelect}
+        onCheckIn={handleHotSpotCheckIn}
+        onOpenReviews={(spot) => setReviewsSpot(spot)}
+        actingSpotId={actingCruisingSpotId}
+      />
+
+      <HotSpotReviewsModal
+        spot={reviewsSpot}
+        open={Boolean(reviewsSpot)}
+        onClose={() => setReviewsSpot(null)}
+        onSpotUpdated={(updated) => {
+          if (selectedHotSpot && selectedHotSpot.id === updated.id) {
+            setSelectedHotSpot(updated);
+          }
+          setHotSpots((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+        }}
       />
     </Layout>
   );

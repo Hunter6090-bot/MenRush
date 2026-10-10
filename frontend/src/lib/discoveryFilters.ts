@@ -1,7 +1,9 @@
 import type { Mood } from '../api/client';
 import { MOOD_LABELS } from '../api/client';
 import type { NearbyUser } from '../components/ProfileCard';
+import { isUserOnlineNow } from './discovery';
 import { INTENT_FILTERS, matchesIntentFilter, type IntentFilter } from './discoveryFormat';
+import { createdAtMs, isFreshFaceNearby, isNewlyJoined, isVisitorFresh } from './newJoiner';
 
 /** Profile tag groups — shared with Profile editor. */
 export const DISCOVERY_FILTER_CATEGORIES = [
@@ -11,18 +13,19 @@ export const DISCOVERY_FILTER_CATEGORIES = [
     singleSelect: true,
     tags: [
       'All',
-      'Chat',
-      'Drinks',
-      'Date',
       'NSA',
       'Hookup',
       'Casual',
-      'Dating',
       'FWB',
       'Discreet',
       'Hosting',
       'Can Travel',
       'Right Now',
+      'Oral',
+      'Anal',
+      'Rim',
+      'JO',
+      'Threesome',
     ],
   },
   {
@@ -33,12 +36,40 @@ export const DISCOVERY_FILTER_CATEGORIES = [
   {
     id: 'tribe',
     label: 'Tribe',
-    tags: ['Twink', 'Twunk', 'Otter', 'Bear', 'Cub', 'Daddy', 'Wolf', 'Jock', 'Leather', 'Rugged', 'Geek'],
+    tags: [
+      'Twink',
+      'Twunk',
+      'Otter',
+      'Bear',
+      'Cub',
+      'Daddy',
+      'Wolf',
+      'Jock',
+      'Leather',
+      'Rugged',
+      'Geek',
+      'Pup',
+      'Chub',
+      'Muscle',
+    ],
   },
   {
     id: 'body',
     label: 'Body',
-    tags: ['Slim', 'Athletic', 'Muscular', 'Stocky', 'Chubby', 'Hairy', 'Smooth', 'Tatted'],
+    tags: [
+      'Slim',
+      'Athletic',
+      'Muscular',
+      'Stocky',
+      'Chubby',
+      'Hairy',
+      'Smooth',
+      'Tatted',
+      'Average',
+      'Toned',
+      'Large',
+      'Dad bod',
+    ],
   },
   {
     id: 'ethnicity',
@@ -59,21 +90,79 @@ export const DISCOVERY_FILTER_CATEGORIES = [
   {
     id: 'vibe',
     label: 'Vibe',
-    tags: ['Kinky', 'Vanilla', 'Open', 'Sober', 'PnP-Free'],
+    tags: [
+      'Kinky',
+      'Vanilla',
+      'Horny',
+      'Filthy',
+      'Rough',
+      'Oral',
+      'Anal',
+      'Rim',
+      'JO',
+      'Dominant',
+      'Submissive',
+      'Sober',
+      'PnP-Free',
+    ],
   },
   {
     id: 'scene',
     label: 'Scene',
-    tags: ['Gym', 'Bar', 'Club', 'Sauna', 'Cruising', 'House Party', 'Coffee', 'Outdoors'],
+    // Legal colour (Zoul/Product): keep venue/scene tags only.
+    // RED hide from live filter/editor face: Cruising, Car, Toilets (SOA 2003 / PSE).
+    // Stored profile tags may still include those — do not mass-rewrite DB.
+    tags: [
+      'Sauna',
+      'Darkroom',
+      'Glory hole',
+      'Hotel',
+      'Private',
+      'Club',
+      'After hours',
+      'House Party',
+      'Gym',
+      'Bar',
+    ],
   },
   {
     id: 'connection',
     label: 'Connection',
-    tags: ['Friends', 'Networking', 'Group', 'Couples', 'Poly', 'Long-term', 'Short-term'],
+    tags: [
+      'Group',
+      'Couples',
+      'Poly',
+      'Threesome',
+      'Gangbang',
+      'Cam',
+      'Overnight',
+      'Host',
+      'Travel',
+      'Now',
+      'Short-term',
+    ],
   },
 ] as const;
 
 export type DiscoveryFilterCategoryId = (typeof DISCOVERY_FILTER_CATEGORIES)[number]['id'];
+
+/** Vibe / scene / connection live in the More filters drawer (not a new nav tab). */
+export const MORE_FILTER_CATEGORY_IDS = ['vibe', 'scene', 'connection'] as const;
+
+export type MoreFilterCategoryId = (typeof MORE_FILTER_CATEGORY_IDS)[number];
+
+export function isMoreFilterCategoryId(id: string): id is MoreFilterCategoryId {
+  return (MORE_FILTER_CATEGORY_IDS as readonly string[]).includes(id);
+}
+
+/** Categories shown in the inline Filters panel (Looking for, position, …). */
+export const PRIMARY_DISCOVERY_FILTER_CATEGORIES = DISCOVERY_FILTER_CATEGORIES.filter(
+  (category) => !isMoreFilterCategoryId(category.id),
+);
+
+export function getMoreFilterCategories() {
+  return DISCOVERY_FILTER_CATEGORIES.filter((category) => isMoreFilterCategoryId(category.id));
+}
 
 export const API_LOOKING_FOR_INTENTS = new Set<string>(INTENT_FILTERS.filter((v) => v !== 'All'));
 
@@ -83,14 +172,22 @@ export const AGE_PRESETS = [
   { id: '22-29', label: '22–29', min: 22, max: 29 },
   { id: '30-39', label: '30–39', min: 30, max: 39 },
   { id: '40-49', label: '40–49', min: 40, max: 49 },
-  { id: '50+', label: '50+', min: 50, max: 99 },
+  /** Once 60+ exists, 50+ means 50–59 (not 50–99). */
+  { id: '50+', label: '50–59', min: 50, max: 59 },
+  { id: '60+', label: '60+', min: 60, max: 99 },
 ] as const;
 
 export type AgePresetId = (typeof AGE_PRESETS)[number]['id'];
 
+/** Discovery age filter floor/ceiling — everyone on the app is 18+. */
+export const AGE_CLAMP_MIN = 18;
+export const AGE_CLAMP_MAX = 99;
+
 export const STATUS_FILTER_OPTIONS = [
   { id: 'online', label: 'Online now' },
   { id: 'pulsing', label: 'Pulsing now' },
+  /** Brand-signed Status chip — same face as Grid/Map pill. */
+  { id: 'new', label: 'NEW' },
   { id: 'hasPhoto', label: 'Has photo' },
   { id: 'verified', label: 'Trust checked' },
 ] as const;
@@ -106,6 +203,9 @@ export interface DiscoveryFilterState {
   intent: string;
   interests: string[];
   agePreset: AgePresetId;
+  /** Custom age bounds; when set, presets are deselected (agePreset = any). */
+  customAgeMin?: number;
+  customAgeMax?: number;
   status: StatusFilterId[];
   mood?: Mood;
 }
@@ -114,24 +214,82 @@ export const DEFAULT_DISCOVERY_FILTERS: DiscoveryFilterState = {
   intent: 'All',
   interests: [],
   agePreset: 'any',
+  customAgeMin: undefined,
+  customAgeMax: undefined,
   status: [],
   mood: undefined,
 };
+
+export function clampAge(value: number): number {
+  return Math.min(AGE_CLAMP_MAX, Math.max(AGE_CLAMP_MIN, Math.trunc(value)));
+}
+
+export function hasCustomAge(state: DiscoveryFilterState): boolean {
+  return state.customAgeMin != null || state.customAgeMax != null;
+}
+
+export function hasActiveAgeFilter(state: DiscoveryFilterState): boolean {
+  return hasCustomAge(state) || state.agePreset !== 'any';
+}
 
 export function countActiveDiscoveryFilters(state: DiscoveryFilterState): number {
   let count = 0;
   if (state.intent !== 'All') count += 1;
   count += state.interests.length;
-  if (state.agePreset !== 'any') count += 1;
+  if (hasActiveAgeFilter(state)) count += 1;
   count += state.status.length;
   if (state.mood) count += 1;
   return count;
+}
+
+export function countMoreFilterSelections(state: DiscoveryFilterState): number {
+  const moreTags = new Set(
+    getMoreFilterCategories().flatMap((category) => category.tags as readonly string[]),
+  );
+  return state.interests.filter((tag) => moreTags.has(tag)).length;
 }
 
 export function getAgeRange(presetId: AgePresetId): { minAge?: number; maxAge?: number } {
   const preset = AGE_PRESETS.find((p) => p.id === presetId);
   if (!preset || preset.id === 'any') return {};
   return { minAge: preset.min, maxAge: preset.max };
+}
+
+/** Prefer custom min/max when present; otherwise use the selected preset. */
+export function resolveAgeRange(state: DiscoveryFilterState): { minAge?: number; maxAge?: number } {
+  if (hasCustomAge(state)) {
+    let minAge = state.customAgeMin;
+    let maxAge = state.customAgeMax;
+    if (minAge != null && maxAge != null && minAge > maxAge) {
+      [minAge, maxAge] = [maxAge, minAge];
+    }
+    return { minAge, maxAge };
+  }
+  return getAgeRange(state.agePreset);
+}
+
+/** Selecting a preset clears custom age. */
+export function withAgePreset(state: DiscoveryFilterState, agePreset: AgePresetId): DiscoveryFilterState {
+  return {
+    ...state,
+    agePreset,
+    customAgeMin: undefined,
+    customAgeMax: undefined,
+  };
+}
+
+/** Setting custom age deselects presets (agePreset → any). Values are clamped 18–99. */
+export function withCustomAge(
+  state: DiscoveryFilterState,
+  customAgeMin?: number,
+  customAgeMax?: number,
+): DiscoveryFilterState {
+  return {
+    ...state,
+    agePreset: 'any',
+    customAgeMin: customAgeMin == null || Number.isNaN(customAgeMin) ? undefined : clampAge(customAgeMin),
+    customAgeMax: customAgeMax == null || Number.isNaN(customAgeMax) ? undefined : clampAge(customAgeMax),
+  };
 }
 
 /** Tags sent to `/users/nearby` interests overlap filter. */
@@ -151,13 +309,16 @@ export function buildLookingForParam(state: DiscoveryFilterState): string | unde
 }
 
 export function buildNearbyApiFilters(state: DiscoveryFilterState) {
-  const { minAge, maxAge } = getAgeRange(state.agePreset);
+  const { minAge, maxAge } = resolveAgeRange(state);
   return {
     interests: buildInterestTags(state),
     lookingFor: buildLookingForParam(state),
     minAge,
     maxAge,
     onlyPulse: state.status.includes('pulsing') || undefined,
+    online: state.status.includes('online') || undefined,
+    verified: state.status.includes('verified') || undefined,
+    new: state.status.includes('new') || undefined,
     mood: state.mood ? `%${state.mood}%` : undefined,
   };
 }
@@ -180,18 +341,25 @@ export function applyDiscoveryClientFilters(users: NearbyUser[], state: Discover
   }
 
   if (state.status.includes('online')) {
-    result = result.filter((u) => u.online);
+    result = result.filter((u) => isUserOnlineNow(u));
+  }
+  if (state.status.includes('new')) {
+    // Newly joined (7d) OR active visitor fresh-face — Nearby-scoped only.
+    result = result.filter((u) => isFreshFaceNearby(u));
   }
   if (state.status.includes('hasPhoto')) {
     result = result.filter((u) => !!u.photo_url);
   }
   if (state.status.includes('verified')) {
-    result = result.filter((u) => u.is_verified || u.authenticity_status === 'verified');
+    // One badge only — Veriff is_verified → Verified. No Authentic-person honor mark.
+    result = result.filter((u) => u.is_verified);
   }
 
-  const { minAge, maxAge } = getAgeRange(state.agePreset);
-  if (minAge != null) result = result.filter((u) => u.age >= minAge);
-  if (maxAge != null) result = result.filter((u) => u.age <= maxAge);
+  const { minAge, maxAge } = resolveAgeRange(state);
+  if (minAge != null) result = result.filter((u) => typeof u.age === 'number' && u.age >= minAge);
+  if (maxAge != null) result = result.filter((u) => typeof u.age === 'number' && u.age <= maxAge);
+  // Hard floor: never surface under-18 even if a bad age slips through.
+  result = result.filter((u) => u.age == null || u.age >= AGE_CLAMP_MIN);
 
   if (state.interests.length > 0) {
     result = result.filter((u) => {
@@ -202,6 +370,23 @@ export function applyDiscoveryClientFilters(users: NearbyUser[], state: Discover
 
   if (state.mood) {
     result = result.filter((u) => u.mood === state.mood);
+  }
+
+  // NEW status: surface fresh faces first — newest joiners, then active visitors.
+  if (state.status.includes('new')) {
+    result = [...result].sort((a, b) => {
+      const aJoin = isNewlyJoined(a.created_at) ? 1 : 0;
+      const bJoin = isNewlyJoined(b.created_at) ? 1 : 0;
+      if (aJoin !== bJoin) return bJoin - aJoin;
+      if (aJoin && bJoin) {
+        const byAge = createdAtMs(b.created_at) - createdAtMs(a.created_at);
+        if (byAge !== 0) return byAge;
+      }
+      const aVis = isVisitorFresh(a) ? 1 : 0;
+      const bVis = isVisitorFresh(b) ? 1 : 0;
+      if (aVis !== bVis) return bVis - aVis;
+      return createdAtMs(b.visitor_expires_at) - createdAtMs(a.visitor_expires_at);
+    });
   }
 
   return result;

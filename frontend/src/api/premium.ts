@@ -1,14 +1,4 @@
-import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
-
-const premiumClient = axios.create({ baseURL: API_BASE_URL });
-
-premiumClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+import { apiClient } from './client';
 
 export type PremiumPlan = {
   id: 'premium';
@@ -21,6 +11,7 @@ export type PremiumPlan = {
 export type PremiumStatus = {
   tier: 'free' | 'premium' | 'premium_plus';
   is_premium: boolean;
+  beta_premium_included: boolean;
   premium_until: string | null;
   features: string[];
   free_limits: {
@@ -32,12 +23,12 @@ export type PremiumStatus = {
 
 export const premiumAPI = {
   getPlans: () =>
-    premiumClient.get<{ processor: string; plans: PremiumPlan[]; free_limits: PremiumStatus['free_limits'] }>(
+    apiClient.get<{ processor: string; plans: PremiumPlan[]; free_limits: PremiumStatus['free_limits'] }>(
       '/premium/plans',
     ),
-  getStatus: () => premiumClient.get<PremiumStatus>('/premium/status'),
+  getStatus: () => apiClient.get<PremiumStatus>('/premium/status'),
   subscribe: (tier: 'premium', returnUrl?: string) =>
-    premiumClient.post<{ processor: string; tier: string; checkout_url: string }>('/premium/subscribe', {
+    apiClient.post<{ processor: string; tier: string; checkout_url: string }>('/premium/subscribe', {
       tier,
       return_url: returnUrl,
     }),

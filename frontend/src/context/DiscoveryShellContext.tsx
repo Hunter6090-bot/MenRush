@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 
 export interface DiscoveryShellState {
   nearbyCount: number;
@@ -23,14 +30,12 @@ const DiscoveryShellContext = createContext<{
 
 export function DiscoveryShellProvider({ children }: { children: ReactNode }) {
   const [state, setFullState] = useState<DiscoveryShellState>(defaultState);
-  const value = useMemo(
-    () => ({
-      state,
-      setState: (patch: Partial<DiscoveryShellState>) =>
-        setFullState((prev) => ({ ...prev, ...patch })),
-    }),
-    [state],
-  );
+  // Stable setter — must not change when `state` updates, or DiscoveryShellPublisher
+  // re-fires its effect every paint (Maximum update depth exceeded on /discover).
+  const setState = useCallback((patch: Partial<DiscoveryShellState>) => {
+    setFullState((prev) => ({ ...prev, ...patch }));
+  }, []);
+  const value = useMemo(() => ({ state, setState }), [state, setState]);
   return <DiscoveryShellContext.Provider value={value}>{children}</DiscoveryShellContext.Provider>;
 }
 

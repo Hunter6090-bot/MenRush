@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1A140C"/>
+      <stop offset="100%" stop-color="#0D0A06"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1350" fill="url(#bg)"/>
+  <rect x="48" y="48" width="984" height="1254" fill="none" stroke="rgba(196,131,42,0.4)" stroke-width="2"/>
+  <text x="540" y="320" text-anchor="middle" fill="#C4832A" font-family="Avenir Next, Segoe UI, sans-serif" font-size="24" letter-spacing="0.4em">MENRUSH</text>
+  <text x="540" y="560" text-anchor="middle" fill="#F0E0C0" font-family="Georgia, serif" font-size="64" font-weight="600">Opens</text>
+  <text x="540" y="680" text-anchor="middle" fill="#E0A04A" font-family="Georgia, serif" font-size="84" font-weight="600">1 October</text>
+  <text x="540" y="790" text-anchor="middle" fill="#F0E0C0" font-family="Georgia, serif" font-size="52">2026</text>
+  <text x="540" y="1000" text-anchor="middle" fill="rgba(240,224,192,0.7)" font-family="Avenir Next, sans-serif" font-size="28">UK first</text>
+  <text x="540" y="1100" text-anchor="middle" fill="#C4832A" font-family="Avenir Next, sans-serif" font-size="24">menrush.com</text>
+</svg>

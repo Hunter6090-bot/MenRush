@@ -1,25 +1,67 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageMediaKind, MessageDTO, MeetAgreementState } from '../api/client';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, memo } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { messagesAPI, usersAPI, MediaKind, MessageMediaKind, MessageDTO, LibraryPhotoDTO } from '../api/client';
 import { trackEventOnce } from '../observability/analytics';
 import { useSocket } from '../hooks/useSocket';
 import { useAuthStore, useCallStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from '../components/UserAvatar';
 import { StatusBadge } from '../components/StatusBadge';
-import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
 import { PulseRing } from '../components/PulseRing';
 import { getPhotoUrl } from '../components/UserAvatar';
 import { FEATURES } from '../lib/featureFlags';
 import { SelfieCaptureModal } from '../components/SelfieCaptureModal';
+import { CameraCaptureChooser } from '../components/CameraCaptureChooser';
+import { VideoNoteCaptureModal } from '../components/VideoNoteCaptureModal';
+import { videoFileFromRecorderBlob } from '../lib/mediaMime';
+import { ChatAttachLibrarySheet } from '../components/ChatAttachLibrarySheet';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { placeOutgoingCall } from '../lib/callBridge';
 import { mapCallMediaError } from '../lib/callMedia';
-import { MobileBackButton } from '../components/MobileBackButton';
+import { ChevronLeftIcon, MobileBackButton } from '../components/MobileBackButton';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { MissedCallIcon } from '../components/MissedCallIcon';
 import { isMissedCallMessage, MISSED_CALL_PREVIEW } from '../lib/missedCall';
 import { openMapsDirections } from '../lib/maps';
 import { parseLocationPayload } from '../lib/locationMessage';
+import { profilePathForUser } from '../lib/profileLinks';
+import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
+import { SoftBlurMedia, shouldBlurMedia } from '../components/SoftBlurMedia';
+import { ChatBubbleFace } from '../components/ChatBubbleFace';
+import { compressChatImageFile } from '../lib/imageUpload';
+import { armOverlayBack } from '../lib/overlayBack';
+import { CHAT_IMAGE_VIEWER_FRAME } from '../lib/chatImageViewerFrame';
+import {
+  shouldLoadOlderOnScroll,
+  shouldStickToBottomOnUpdate,
+  restoreScrollAfterPrepend,
+} from '../lib/chatScroll';
+import {
+  VIDEO_LOAD_TIMEOUT_MS,
+  chatVideoUnsupportedHint,
+  resolveChatVideoPlayUrl,
+  type ChatVideoLoadState,
+} from '../lib/chatVideoPlayback';
+import {
+  appendUniqueMessage,
+  CHAT_LIVE_REFRESH_EVENT,
+  CONVERSATION_PAGE_SIZE,
+  conversationFingerprint,
+  mergeConversationRows,
+  prependOlderMessages,
+  sortMessagesChronologically,
+} from '../lib/pushDeepLink';
+import {
+  appendCachedThreadMessage,
+  isPreviewSeedMessage,
+  readCachedThread,
+  rememberInboxThread,
+  stripPreviewSeedMessages,
+  threadLikelyHasHistory,
+  writeCachedThread,
+} from '../lib/conversationHistoryCache';
+import { refreshNotifications } from '../hooks/useNotificationSync';
+import { useNotificationStore } from '../hooks/store';
+import type { ThreadOpenState } from '../components/ConversationItem';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
 interface Message extends Partial<MessageDTO> {
@@ -38,6 +80,27 @@ interface Message extends Partial<MessageDTO> {
   view_count?: number;
   remaining_views?: number | null;
   expired?: boolean;
+  media_clear?: boolean;
+  read?: boolean;
+  delivered?: boolean;
+}
+
+function seedThreadForOpen(
+  peerId: string | undefined,
+  selfId: string | undefined,
+  nav: ThreadOpenState | null,
+): Message[] {
+  if (!peerId) return [];
+  const preview = nav?.threadPreview;
+  if (preview && preview.peerId === peerId && preview.lastMessage) {
+    rememberInboxThread(peerId, {
+      lastMessage: preview.lastMessage,
+      lastMessageTime: preview.lastMessageTime,
+      selfId,
+    });
+  }
+  const cached = readCachedThread(peerId);
+  return cached ? (cached as Message[]) : [];
 }
 
 /** Sender's chosen viewing rule for an outgoing image. */
@@ -111,7 +174,11 @@ function isSameDay(a?: string, b?: string): boolean {
 }
 
 function isWithdrawnMedia(msg: Message): boolean {
-  return !!msg.withdrawn_at || (!!msg.expired && /withdrawn/i.test(msg.message || ''));
+  return (
+    !!msg.withdrawn_at ||
+    (!!msg.expired && /withdrawn/i.test(msg.message || '')) ||
+    (!!msg.media_type && /withdrawn/i.test(msg.message || ''))
+  );
 }
 
 function canWithdrawMedia(msg: Message, userId?: string): boolean {
@@ -120,18 +187,41 @@ function canWithdrawMedia(msg: Message, userId?: string): boolean {
     msg.sender_id === userId &&
     !!msg.media_type &&
     !isWithdrawnMedia(msg) &&
-    (!!msg.media_url || !!msg.is_disappearing)
+    (!!msg.media_url || !!msg.is_disappearing || msg.media_type === 'location')
   );
 }
+
+/** Direct, premium openers — never creepy. 18+ consent-first tone. */
+const ICEBREAKERS = [
+  'Hey — saw you nearby. Free later?',
+  'Your profile stood out. Up for a chat?',
+  'What are you looking for tonight?',
+] as const;
 
 // ── Main component ───────────────────────────────────────────────────────────
 
 export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const { otherId } = useParams<{ otherId: string }>();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const location = useLocation();
+  const navState = (location.state as ThreadOpenState | null) || null;
+  const user = useAuthStore((s) => s.user);
+  // Seed from nav preview / session cache so existing threads never flash empty.
+  const [messages, setMessages] = useState<Message[]>(() =>
+    seedThreadForOpen(otherId, user?.id, navState),
+  );
+  const [historyReady, setHistoryReady] = useState(
+    () => readCachedThread(otherId) !== undefined,
+  );
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [otherUser, setOtherUser] = useState<OtherUser | null>(null);
+  const sendingRef = useRef(false);
+  const [otherUser, setOtherUser] = useState<OtherUser | null>(() => {
+    const preview = navState?.threadPreview;
+    if (preview && otherId && preview.peerId === otherId && preview.name) {
+      return { name: preview.name, photo_url: preview.photoUrl };
+    }
+    return null;
+  });
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -141,25 +231,38 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   // Image composer: hold the selected file for preview + view-rule choice
   // before sending (instead of sending immediately on pick).
   const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [pendingLibraryPhotos, setPendingLibraryPhotos] = useState<LibraryPhotoDTO[] | null>(null);
+  const [pendingPreparing, setPendingPreparing] = useState(false);
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
   const [viewRule, setViewRule] = useState<ViewRule>('once');
   const [customViews, setCustomViews] = useState(3);
   // Recipient image viewer (transient full-screen view of a disappearing image).
   const [viewerMsg, setViewerMsg] = useState<Message | null>(null);
+  const [cameraChooserOpen, setCameraChooserOpen] = useState(false);
+  const [attachLibraryOpen, setAttachLibraryOpen] = useState(false);
   const [selfieOpen, setSelfieOpen] = useState(false);
-  const [videoRecording, setVideoRecording] = useState(false);
-  const [videoRecordSeconds, setVideoRecordSeconds] = useState(0);
-  const [meetState, setMeetState] = useState<MeetAgreementState | null>(null);
-  const [meetSubmitting, setMeetSubmitting] = useState(false);
+  const [videoNoteOpen, setVideoNoteOpen] = useState(false);
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
-  // Ticks once a second so disappearing countdowns and burned states update.
-  const [, setBurnTick] = useState(0);
+  const [canJerk, setCanJerk] = useState(false);
+  const [jerkSent, setJerkSent] = useState(false);
+  const [jerking, setJerking] = useState(false);
+  // Disappearing countdown lives in ImageViewer only — do not 1Hz re-render the whole thread.
   const socket = useSocket();
-  const user = useAuthStore((s) => s.user);
   const { setCalling, setCallSetupError, resetCall } = useCallStore();
   const navigate = useNavigate();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const savedScrollTopRef = useRef<number | null>(null);
+  /** Follow latest only while near the tip (or after own send). */
+  const stickToBottomRef = useRef(true);
+  /** One-shot: own send always snaps to latest even if reading history. */
+  const forceStickAfterSendRef = useRef(false);
+  /** scrollHeight before an older-page prepend — restore in useLayoutEffect. */
+  const pendingPrependHeightRef = useRef<number | null>(null);
+  const loadingOlderRef = useRef(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputValueRef = useRef('');
@@ -169,27 +272,235 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const recordStartRef = useRef<number>(0);
   const recordStreamRef = useRef<MediaStream | null>(null);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const videoRecorderRef = useRef<MediaRecorder | null>(null);
-  const videoChunksRef = useRef<BlobPart[]>([]);
-  const videoStreamRef = useRef<MediaStream | null>(null);
-  const videoStartRef = useRef<number>(0);
-  const videoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const cameraHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cameraHoldActiveRef = useRef(false);
-  const videoShouldSendRef = useRef(true);
-  const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
+
+  /** Append a confirmed server row to the open thread + session cache. */
+  const commitThreadMessage = useCallback(
+    (msg: Message) => {
+      if (!otherId) return;
+      setMessages((prev) => {
+        const next = appendUniqueMessage(stripPreviewSeedMessages(prev), msg);
+        appendCachedThreadMessage(otherId, msg);
+        return next;
+      });
+      setHistoryReady(true);
+    },
+    [otherId],
+  );
+
+  const loadConversation = useCallback((opts?: { replace?: boolean }) => {
+    if (!otherId) return;
+    messagesAPI
+      .getConversation(otherId)
+      .then((r) => {
+        const rows = Array.isArray(r.data) ? (r.data as Message[]) : [];
+        if (opts?.replace) {
+          setHasMoreOlder(rows.length >= CONVERSATION_PAGE_SIZE);
+        }
+        setMessages((prev) => {
+          // Drop inbox preview seeds before merge so LIMIT-window union stays correct.
+          const base = stripPreviewSeedMessages(prev);
+          // Always normalize order: poll merge used to re-append rows that slid
+          // out of the LIMIT page and jump earlier bubbles to the bottom.
+          const next = opts?.replace
+            ? sortMessagesChronologically(rows)
+            : mergeConversationRows(base, rows);
+          if (
+            conversationFingerprint(base) === conversationFingerprint(next) &&
+            base.length === prev.length
+          ) {
+            return prev;
+          }
+          writeCachedThread(otherId, next);
+          return next;
+        });
+        setHistoryReady(true);
+      })
+      .catch(() => {
+        if (opts?.replace) {
+          // Keep any cached/preview paint; only clear when we had nothing to show.
+          setMessages((prev) => {
+            if (prev.length > 0) return prev;
+            writeCachedThread(otherId, []);
+            return [];
+          });
+          setHasMoreOlder(false);
+          setHistoryReady(true);
+        }
+      })
+      .finally(() => {
+        // Ticket 4: Thread opened / read messages clear related notifications for this user
+        if (otherId) {
+          const notifState = useNotificationStore.getState();
+          const hasRelated = notifState.notifications.some(
+            (n) => n.userId === otherId && !n.read && (n.type === 'message' || n.type === 'photo' || n.type === 'voice' || n.type === 'missed_call')
+          );
+          if (hasRelated) {
+            void refreshNotifications();
+          }
+        }
+      });
+  }, [otherId]);
+
+  const markOwnSendStick = useCallback(() => {
+    forceStickAfterSendRef.current = true;
+    stickToBottomRef.current = true;
+  }, []);
+
+  const loadOlderMessages = useCallback(() => {
+    if (!otherId || loadingOlderRef.current || !hasMoreOlder) return;
+    // Skip inbox preview seeds — they are not real server message ids.
+    const oldestId = messages.find((m) => m.id && !isPreviewSeedMessage(m))?.id;
+    if (!oldestId) return;
+
+    const scroller = messagesScrollRef.current;
+    pendingPrependHeightRef.current = scroller?.scrollHeight ?? null;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    // Reading history — never snap to tip after this prepend.
+    stickToBottomRef.current = false;
+
+    messagesAPI
+      .getConversation(otherId, { before: oldestId, limit: CONVERSATION_PAGE_SIZE })
+      .then((r) => {
+        const rows = Array.isArray(r.data) ? (r.data as Message[]) : [];
+        if (rows.length < CONVERSATION_PAGE_SIZE) setHasMoreOlder(false);
+        if (rows.length === 0) {
+          pendingPrependHeightRef.current = null;
+          return;
+        }
+        setMessages((prev) => {
+          const next = prependOlderMessages(prev, rows);
+          if (conversationFingerprint(prev) === conversationFingerprint(next)) {
+            pendingPrependHeightRef.current = null;
+            return prev;
+          }
+          writeCachedThread(otherId, next);
+          return next;
+        });
+      })
+      .catch(() => {
+        pendingPrependHeightRef.current = null;
+      })
+      .finally(() => {
+        loadingOlderRef.current = false;
+        setLoadingOlder(false);
+      });
+  }, [otherId, hasMoreOlder, messages]);
+
+  const handleThreadScroll = useCallback(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    stickToBottomRef.current = shouldStickToBottomOnUpdate(el);
+    if (
+      shouldLoadOlderOnScroll(el, {
+        loading: loadingOlderRef.current,
+        hasMore: hasMoreOlder,
+      })
+    ) {
+      loadOlderMessages();
+    }
+  }, [hasMoreOlder, loadOlderMessages]);
+
+  // Paint before browser paint: nav preview + session cache (survives lazy remount).
+  useLayoutEffect(() => {
+    if (!otherId) return;
+    const seeded = seedThreadForOpen(otherId, user?.id, navState);
+    if (seeded.length > 0) {
+      setMessages(seeded);
+      setHistoryReady(true);
+    } else {
+      const cached = readCachedThread(otherId);
+      setMessages(cached ? (cached as Message[]) : []);
+      setHistoryReady(cached !== undefined);
+    }
+    const preview = navState?.threadPreview;
+    if (preview && preview.peerId === otherId && preview.name) {
+      setOtherUser((prev) =>
+        prev?.name
+          ? prev
+          : {
+              name: preview.name,
+              photo_url: preview.photoUrl,
+            },
+      );
+    }
+  }, [otherId, user?.id, navState]);
 
   useEffect(() => {
     if (!otherId) return;
-    messagesAPI.getConversation(otherId).then((r) => setMessages(r.data)).catch(() => {});
-    usersAPI.getProfile(otherId).then((r) => setOtherUser(r.data)).catch(() => {});
-    meetAPI.getState(otherId).then((r) => setMeetState(r.data)).catch(() => setMeetState(null));
+    stickToBottomRef.current = true;
+    forceStickAfterSendRef.current = false;
+    pendingPrependHeightRef.current = null;
+    loadingOlderRef.current = false;
+    setHasMoreOlder(true);
+    setLoadingOlder(false);
+    setIsOtherTyping(false);
+    // Keep any seeded preview while fetching; do not blank the thread.
+    loadConversation({ replace: true });
+    usersAPI
+      .getProfile(otherId)
+      .then((r) => {
+        const data = r.data as OtherUser | null;
+        if (data && typeof data === 'object' && typeof (data as OtherUser).name === 'string') {
+          setOtherUser(data as OtherUser);
+        }
+      })
+      .catch(() => {});
     useUnreadStore.getState().clearUnreadFrom(otherId);
-  }, [otherId]);
+  }, [otherId, loadConversation]);
+
+  // Preserve visual position after older history is prepended (before paint).
+  useLayoutEffect(() => {
+    const prevHeight = pendingPrependHeightRef.current;
+    const el = messagesScrollRef.current;
+    if (prevHeight == null || !el) return;
+    restoreScrollAfterPrepend(el, prevHeight);
+    pendingPrependHeightRef.current = null;
+    // Keep stick off — user was reading history.
+    stickToBottomRef.current = false;
+  }, [messages]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isOtherTyping]);
+    // Don't yank scroll while the photo viewer is open — restore on close instead.
+    // Owner lock: while reading earlier history (not near latest edge), never
+    // force scroll on poll / socket / merge / typing re-render.
+    if (viewerMsg) return;
+    // Avoid scrolling away a single inbox-preview seed before real history arrives.
+    if (
+      messages.length > 0 &&
+      messages.every((m) => isPreviewSeedMessage(m))
+    ) {
+      return;
+    }
+    const force = forceStickAfterSendRef.current;
+    if (!force && !stickToBottomRef.current) return;
+    const stick = shouldStickToBottomOnUpdate(messagesScrollRef.current, { force });
+    if (!stick) {
+      stickToBottomRef.current = false;
+      return;
+    }
+    forceStickAfterSendRef.current = false;
+    stickToBottomRef.current = true;
+    bottomRef.current?.scrollIntoView({ behavior: force ? 'smooth' : 'auto' });
+  }, [messages, isOtherTyping, viewerMsg]);
+
+  const openImageViewer = useCallback((msg: Message) => {
+    if (messagesScrollRef.current) {
+      savedScrollTopRef.current = messagesScrollRef.current.scrollTop;
+    }
+    setViewerMsg(msg);
+  }, []);
+
+  const closeImageViewer = useCallback(() => {
+    setViewerMsg(null);
+    const top = savedScrollTopRef.current;
+    if (top == null) return;
+    requestAnimationFrame(() => {
+      if (messagesScrollRef.current) {
+        messagesScrollRef.current.scrollTop = top;
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (!otherId) return;
@@ -200,12 +511,59 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     return () => window.clearInterval(id);
   }, [otherId]);
 
+  // Live delivery while sitting in the thread: iPhone PWAs often keep the page
+  // visible but miss the Socket.IO event (suspend / silent disconnect). Remount
+  // fixed it because getConversation ran again — poll so we do not need leave/reenter.
+  useEffect(() => {
+    if (!otherId) return;
+    const OPEN_THREAD_POLL_MS = 2500;
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      loadConversation();
+    };
+    const id = window.setInterval(tick, OPEN_THREAD_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [otherId, loadConversation]);
+
+  // iPhone PWA: also refetch on visibility / reconnect / push hint (faster than poll).
+  useEffect(() => {
+    if (!otherId) return;
+
+    const refreshIfVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      loadConversation();
+    };
+
+    const onLiveRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ otherId?: string | null }>).detail;
+      if (detail?.otherId && detail.otherId !== otherId) return;
+      refreshIfVisible();
+    };
+
+    document.addEventListener('visibilitychange', refreshIfVisible);
+    window.addEventListener('pageshow', refreshIfVisible);
+    window.addEventListener(CHAT_LIVE_REFRESH_EVENT, onLiveRefresh as EventListener);
+    socket?.on('connect', refreshIfVisible);
+
+    return () => {
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+      window.removeEventListener('pageshow', refreshIfVisible);
+      window.removeEventListener(CHAT_LIVE_REFRESH_EVENT, onLiveRefresh as EventListener);
+      socket?.off('connect', refreshIfVisible);
+    };
+  }, [otherId, loadConversation, socket]);
+
   useEffect(() => {
     if (!socket || !otherId) return;
 
     const onMessage = (data: Message) => {
       if (data.sender_id === otherId || data.receiver_id === otherId) {
-        setMessages((prev) => [...prev, data]);
+        setMessages((prev) => {
+          const next = appendUniqueMessage(stripPreviewSeedMessages(prev), data);
+          appendCachedThreadMessage(otherId, data);
+          return next;
+        });
+        setHistoryReady(true);
       }
     };
     const onTyping = ({ typing }: { typing: boolean }) => setIsOtherTyping(typing);
@@ -227,39 +585,19 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         prev.map((m) => (m.id === data.id ? { ...m, ...data } : m)),
       );
     };
-    const onMeetUpdated = (data: MeetAgreementState & { peer_id?: string }) => {
-      if (data.peer_id === otherId || !data.peer_id) {
-        setMeetState({
-          my_confirmed: data.my_confirmed,
-          peer_confirmed: data.peer_confirmed,
-          mutual: data.mutual,
-          my_confirmed_at: data.my_confirmed_at,
-          peer_confirmed_at: data.peer_confirmed_at,
-        });
-      }
-    };
 
     socket.on('message', onMessage);
     socket.on('typing', onTyping);
     socket.on('message:viewed', onViewed);
     socket.on('message:withdrawn', onWithdrawn);
-    socket.on('meet:updated', onMeetUpdated);
 
     return () => {
       socket.off('message', onMessage);
       socket.off('typing', onTyping);
       socket.off('message:viewed', onViewed);
       socket.off('message:withdrawn', onWithdrawn);
-      socket.off('meet:updated', onMeetUpdated);
     };
   }, [socket, otherId]);
-
-  // Drive disappearing-message countdowns. 1Hz is enough — the burn window
-  // is 10s, so users see the second-by-second tick clearly.
-  useEffect(() => {
-    const id = window.setInterval(() => setBurnTick((n) => n + 1), 1000);
-    return () => window.clearInterval(id);
-  }, []);
 
   // Auto-dismiss media error toasts so they don't stick around.
   useEffect(() => {
@@ -327,162 +665,86 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     const normalized = normalizeImageFile(file);
     if (!normalized || !otherId) return;
     setMediaError('');
+    setViewRule('once');
+    setPendingLibraryPhotos(null);
     setPendingPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
+      if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
       return URL.createObjectURL(normalized);
     });
     setPendingImage(normalized);
-    setViewRule('once');
+    // Compress while the user picks view-once / send — Android originals
+    // were multi‑MB and dominated the ~50s Al→Pete send.
+    setPendingPreparing(true);
+    void compressChatImageFile(normalized)
+      .then((compressed) => {
+        setPendingImage(compressed);
+        setPendingPreviewUrl((prev) => {
+          if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(compressed);
+        });
+      })
+      .catch(() => undefined)
+      .finally(() => setPendingPreparing(false));
   };
 
-  // ── Media: gallery attach + tap selfie / press-hold video ───────────────
-  const handleAttachClick = () => fileInputRef.current?.click();
-  const handleCameraClick = () => setSelfieOpen(true);
-
-  const stopVideoRecording = useCallback((send: boolean) => {
-    const mr = videoRecorderRef.current;
-    if (!mr) return;
-    videoShouldSendRef.current = send;
-    if (!send) {
-      videoChunksRef.current = [];
-    }
-    if (mr.state === 'recording') mr.stop();
-  }, []);
-
-  const startVideoRecording = useCallback(async () => {
-    if (videoRecording || uploadingMedia || recording || !otherId) return;
+  const stageLibraryPhotos = (photos: LibraryPhotoDTO[]) => {
+    if (!photos.length || !otherId) return;
     setMediaError('');
-    videoShouldSendRef.current = true;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'user' }, width: { ideal: 720 }, height: { ideal: 1280 } },
-        audio: true,
-      });
-      videoStreamRef.current = stream;
-      if (videoPreviewRef.current) {
-        videoPreviewRef.current.srcObject = stream;
-        void videoPreviewRef.current.play().catch(() => undefined);
-      }
-      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
-        ? 'video/webm;codecs=vp8,opus'
-        : MediaRecorder.isTypeSupported('video/webm')
-          ? 'video/webm'
-          : '';
-      const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
-      videoRecorderRef.current = mr;
-      videoChunksRef.current = [];
-      mr.ondataavailable = (ev) => {
-        if (ev.data.size > 0) videoChunksRef.current.push(ev.data);
-      };
-      mr.onstop = async () => {
-        const duration = Date.now() - videoStartRef.current;
-        const shouldSend = videoShouldSendRef.current;
-        const blob = new Blob(videoChunksRef.current, { type: mr.mimeType || 'video/webm' });
-        videoStreamRef.current?.getTracks().forEach((t) => t.stop());
-        videoStreamRef.current = null;
-        if (videoPreviewRef.current) videoPreviewRef.current.srcObject = null;
-        if (videoTimerRef.current) {
-          window.clearInterval(videoTimerRef.current);
-          videoTimerRef.current = null;
-        }
-        setVideoRecording(false);
-        setVideoRecordSeconds(0);
-        videoRecorderRef.current = null;
-        if (!shouldSend || duration < 600 || blob.size < 2000) return;
-        setUploadingMedia(true);
-        try {
-          const res = await messagesAPI.sendMedia(otherId!, blob, {
-            kind: 'video',
-            durationMs: duration,
-          });
-          setMessages((prev) => [...prev, res.data]);
-        } catch (err: any) {
-          setMediaError(err?.response?.data?.error || 'Failed to send video');
-        } finally {
-          setUploadingMedia(false);
-        }
-      };
-      videoStartRef.current = Date.now();
-      mr.start(250);
-      setVideoRecording(true);
-      setVideoRecordSeconds(0);
-      videoTimerRef.current = window.setInterval(
-        () => setVideoRecordSeconds((s) => Math.min(60, s + 1)),
-        1000,
-      );
-      window.setTimeout(() => {
-        if (videoRecorderRef.current && videoRecorderRef.current.state === 'recording') {
-          videoRecorderRef.current.stop();
-        }
-      }, 60_000);
-    } catch {
-      setMediaError('Camera access denied.');
-      setVideoRecording(false);
-    }
-  }, [videoRecording, uploadingMedia, recording, otherId]);
-
-  const onCameraPointerDown = (e: React.PointerEvent) => {
-    if (uploadingMedia || pendingImage || recording || videoRecording) return;
-    e.preventDefault();
-    cameraHoldActiveRef.current = false;
-    cameraHoldTimerRef.current = window.setTimeout(() => {
-      cameraHoldActiveRef.current = true;
-      void startVideoRecording();
-    }, 380);
-  };
-
-  const onCameraPointerUp = () => {
-    if (cameraHoldTimerRef.current) {
-      window.clearTimeout(cameraHoldTimerRef.current);
-      cameraHoldTimerRef.current = null;
-    }
-    if (cameraHoldActiveRef.current || videoRecording) {
-      cameraHoldActiveRef.current = false;
-      stopVideoRecording(true);
-      return;
-    }
-    handleCameraClick();
-  };
-
-  const onCameraPointerCancel = () => {
-    if (cameraHoldTimerRef.current) {
-      window.clearTimeout(cameraHoldTimerRef.current);
-      cameraHoldTimerRef.current = null;
-    }
-    if (videoRecording) {
-      stopVideoRecording(false);
-    }
-    cameraHoldActiveRef.current = false;
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    stageImageFile(file);
+    setViewRule('once');
+    setPendingImage(null);
+    setPendingPreparing(false);
+    setPendingPreviewUrl((prev) => {
+      if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setPendingLibraryPhotos(photos);
   };
 
   const clearPendingImage = useCallback(() => {
     setPendingImage(null);
+    setPendingLibraryPhotos(null);
+    setPendingPreparing(false);
     setPendingPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
+      if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
       return null;
     });
   }, []);
 
   const handleSendPendingImage = async () => {
-    if (!pendingImage || !otherId || uploadingMedia) return;
-    const file = pendingImage;
+    if (!otherId || uploadingMedia) return;
     const { disappearing, maxViews } = ruleToSendOptions(viewRule, customViews);
     setMediaError('');
     setUploadingMedia(true);
     try {
+      if (pendingLibraryPhotos && pendingLibraryPhotos.length > 0) {
+        // Send selected library photos — album rows / visibility stay untouched.
+        for (const photo of pendingLibraryPhotos) {
+          const res = await messagesAPI.sendFromAlbum(otherId, photo.id, {
+            disappearing,
+            maxViews,
+          });
+          markOwnSendStick();
+          commitThreadMessage(res.data);
+        }
+        clearPendingImage();
+        trackEventOnce(
+          'first_message_success',
+          { kind: 'image', surface: 'direct_message', source: 'my_photos' },
+          'first_message_success',
+        );
+        return;
+      }
+
+      if (!pendingImage) return;
+      // Re-run compress if staging still preparing, or as a cheap no-op when small.
+      const file = await compressChatImageFile(pendingImage);
       const res = await messagesAPI.sendMedia(otherId, file, {
         kind: 'image',
         disappearing,
         maxViews,
       });
-      setMessages((prev) => [...prev, res.data]);
+      markOwnSendStick();
+      commitThreadMessage(res.data);
       clearPendingImage();
       trackEventOnce(
         'first_message_success',
@@ -501,6 +763,61 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     }
   };
 
+  // ── Media: My Photos attach + device gallery secondary + camera chooser ──
+  const handleAttachClick = () => {
+    if (uploadingMedia || pendingImage || pendingLibraryPhotos || recording) return;
+    setAttachLibraryOpen(true);
+  };
+
+  const handleCameraClick = () => {
+    if (uploadingMedia || pendingImage || pendingLibraryPhotos || recording) return;
+    setCameraChooserOpen(true);
+  };
+
+  const handleChoosePicture = () => {
+    setCameraChooserOpen(false);
+    setSelfieOpen(true);
+  };
+
+  const handleChooseVideo = () => {
+    setCameraChooserOpen(false);
+    setVideoNoteOpen(true);
+  };
+
+  const handleSendVideoNote = useCallback(
+    async (blob: Blob, durationMs: number) => {
+      if (!otherId || uploadingMedia) return;
+      setUploadingMedia(true);
+      setMediaError('');
+      try {
+        const file = blob instanceof File ? blob : await videoFileFromRecorderBlob(blob);
+        const res = await messagesAPI.sendMedia(otherId, file, {
+          kind: 'video',
+          durationMs,
+        });
+        markOwnSendStick();
+        commitThreadMessage(res.data);
+      } catch (err: any) {
+        const code = String(err?.response?.data?.error || '');
+        setMediaError(
+          /unsupported|not supported|does not match/i.test(code)
+            ? 'This video could not be sent. Record again and tap Send.'
+            : code || 'Failed to send video',
+        );
+      } finally {
+        setUploadingMedia(false);
+      }
+    },
+    [otherId, uploadingMedia, markOwnSendStick, commitThreadMessage],
+  );
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    stageImageFile(file);
+  };
+
   // ── Media: voice notes (tap to start, tap again to stop) ──────────────
   const handleStartRecording = useCallback(async () => {
     if (recording || uploadingMedia || !otherId) return;
@@ -516,7 +833,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       };
       mr.onstop = async () => {
         const duration = Date.now() - recordStartRef.current;
-        const blob = new Blob(recordChunksRef.current, { type: mr.mimeType || 'audio/webm' });
+        // Base MIME only — keep multipart Content-Type busboy-safe (see mediaMime.ts).
+        const audioType = (mr.mimeType || 'audio/webm').split(';')[0].trim() || 'audio/webm';
+        const blob = new Blob(recordChunksRef.current, { type: audioType });
         // Tear down the mic stream so the OS indicator goes away immediately.
         recordStreamRef.current?.getTracks().forEach((t) => t.stop());
         recordStreamRef.current = null;
@@ -534,7 +853,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             kind: 'audio',
             durationMs: duration,
           });
-          setMessages((prev) => [...prev, res.data]);
+          markOwnSendStick();
+          commitThreadMessage(res.data);
         } catch (err: any) {
           setMediaError(err?.response?.data?.error || 'Failed to send voice note');
         } finally {
@@ -560,7 +880,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       setMediaError('Microphone access denied.');
       setRecording(false);
     }
-  }, [recording, uploadingMedia, otherId]);
+  }, [recording, uploadingMedia, otherId, markOwnSendStick, commitThreadMessage]);
 
   const handleStopRecording = useCallback(() => {
     const mr = mediaRecorderRef.current;
@@ -584,55 +904,112 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const sendTextMessage = useCallback(
     async (raw: string) => {
       const current = raw.trim();
-      if (!current || !otherId || !user || sending) return;
+      if (!current || !otherId || !user || sendingRef.current) return;
 
       emitTyping(false);
       if (typingTimer.current) clearTimeout(typingTimer.current);
 
       inputValueRef.current = '';
       setInput('');
+      sendingRef.current = true;
       setSending(true);
-      inputRef.current?.focus();
+      setMediaError('');
+      // Keep focus for desktop; on mobile avoid forced refocus which fights the keyboard.
+      if (!window.matchMedia('(pointer: coarse)').matches) {
+        inputRef.current?.focus();
+      }
 
       try {
         const res = await messagesAPI.sendMessage(otherId, current);
         const saved: Message = res.data;
-        setMessages((prev) => [...prev, saved]);
+        markOwnSendStick();
+        commitThreadMessage(saved);
         trackEventOnce(
           'first_message_success',
           { kind: 'text', surface: 'direct_message' },
           'first_message_success',
         );
-      } catch {
+      } catch (err: unknown) {
         inputValueRef.current = current;
         setInput(current);
+        const data = (err as { response?: { data?: { error?: string; code?: string } } })?.response
+          ?.data;
+        const code = data?.code;
+        const msg = data?.error;
+        if (code === 'match_required' || /mutual match/i.test(msg || '')) {
+          setMediaError('You need a mutual match before messaging.');
+          setCanJerk(true);
+        } else if (code === 'interaction_blocked' || /blocked/i.test(msg || '')) {
+          setMediaError('You cannot message this person.');
+          setCanJerk(false);
+        } else if (
+          (err as { code?: string })?.code === 'ECONNABORTED' ||
+          /timeout/i.test(String((err as { message?: string })?.message || ''))
+        ) {
+          setMediaError('Send timed out — check your connection and try again.');
+        } else {
+          setMediaError(msg || 'Could not send message. Try again.');
+        }
       } finally {
+        sendingRef.current = false;
         setSending(false);
       }
     },
-    [otherId, user, sending, emitTyping],
+    [otherId, user, emitTyping, markOwnSendStick, commitThreadMessage],
   );
 
-  const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {
-    e?.preventDefault?.();
-    await sendTextMessage(inputValueRef.current ?? input);
-  };
-
-  /** Direct, premium openers — never creepy. 18+ consent-first tone. */
-  const ICEBREAKERS = [
-    'Hey — saw you nearby. Free later?',
-    'Your profile stood out. Up for a chat?',
-    'What are you looking for tonight?',
-  ] as const;
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend(e);
+  const handleSendJerk = async () => {
+    if (!otherId || jerking || jerkSent) return;
+    setJerking(true);
+    try {
+      await usersAPI.likeUser(otherId);
+      setJerkSent(true);
+      setMediaError('');
+    } catch {
+      setMediaError('Could not send a jerk. Try again.');
+    } finally {
+      setJerking(false);
     }
   };
 
-  const handleWithdrawMedia = async (messageId: string) => {
+  const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {
+    e?.preventDefault?.();
+    await sendTextMessage(inputValueRef.current || input);
+  };
+
+  /**
+   * Fire send on pointerdown (touch/pen) so mobile Chrome keyboard dismiss
+   * cannot steal the tap — same failure mode on Android Chrome and iOS.
+   * Mouse left-clicks still use the normal click → submit path.
+   */
+  const handleSendPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    if (e.pointerType === 'mouse') return;
+    e.preventDefault();
+    void handleSend(e as unknown as React.FormEvent);
+  };
+
+  /**
+   * Desktop Enter + Android Gboard quirks: Chrome often reports IME keys as
+   * `Unidentified` / keyCode 229, or routes Return through beforeinput
+   * `insertLineBreak` without a matching Enter keydown.
+   */
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      void handleSend(e);
+    }
+  };
+
+  const handleBeforeInput = (e: React.FormEvent<HTMLInputElement>) => {
+    const ne = e.nativeEvent as InputEvent;
+    if (ne.inputType !== 'insertLineBreak' && ne.inputType !== 'insertParagraph') return;
+    e.preventDefault();
+    void handleSend();
+  };
+
+  const handleWithdrawMedia = useCallback(async (messageId: string) => {
     if (withdrawingId) return;
     setWithdrawingId(messageId);
     try {
@@ -643,7 +1020,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     } finally {
       setWithdrawingId(null);
     }
-  };
+  }, [withdrawingId]);
 
   const handleShareLocation = () => {
     if (!otherId || sharingLocation || uploadingMedia) return;
@@ -664,7 +1041,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             position.coords.latitude,
             position.coords.longitude,
           );
-          setMessages((prev) => [...prev, res.data]);
+          markOwnSendStick();
+          commitThreadMessage(res.data);
         } catch {
           setMediaError('Could not share your location.');
         } finally {
@@ -677,32 +1055,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
-  };
-
-  const handleMeetConfirm = async () => {
-    if (!otherId || meetSubmitting) return;
-    setMeetSubmitting(true);
-    try {
-      const res = await meetAPI.confirm(otherId);
-      setMeetState(res.data);
-    } catch {
-      setMediaError('Could not confirm meet readiness.');
-    } finally {
-      setMeetSubmitting(false);
-    }
-  };
-
-  const handleMeetRevoke = async () => {
-    if (!otherId || meetSubmitting) return;
-    setMeetSubmitting(true);
-    try {
-      const res = await meetAPI.revoke(otherId);
-      setMeetState(res.data);
-    } catch {
-      setMediaError('Could not update meet readiness.');
-    } finally {
-      setMeetSubmitting(false);
-    }
   };
 
   const handleStartVideoCall = async () => {
@@ -722,17 +1074,22 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
   return (
     <div
+      data-testid="messaging-root"
       className={
         embedded
-          ? 'flex h-full min-h-0 flex-col'
-          : 'fixed inset-0 flex flex-col'
+          ? 'flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-x-clip'
+          : 'fixed inset-0 flex min-w-0 max-w-full flex-col overflow-x-clip'
       }
-      style={{ background: 'var(--bg-primary)' }}
+      style={{
+        background: 'var(--bg-primary)',
+        // Kill iOS double-tap zoom trap on the thread chrome (pinch still allowed).
+        touchAction: 'manipulation',
+      }}
     >
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <header
-        className={`flex-shrink-0 flex items-center gap-1.5 border-b border-[var(--border-default)] px-2 sm:px-4 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl ${
+        className={`flex-shrink-0 flex min-w-0 max-w-full items-center gap-1 border-b border-[var(--border-default)] px-1.5 sm:gap-1.5 sm:px-4 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl overflow-x-clip ${
           embedded ? '' : 'pt-[env(safe-area-inset-top,0px)]'
         }`}
         style={{
@@ -745,21 +1102,25 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         <MobileBackButton
           fallback="/conversations"
           onClick={() => navigate('/conversations')}
-          className="-ml-1"
+          showLabel={false}
+          className="-ml-0.5"
         />
 
         {/* Avatar + name block — centered, tappable to open profile */}
         <button
           type="button"
-          onClick={() => otherId && navigate(`/profile/${otherId}`)}
+          onClick={() => otherId && navigate(profilePathForUser(otherId, user?.id))}
           aria-label={otherUser ? `Open ${otherUser.name}'s profile` : 'Open profile'}
           className="flex-1 flex items-center gap-3 min-w-0 text-left rounded-xl px-1 py-1 -mx-1 hover:bg-[var(--bg-card)] active:scale-[0.99] transition-all"
+          data-testid="chat-header-profile"
         >
           {otherUser ? (
             <>
               <UserAvatar
                 name={otherUser.name}
                 photoUrl={otherUser.photo_url}
+                userId={otherId}
+                linkToProfile={false}
                 online={otherUser.online}
                 size="sm"
               />
@@ -792,7 +1153,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             <button
               onClick={() => void handleStartVideoCall()}
               aria-label="Start video call"
-              className="flex-shrink-0 w-[42px] h-[42px] rounded-xl flex items-center justify-center transition-all duration-150 active:scale-95 mr-cta-gradient"
+              className="mr-cta-gradient flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-all duration-150 active:scale-95 sm:h-[42px] sm:w-[42px]"
               style={{
                 boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
               }}
@@ -805,21 +1166,28 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                   '0 2px 12px rgba(196,131,42,0.35)';
               }}
             >
-              <VideoIcon className="w-4 h-4 text-white" />
+              <VideoIcon className="h-4 w-4 text-white" />
             </button>
           </>
         )}
 
         {otherId && (
-          <ChatSafetyMenu
-            peerId={otherId}
-            peerName={otherUser?.name ?? 'this user'}
-            onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
-            onBlocked={() => {
-              // Land on the unblock list so the action is obvious.
-              window.setTimeout(() => navigate('/settings#blocked'), 600);
-            }}
-          />
+          <>
+            <ChatSafetyMenu
+              peerId={otherId}
+              peerName={otherUser?.name ?? 'this user'}
+              threadId={
+                user?.id
+                  ? `dm:${[user.id, otherId].sort().join('_')}`
+                  : `dm:${otherId}`
+              }
+              onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
+              onBlocked={() => {
+                // Land on the unblock list so the action is obvious.
+                window.setTimeout(() => navigate('/settings#blocked'), 600);
+              }}
+            />
+          </>
         )}
       </header>
 
@@ -837,274 +1205,66 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         </div>
       )}
 
-      {otherId && meetState && (
-        <MeetConsentBar
-          state={meetState}
-          peerName={otherUser?.name ?? 'them'}
-          submitting={meetSubmitting}
-          onConfirm={handleMeetConfirm}
-          onRevoke={handleMeetRevoke}
-        />
-      )}
-
-      {/* ── Messages area ─────────────────────────────────────────────────── */}
-      <div
-        className="flex-1 overflow-y-auto px-4 py-4"
-        style={{ scrollbarWidth: 'thin' }}
-      >
-        {messages.length === 0 && !sending && (
-          <div
-            className="flex flex-col items-center justify-center h-full select-none px-4"
-            data-testid="chat-icebreakers"
-          >
-            <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
-            >
-              <BubbleIcon className="w-8 h-8" style={{ color: 'var(--copper)', opacity: 0.5 }} />
-            </div>
-            <p className="font-medium text-sm text-[var(--cream-muted)]">
-              No messages yet
-            </p>
-            <p className="text-xs mt-1 mb-4 text-center text-[var(--cream-muted)]">
-              Be direct. Consent first.
-            </p>
-            <div className="flex flex-col gap-2 w-full max-w-sm">
-              {ICEBREAKERS.map((line) => (
-                <button
-                  key={line}
-                  type="button"
-                  disabled={sending}
-                  onClick={() => void sendTextMessage(line)}
-                  className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-4 py-3 text-left text-[13px] font-medium text-[var(--cream)] transition-colors hover:bg-[rgba(196,131,42,0.2)] disabled:opacity-50"
-                >
-                  {line}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {messages.map((msg, i) => {
-          const isMine = msg.sender_id === user?.id;
-          const prevMsg = messages[i - 1];
-          const nextMsg = messages[i + 1];
-          const showDateSep = !isSameDay(prevMsg?.created_at, msg.created_at);
-          const showTail = !nextMsg || nextMsg.sender_id !== msg.sender_id;
-          const isGrouped = prevMsg && prevMsg.sender_id === msg.sender_id && !showDateSep;
-
-          if (isMissedCallMessage(msg)) {
-            return (
-              <React.Fragment key={msg.id ?? i}>
-                {showDateSep && (
-                  <div className="flex items-center gap-3 my-5">
-                    <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
-                    <span
-                      className="text-[10px] font-semibold px-3 py-1 rounded-full"
-                      style={{
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border-default)',
-                        color: 'var(--cream-muted)',
-                        letterSpacing: '0.06em',
-                      }}
-                    >
-                      {formatDateLabel(msg.created_at)}
-                    </span>
-                    <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
-                  </div>
-                )}
-                <div className="flex justify-center my-4" data-testid="missed-call-log">
-                  <div
-                    className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
-                    style={{
-                      background: 'rgba(176,67,46,0.12)',
-                      border: '1px solid rgba(217,106,82,0.35)',
-                      color: '#D96A52',
-                    }}
-                  >
-                    <MissedCallIcon size={14} className="shrink-0" />
-                    <span className="text-xs font-semibold">{MISSED_CALL_PREVIEW}</span>
-                    {msg.created_at && (
-                      <span className="text-[10px] opacity-80">{formatTime(msg.created_at)}</span>
-                    )}
-                  </div>
-                </div>
-              </React.Fragment>
-            );
-          }
-
-          return (
-            <React.Fragment key={msg.id ?? i}>
-              {/* Date separator */}
-              {showDateSep && (
-                <div className="flex items-center gap-3 my-5">
-                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
-                  <span
-                    className="text-[10px] font-semibold px-3 py-1 rounded-full"
-                    style={{
-                      background: 'var(--bg-card)',
-                      border: '1px solid var(--border-default)',
-                      color: 'var(--cream-muted)',
-                      letterSpacing: '0.06em',
-                    }}
-                  >
-                    {formatDateLabel(msg.created_at)}
-                  </span>
-                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
-                </div>
-              )}
-
-              {/* Message row */}
-              <div
-                className={`flex ${isMine ? 'justify-end' : 'justify-start'} ${
-                  isGrouped ? 'mt-0.5' : 'mt-3'
-                }`}
-              >
-                {/* Received: avatar placeholder for spacing */}
-                {!isMine && (
-                  <div className="w-7 flex-shrink-0 mr-2 flex items-end mb-1">
-                    {showTail && (
-                      otherUser?.photo_url ? (
-                        <div
-                          className="w-7 h-7 rounded-full overflow-hidden"
-                          style={{ border: '1px solid var(--border-default)', flexShrink: 0 }}
-                        >
-                          <img
-                            src={otherUser.photo_url}
-                            alt={otherUser.name}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      ) : (
-                        <SilhouetteAvatar size={28} variant="chat" />
-                      )
-                    )}
-                  </div>
-                )}
-
-                <div
-                  className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} max-w-[62%]`}
-                >
-                  {msg.media_type === 'image' ? (
-                    <ImageBubble
-                      msg={msg}
-                      isMine={isMine}
-                      showTail={showTail}
-                      onOpen={setViewerMsg}
-                      onWithdraw={
-                        canWithdrawMedia(msg, user?.id)
-                          ? () => msg.id && handleWithdrawMedia(msg.id)
-                          : undefined
-                      }
-                      withdrawing={withdrawingId === msg.id}
-                    />
-                  ) : msg.media_type === 'audio' ? (
-                    <AudioBubble
-                      msg={msg}
-                      isMine={isMine}
-                      showTail={showTail}
-                      onWithdraw={
-                        canWithdrawMedia(msg, user?.id)
-                          ? () => msg.id && handleWithdrawMedia(msg.id)
-                          : undefined
-                      }
-                      withdrawing={withdrawingId === msg.id}
-                    />
-                  ) : msg.media_type === 'video' ? (
-                    <VideoBubble
-                      msg={msg}
-                      isMine={isMine}
-                      showTail={showTail}
-                      onWithdraw={
-                        canWithdrawMedia(msg, user?.id)
-                          ? () => msg.id && handleWithdrawMedia(msg.id)
-                          : undefined
-                      }
-                      withdrawing={withdrawingId === msg.id}
-                    />
-                  ) : msg.media_type === 'location' ? (
-                    <LocationBubble
-                      msg={msg}
-                      isMine={isMine}
-                      showTail={showTail}
-                      peerName={otherUser?.name}
-                    />
-                  ) : (
-                    <div
-                      className="relative px-4 py-2.5 text-sm leading-relaxed"
-                      style={
-                        isMine
-                          ? {
-                              background: 'linear-gradient(135deg, #C4832A, #A45E18)',
-                              color: '#FFF5E6',
-                              borderRadius: showTail
-                                ? '18px 18px 4px 18px'
-                                : '18px 18px 18px 18px',
-                              boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
-                            }
-                          : {
-                              background: 'var(--bg-card)',
-                              border: '1px solid var(--border-default)',
-                              color: 'var(--cream)',
-                              borderRadius: showTail
-                                ? '18px 18px 18px 4px'
-                                : '18px 18px 18px 18px',
-                            }
-                      }
-                    >
-                      {msg.message}
-                    </div>
-                  )}
-                  {/* Timestamp */}
-                  {showTail && (
-                    <span
-                      className="text-[10px] mt-1 px-1"
-                      style={{ color: '#6B5035' }}
-                    >
-                      {formatTime(msg.created_at)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </React.Fragment>
-          );
-        })}
-
-        {/* Typing indicator */}
-        {isOtherTyping && (
-          <div className="flex justify-start mt-3">
-            <div className="w-7 flex-shrink-0 mr-2" />
-            <div
-              className="px-4 py-3 rounded-[18px] rounded-bl-[4px] flex items-center gap-1.5"
-              style={{
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border-default)',
-              }}
-            >
-              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
-              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
-              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
-            </div>
-          </div>
-        )}
-
-        <div ref={bottomRef} />
-      </div>
+      {/* ── Messages area — memoized so composer keystrokes do not redraw bubbles ─ */}
+      <ChatThreadScroll
+        messages={messages}
+        userId={user?.id}
+        otherId={otherId}
+        otherUser={otherUser}
+        isOtherTyping={isOtherTyping}
+        withdrawingId={withdrawingId}
+        sending={sending}
+        historyReady={historyReady}
+        loadingOlder={loadingOlder}
+        hasMoreOlder={hasMoreOlder}
+        messagesScrollRef={messagesScrollRef}
+        bottomRef={bottomRef}
+        onScroll={handleThreadScroll}
+        onOpenImage={openImageViewer}
+        onWithdrawMedia={handleWithdrawMedia}
+        onSendIcebreaker={sendTextMessage}
+      />
 
       {/* ── Input bar ─────────────────────────────────────────────────────── */}
       <div
-        className="flex-shrink-0 border-t border-[var(--border-default)] px-4 py-3 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl"
+        className="relative z-[70] min-w-0 max-w-full flex-shrink-0 overflow-x-clip border-t border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] px-2 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] backdrop-blur-xl sm:px-4"
+        data-testid="chat-composer"
       >
         {mediaError && (
           <div
-            className="mb-2 text-[11px] px-3 py-2 rounded-lg"
+            className="mb-2 flex items-center justify-between gap-2 text-[11px] px-3 py-2 rounded-lg"
             style={{
               background: 'rgba(196,131,42,0.12)',
               border: '1px solid rgba(196,131,42,0.35)',
               color: 'var(--cream)',
             }}
           >
-            {mediaError}
+            <span>{mediaError}</span>
+            {canJerk && (
+              <button
+                type="button"
+                onClick={handleSendJerk}
+                disabled={jerking || jerkSent}
+                data-testid="chat-jerk-button"
+                aria-label={jerkSent ? 'Jerk sent' : jerking ? 'Sending jerk' : 'Send a jerk'}
+                title={jerkSent ? 'Jerk sent' : 'Send a jerk'}
+                className="shrink-0 rounded-full bg-[#C4832A] px-3 py-1 text-[11px] font-bold text-[#1A0E03] transition-transform active:scale-95 disabled:opacity-50"
+              >
+                {jerkSent ? 'Jerk sent' : jerking ? 'Sending…' : 'Send a jerk'}
+              </button>
+            )}
+          </div>
+        )}
+        {jerkSent && !mediaError && (
+          <div
+            className="mb-2 text-[11px] px-3 py-1.5 rounded-lg text-center"
+            style={{
+              background: 'rgba(196,131,42,0.12)',
+              border: '1px solid rgba(196,131,42,0.35)',
+              color: 'var(--cream)',
+            }}
+          >
+            Jerk sent.
           </div>
         )}
 
@@ -1119,52 +1279,24 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         />
 
         {/* Image composer — preview + view-rule choice before sending */}
-        {pendingImage && pendingPreviewUrl && (
+        {(pendingImage && pendingPreviewUrl) ||
+        (pendingLibraryPhotos && pendingLibraryPhotos.length > 0) ? (
           <ImageComposer
-            previewUrl={pendingPreviewUrl}
+            previewUrl={
+              pendingPreviewUrl ||
+              getPhotoUrl(pendingLibraryPhotos![0].photo_url) ||
+              pendingLibraryPhotos![0].photo_url
+            }
             rule={viewRule}
             customViews={customViews}
             uploading={uploadingMedia}
+            preparing={pendingPreparing}
+            photoCount={pendingLibraryPhotos?.length ?? 1}
             onRuleChange={setViewRule}
             onCustomViewsChange={setCustomViews}
             onCancel={clearPendingImage}
             onSend={handleSendPendingImage}
           />
-        )}
-
-        {videoRecording ? (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-[var(--copper)]/50 bg-black">
-            <video
-              ref={videoPreviewRef}
-              muted
-              playsInline
-              autoPlay
-              className="h-48 w-full object-cover"
-            />
-            <div className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-elevated)]">
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ background: '#E5484D', boxShadow: '0 0 8px #E5484D' }}
-              />
-              <span className="flex-1 text-xs font-semibold text-[var(--cream)]">
-                Recording video… {formatDuration(videoRecordSeconds * 1000)}
-              </span>
-              <button
-                type="button"
-                onClick={() => stopVideoRecording(false)}
-                className="rounded-lg px-2 py-1 text-xs font-bold text-[var(--cream-muted)]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => stopVideoRecording(true)}
-                className="rounded-lg bg-[var(--copper)] px-3 py-1 text-xs font-bold text-[var(--nn-on-copper)]"
-              >
-                Send
-              </button>
-            </div>
-          </div>
         ) : null}
 
         {recording ? (
@@ -1208,62 +1340,66 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             </button>
           </div>
         ) : (
-          <form onSubmit={handleSend} className="flex items-center gap-2">
+          <form onSubmit={handleSend} className="flex min-w-0 max-w-full items-center gap-1.5 sm:gap-2">
             <button
               type="button"
               onClick={handleShareLocation}
-              disabled={uploadingMedia || sharingLocation || !!pendingImage}
+              disabled={uploadingMedia || sharingLocation || !!pendingImage || !!pendingLibraryPhotos}
               aria-label="Send current location"
               title="Send current location"
-              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
             >
-              <LocationPinIcon className="w-4 h-4" />
+              <LocationPinIcon className="h-4 w-4" />
             </button>
 
-            {/* Camera — tap selfie, press-and-hold video */}
+            {/* Camera — opens Picture | Video chooser, then live camera */}
             <button
               type="button"
-              onPointerDown={onCameraPointerDown}
-              onPointerUp={onCameraPointerUp}
-              onPointerCancel={onCameraPointerCancel}
-              onContextMenu={(e) => e.preventDefault()}
-              disabled={uploadingMedia || !!pendingImage || recording}
-              aria-label="Take photo or hold for video"
-              title="Tap for photo · hold for video"
-              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper touch-none select-none"
-              style={{ touchAction: 'none' }}
+              onClick={handleCameraClick}
+              disabled={uploadingMedia || !!pendingImage || !!pendingLibraryPhotos || recording}
+              aria-label="Open camera"
+              title="Take a picture or video"
+              data-testid="chat-camera-button"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
             >
-              <CameraIcon className="w-4 h-4" />
+              <CameraIcon className="h-4 w-4" />
             </button>
 
-            {/* Gallery / attachments */}
+            {/* My Photos attach (device gallery secondary inside sheet) */}
             <button
               type="button"
               onClick={handleAttachClick}
-              disabled={uploadingMedia || !!pendingImage}
-              aria-label="Attach from gallery"
-              title="Attach from gallery"
-              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper"
+              disabled={uploadingMedia || !!pendingImage || !!pendingLibraryPhotos}
+              aria-label="Attach from My Photos"
+              title="Attach from My Photos"
+              data-testid="chat-attach-button"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
             >
-              <AttachIcon className="w-4 h-4" />
+              <AttachIcon className="h-4 w-4" />
             </button>
 
-            {/* Text input */}
-            <div className="relative flex-1">
+            {/* Text input — min-w-0 so flex siblings cannot shove past the phone edge */}
+            <div className="relative min-w-0 flex-1">
               <input
                 ref={inputRef}
                 type="text"
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
+                onBeforeInput={handleBeforeInput}
                 placeholder="Say something direct."
                 autoComplete="off"
-                className="w-full text-sm px-5 py-3 rounded-full focus:outline-none transition-all duration-200"
+                enterKeyHint="send"
+                inputMode="text"
+                data-testid="chat-text-input"
+                // ≥16px: iOS Safari auto-zooms focused inputs under 16px and sticks >1× until pinch-out.
+                className="w-full min-w-0 rounded-full px-3 py-2.5 text-[16px] leading-snug transition-all duration-200 focus:outline-none sm:px-5 sm:py-3"
                 style={{
                   background: 'var(--bg-card)',
                   border: '1px solid var(--border-default)',
                   color: 'var(--cream)',
                   caretColor: '#C4832A',
+                  fontSize: '16px',
                 }}
                 onFocus={(e) => {
                   e.currentTarget.style.border = '1px solid rgba(196,131,42,0.5)';
@@ -1276,13 +1412,17 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               />
             </div>
 
-            {/* Voice note OR Send — switch based on whether there's text */}
-            {input.trim() ? (
+            {/* Voice note OR Send — keep Send visible while in-flight so a
+                keyboard-dismiss ghost tap cannot land on Mic after input clears
+                (Android Chrome + iOS). */}
+            {input.trim() || sending ? (
               <button
                 type="submit"
-                disabled={!input.trim() || sending}
+                disabled={(!input.trim() && !sending) || sending}
                 aria-label="Send message"
-                className="flex-shrink-0 rounded-full px-5 py-2.5 text-sm font-bold mr-cta-gradient transition-all duration-200 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed min-h-[46px]"
+                data-testid="chat-send-button"
+                onPointerDown={handleSendPointerDown}
+                className="mr-cta-gradient min-h-[40px] flex-shrink-0 rounded-full px-3 py-2 text-sm font-bold transition-all duration-200 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 sm:min-h-[46px] sm:px-5 sm:py-2.5"
               >
                 {sending ? <PulseRing size={16} label="Sending" /> : 'Send'}
               </button>
@@ -1293,9 +1433,10 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 disabled={uploadingMedia}
                 aria-label="Record voice note"
                 title="Record voice note"
-                className="flex-shrink-0 w-[46px] h-[46px] rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 mr-cta-gradient text-[#FFF6E6] shadow-[0_2px_12px_rgba(196,131,42,0.4)]"
+                data-testid="chat-voice-button"
+                className="mr-cta-gradient flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-[#FFF6E6] shadow-[0_2px_12px_rgba(196,131,42,0.4)] active:scale-95 disabled:opacity-40 sm:h-[46px] sm:w-[46px]"
               >
-                <MicIcon className="w-4 h-4" />
+                <MicIcon className="h-4 w-4" />
               </button>
             )}
           </form>
@@ -1307,15 +1448,45 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         <ImageViewer
           msg={viewerMsg}
           onConsume={handleConsumeView}
-          onClose={() => setViewerMsg(null)}
+          onClose={closeImageViewer}
         />
       )}
+
+      <CameraCaptureChooser
+        open={cameraChooserOpen}
+        onClose={() => setCameraChooserOpen(false)}
+        onChoosePicture={handleChoosePicture}
+        onChooseVideo={handleChooseVideo}
+      />
+
+      <ChatAttachLibrarySheet
+        open={attachLibraryOpen}
+        onClose={() => setAttachLibraryOpen(false)}
+        onConfirm={(photos) => {
+          setAttachLibraryOpen(false);
+          stageLibraryPhotos(photos);
+        }}
+        onDeviceGallery={() => {
+          setAttachLibraryOpen(false);
+          fileInputRef.current?.click();
+        }}
+      />
 
       <SelfieCaptureModal
         variant="compact"
         open={selfieOpen}
         onClose={() => setSelfieOpen(false)}
         onCapture={stageImageFile}
+        onError={setMediaError}
+        ariaLabel="Take a picture"
+        captureLabel="Capture"
+        filePrefix="chat-photo"
+      />
+
+      <VideoNoteCaptureModal
+        open={videoNoteOpen}
+        onClose={() => setVideoNoteOpen(false)}
+        onCapture={handleSendVideoNote}
         onError={setMediaError}
       />
 
@@ -1330,54 +1501,94 @@ interface LocationBubbleProps {
   isMine: boolean;
   showTail: boolean;
   peerName?: string;
+  onWithdraw?: () => void;
+  withdrawing?: boolean;
 }
 
-const LocationBubble: React.FC<LocationBubbleProps> = ({ msg, isMine, showTail, peerName }) => {
-  const coords = parseLocationPayload(msg.media_type, msg.message);
+const LocationBubble: React.FC<LocationBubbleProps> = ({
+  msg,
+  isMine,
+  showTail,
+  peerName,
+  onWithdraw,
+  withdrawing,
+}) => {
+  const radius = showTail
+    ? isMine
+      ? '18px 18px 4px 18px'
+      : '18px 18px 18px 4px'
+    : '18px';
+
+  if (isWithdrawnMedia(msg)) {
+    return (
+      <div className={`flex max-w-full flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
+        <div
+          className="flex max-w-full items-center gap-2 px-4 py-3 text-xs break-words [overflow-wrap:anywhere]"
+          data-testid="media-withdrawn"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-default)',
+            color: 'var(--cream-muted)',
+            borderRadius: radius,
+          }}
+        >
+          <FlameIcon className="h-4 w-4 shrink-0" />
+          <span>{msg.message || 'Location withdrawn'}</span>
+        </div>
+      </div>
+    );
+  }
+
+  const coords = parseLocationPayload(msg.media_type, msg.message, msg.withdrawn_at);
   const label = isMine ? 'Shared location' : `${peerName ?? 'Match'}'s location`;
 
   const bubbleStyle = isMine
     ? {
         background: 'linear-gradient(135deg, #C4832A, #A45E18)',
         color: '#FFF5E6',
-        borderRadius: showTail ? '18px 18px 4px 18px' : '18px',
+        borderRadius: radius,
         boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
       }
     : {
         background: 'var(--bg-card)',
         border: '1px solid var(--border-default)',
         color: 'var(--cream)',
-        borderRadius: showTail ? '18px 18px 18px 4px' : '18px',
+        borderRadius: radius,
       };
 
   return (
-    <div className="relative px-4 py-3 text-sm leading-relaxed max-w-[240px]" style={bubbleStyle}>
-      <div className="flex items-start gap-2">
-        <LocationPinIcon className="w-5 h-5 shrink-0 mt-0.5" />
-        <div>
-          <p className="font-semibold">{label}</p>
-          {coords ? (
-            <p className="mt-1 text-[11px] opacity-80">
-              {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
-            </p>
-          ) : null}
+    <div className={`flex max-w-full flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
+      <div className="relative max-w-full px-4 py-3 text-base leading-relaxed break-words [overflow-wrap:anywhere]" style={bubbleStyle}>
+        <div className="flex min-w-0 items-start gap-2">
+          <LocationPinIcon className="mt-0.5 h-5 w-5 shrink-0" />
+          <div className="min-w-0">
+            <p className="font-semibold">{label}</p>
+            {coords ? (
+              <p className="mt-1 text-[11px] opacity-80">
+                {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
+              </p>
+            ) : null}
+          </div>
         </div>
+        {coords ? (
+          <button
+            type="button"
+            onClick={() => openMapsDirections(coords.lat, coords.lng, label)}
+            className="mt-3 w-full rounded-lg px-3 py-2 text-xs font-bold"
+            style={
+              isMine
+                ? { background: 'rgba(13,10,6,0.22)', color: '#FFF5E6' }
+                : { background: 'rgba(196,131,42,0.16)', color: '#C4832A', border: '1px solid rgba(196,131,42,0.35)' }
+            }
+          >
+            Get directions
+          </button>
+        ) : (
+          <p className="mt-2 text-[11px] opacity-70">Location unavailable</p>
+        )}
       </div>
-      {coords ? (
-        <button
-          type="button"
-          onClick={() => openMapsDirections(coords.lat, coords.lng, label)}
-          className="mt-3 w-full rounded-lg px-3 py-2 text-xs font-bold"
-          style={
-            isMine
-              ? { background: 'rgba(13,10,6,0.22)', color: '#FFF5E6' }
-              : { background: 'rgba(196,131,42,0.16)', color: '#C4832A', border: '1px solid rgba(196,131,42,0.35)' }
-          }
-        >
-          Get directions
-        </button>
-      ) : (
-        <p className="mt-2 text-[11px] opacity-70">Location unavailable</p>
+      {onWithdraw && isMine && (
+        <WithdrawMediaButton onClick={onWithdraw} loading={withdrawing} label="Withdraw location" />
       )}
     </div>
   );
@@ -1385,99 +1596,25 @@ const LocationBubble: React.FC<LocationBubbleProps> = ({ msg, isMine, showTail, 
 
 // ── SVG Icons ────────────────────────────────────────────────────────────────
 
-interface MeetConsentBarProps {
-  state: MeetAgreementState;
-  peerName: string;
-  submitting: boolean;
-  onConfirm: () => void;
-  onRevoke: () => void;
-}
-
-const MeetConsentBar: React.FC<MeetConsentBarProps> = ({
-  state,
-  peerName,
-  submitting,
-  onConfirm,
-  onRevoke,
-}) => {
-  if (state.mutual) {
-    return (
-      <div
-        className="flex-shrink-0 px-4 py-2.5 border-b text-center"
-        style={{ borderColor: 'var(--border-default)', background: 'rgba(22,163,74,0.12)' }}
-        data-testid="meet-consent-mutual"
-      >
-        <p className="text-xs font-semibold" style={{ color: '#86EFAC' }}>
-          You both confirmed you&apos;re ready to meet — coordinate safely in public.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="flex-shrink-0 px-4 py-3 border-b"
-      style={{ borderColor: 'var(--border-default)', background: 'color-mix(in srgb, var(--bg-card) 95%, transparent)' }}
-      data-testid="meet-consent-bar"
-    >
-      <p className="text-xs font-semibold" style={{ color: 'var(--cream)' }}>
-        Ready to meet?
-      </p>
-      <p className="text-[11px] mt-1 leading-relaxed" style={{ color: 'var(--cream-muted)' }}>
-        Confirm only when you&apos;re happy to arrange a meet-up with {peerName}. Both of you must
-        agree before this shows as mutual.
-      </p>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        {state.my_confirmed ? (
-          <>
-            <span className="text-[11px] font-medium" style={{ color: '#C4832A' }}>
-              You confirmed · waiting for {peerName}
-              {state.peer_confirmed ? '' : '…'}
-            </span>
-            <button
-              type="button"
-              onClick={onRevoke}
-              disabled={submitting}
-              className="text-[11px] font-semibold underline disabled:opacity-50"
-              style={{ color: 'var(--cream-muted)' }}
-            >
-              Undo
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={submitting}
-            className="rounded-xl px-3 py-2 text-[11px] font-bold disabled:opacity-50"
-            style={{ background: '#C4832A', color: 'var(--nn-on-copper)' }}
-          >
-            {submitting ? 'Saving…' : "I'm ready to meet"}
-          </button>
-        )}
-        {state.peer_confirmed && !state.my_confirmed && (
-          <span className="text-[11px]" style={{ color: '#86EFAC' }}>
-            {peerName} is ready — your turn
-          </span>
-        )}
-      </div>
-    </div>
-  );
-};
-
-const WithdrawMediaButton: React.FC<{ onClick: () => void; loading?: boolean }> = ({
+const WithdrawMediaButton: React.FC<{
+  onClick: () => void;
+  loading?: boolean;
+  label?: string;
+}> = ({
   onClick,
   loading,
+  label = 'Withdraw media',
 }) => (
   <button
     type="button"
     onClick={onClick}
     disabled={loading}
     data-testid="withdraw-media"
+    aria-label={label}
     className="text-[10px] font-semibold underline disabled:opacity-50"
     style={{ color: 'var(--cream-muted)' }}
   >
-    {loading ? 'Withdrawing…' : 'Withdraw media'}
+    {loading ? 'Withdrawing…' : label}
   </button>
 );
 
@@ -1585,6 +1722,33 @@ const FlameIcon = ({
   </svg>
 );
 
+const MessageReceiptTicks = ({
+  read,
+  isMine: _isMine,
+}: {
+  read?: boolean;
+  isMine?: boolean;
+}) => {
+  // Brand Soft lock for ticket 6 (double ticks) — exact rules:
+  // - Light ticks on dark skins: cream #F0E0C0 delivered, copper #E0A14A read
+  // - Dark ticks on light skins: night/card ink #1E1508 delivered, dark copper #8B5A1A read
+  // - No grey-on-grey
+  // Wires to real app theme mechanism (data-theme="light" / html.theme-light) via CSS variables:
+  // --mr-tick-delivered and --mr-tick-read defined in menrush-tokens.css.
+  return (
+    <span
+      className={`inline-flex items-center ml-1 align-baseline tracking-[-0.22em] text-[11px] font-bold ${
+        read ? 'mr-receipt-tick-read' : 'mr-receipt-tick-delivered'
+      }`}
+      title={read ? 'Read' : 'Delivered'}
+      aria-label={read ? 'Read' : 'Delivered'}
+      data-testid={read ? 'message-tick-read' : 'message-tick-delivered'}
+    >
+      ✓✓
+    </span>
+  );
+};
+
 function formatDuration(ms?: number | null): string {
   if (!ms || ms < 0) return '0:00';
   const total = Math.round(ms / 1000);
@@ -1602,6 +1766,8 @@ interface ImageComposerProps {
   rule: ViewRule;
   customViews: number;
   uploading: boolean;
+  preparing?: boolean;
+  photoCount?: number;
   onRuleChange: (rule: ViewRule) => void;
   onCustomViewsChange: (n: number) => void;
   onCancel: () => void;
@@ -1613,11 +1779,14 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
   rule,
   customViews,
   uploading,
+  preparing = false,
+  photoCount = 1,
   onRuleChange,
   onCustomViewsChange,
   onCancel,
   onSend,
 }) => {
+  const busy = uploading || preparing;
   const rules: ViewRule[] = ['permanent', 'once', 'twice', 'custom'];
   const ruleSummary =
     rule === 'permanent'
@@ -1630,23 +1799,24 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
 
   return (
     <div
-      className="mb-3 p-3 rounded-2xl"
+      className="mb-3 max-w-full overflow-x-clip rounded-2xl p-3"
       data-testid="image-composer"
       style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
     >
-      <div className="flex gap-3">
+      <div className="flex min-w-0 gap-3">
         <img
           src={previewUrl}
           alt="Selected photo preview"
           data-testid="image-composer-preview"
-          className="w-20 h-20 rounded-xl object-cover flex-shrink-0"
+          className="h-20 w-20 flex-shrink-0 rounded-xl object-cover"
           style={{ border: '1px solid var(--border-default)' }}
         />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold mb-2" style={{ color: 'var(--cream)' }}>
-            Photo · <span data-testid="image-composer-rule">{VIEW_RULE_LABELS[rule]}</span>
+        <div className="min-w-0 flex-1">
+          <p className="mb-2 text-xs font-semibold" style={{ color: 'var(--cream)' }}>
+            {photoCount > 1 ? `${photoCount} photos` : 'Photo'} ·{' '}
+            <span data-testid="image-composer-rule">{VIEW_RULE_LABELS[rule]}</span>
           </p>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex max-w-full flex-wrap gap-1.5">
             {rules.map((r) => {
               const active = r === rule;
               return (
@@ -1656,7 +1826,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
                   onClick={() => onRuleChange(r)}
                   data-testid={`rule-${r}`}
                   aria-pressed={active}
-                  className="text-[11px] px-2.5 py-1 rounded-full transition-all active:scale-95"
+                  className="rounded-full px-2.5 py-1 text-[11px] transition-all active:scale-95"
                   style={{
                     background: active ? 'rgba(196,131,42,0.22)' : 'var(--bg-primary)',
                     border: `1px solid ${active ? '#C4832A' : 'var(--border-default)'}`,
@@ -1702,7 +1872,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
         <button
           type="button"
           onClick={onCancel}
-          disabled={uploading}
+          disabled={busy}
           data-testid="image-composer-cancel"
           className="text-xs px-4 py-2 rounded-full disabled:opacity-40"
           style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', color: 'var(--cream-muted)' }}
@@ -1712,7 +1882,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
         <button
           type="button"
           onClick={onSend}
-          disabled={uploading}
+          disabled={busy}
           data-testid="image-composer-send"
           className="text-xs font-semibold px-5 py-2 rounded-full disabled:opacity-50 active:scale-95"
           style={{
@@ -1721,7 +1891,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
             boxShadow: '0 2px 12px rgba(196,131,42,0.4)',
           }}
         >
-          {uploading ? 'Sending…' : 'Send'}
+          {preparing ? 'Preparing…' : uploading ? 'Sending…' : 'Send'}
         </button>
       </div>
     </div>
@@ -1759,19 +1929,18 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
 
   if (isWithdrawnMedia(msg)) {
     return (
-      <div className="flex flex-col items-end gap-1">
+      <div className="flex max-w-full flex-col items-end gap-1">
         <div
-          className="px-4 py-3 flex items-center gap-2 text-xs"
+          className="flex max-w-full items-center gap-2 px-4 py-3 text-xs break-words [overflow-wrap:anywhere]"
           data-testid="media-withdrawn"
           style={{
             background: 'var(--bg-card)',
             border: '1px solid var(--border-default)',
             color: 'var(--cream-muted)',
             borderRadius: radius,
-            minWidth: 200,
           }}
         >
-          <FlameIcon className="w-4 h-4" />
+          <FlameIcon className="h-4 w-4 shrink-0" />
           <span>{msg.message || 'Photo withdrawn'}</span>
         </div>
       </div>
@@ -1786,17 +1955,16 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
   if (isDisappearing && isExhausted) {
     return (
       <div
-        className="px-4 py-3 flex items-center gap-2 text-xs"
+        className="flex max-w-full items-center gap-2 px-4 py-3 text-xs"
         data-testid="image-unavailable"
         style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border-default)',
           color: 'var(--cream-muted)',
           borderRadius: radius,
-          minWidth: 200,
         }}
       >
-        <FlameIcon className="w-4 h-4" />
+        <FlameIcon className="h-4 w-4 shrink-0" />
         <span>Photo no longer available</span>
       </div>
     );
@@ -1804,26 +1972,52 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
 
   // Permanent image → inline, always available.
   if (!isDisappearing) {
-    if (!url) return null;
-    return (
-      <div className="flex flex-col items-end gap-1">
+    if (!url) {
+      // Socket payloads can arrive before a signed URL is usable; never paint
+      // an empty hole — show the caption/fallback until refetch fills media_url.
+      return (
         <div
-          className="relative overflow-hidden"
+          className="max-w-full px-4 py-3 text-sm break-words [overflow-wrap:anywhere]"
+          data-testid="image-pending"
+          style={{
+            background: isMine
+              ? 'linear-gradient(135deg, #C4832A, #A45E18)'
+              : 'var(--bg-card)',
+            color: isMine ? '#FFF5E6' : 'var(--cream)',
+            border: isMine ? 'none' : '1px solid var(--border-default)',
+            borderRadius: radius,
+          }}
+        >
+          {msg.message || '📷 Photo'}
+        </div>
+      );
+    }
+    const blurred = shouldBlurMedia(msg.media_clear);
+    return (
+      <div className="flex w-full max-w-full flex-col items-end gap-1">
+        <button
+          type="button"
+          className="relative w-full max-w-full overflow-hidden cursor-zoom-in text-left"
           data-testid="image-permanent"
+          aria-label="Open photo"
+          onClick={() => onOpen(msg)}
           style={{
             background: 'var(--bg-card)',
             border: isMine ? 'none' : '1px solid var(--border-default)',
             borderRadius: radius,
             boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
+            padding: 0,
           }}
         >
-          <img
-            src={url}
-            alt={msg.message || 'photo'}
-            className="block max-w-[260px] max-h-[340px] object-cover cursor-zoom-in"
-            onClick={() => onOpen(msg)}
-          />
-        </div>
+          <SoftBlurMedia blurred={blurred}>
+            <img
+              src={url}
+              alt={msg.message || 'photo'}
+              className="block h-auto w-full max-h-[340px] object-cover pointer-events-none"
+              draggable={false}
+            />
+          </SoftBlurMedia>
+        </button>
         {onWithdraw && (
           <WithdrawMediaButton onClick={onWithdraw} loading={withdrawing} />
         )}
@@ -1842,20 +2036,19 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
         ? 'Viewed'
         : `Opened · ${remainingLabel}`;
     return (
-      <div className="flex flex-col items-end gap-1">
+      <div className="flex max-w-full flex-col items-end gap-1">
         <div
-          className="px-4 py-3 flex items-center gap-3 text-xs"
+          className="flex max-w-full items-center gap-3 px-4 py-3 text-xs"
           data-testid="image-sent-status"
           style={{
             background: 'linear-gradient(135deg, #C4832A, #A45E18)',
             color: '#FFF5E6',
             borderRadius: radius,
-            minWidth: 200,
             boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
           }}
         >
-          <FlameIcon className="w-4 h-4" />
-          <div className="flex flex-col">
+          <FlameIcon className="h-4 w-4 shrink-0" />
+          <div className="flex min-w-0 flex-col">
             <span className="font-semibold">Photo · {remainingViewsLabel(null, msg.max_views)}</span>
             <span style={{ color: 'rgba(255,245,230,0.8)' }}>{status}</span>
           </div>
@@ -1874,10 +2067,8 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
       type="button"
       onClick={() => onOpen(msg)}
       data-testid="image-locked"
-      className="relative overflow-hidden flex items-center justify-center active:scale-[0.98] transition-transform"
+      className="relative aspect-square w-full max-w-[220px] overflow-hidden flex items-center justify-center active:scale-[0.98] transition-transform"
       style={{
-        width: 220,
-        height: 220,
         background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-primary) 100%)',
         border: '1px solid var(--border-default)',
         borderRadius: radius,
@@ -1886,10 +2077,10 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
     >
       <div className="flex flex-col items-center gap-2 px-4 text-center">
         <div
-          className="w-12 h-12 rounded-full flex items-center justify-center"
+          className="flex h-12 w-12 items-center justify-center rounded-full"
           style={{ background: 'rgba(196,131,42,0.15)', border: '1px solid rgba(196,131,42,0.4)' }}
         >
-          <FlameIcon className="w-5 h-5" style={{ color: '#C4832A' }} />
+          <FlameIcon className="h-5 w-5" style={{ color: '#C4832A' }} />
         </div>
         <p className="text-xs font-semibold" style={{ color: 'var(--cream)' }}>
           Tap to view
@@ -1907,8 +2098,10 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
 // only after the image has loaded and become visible (onLoad). A failed load
 // shows a retry and never burns a view. After loading, the photo stays up for a
 // viewing window so "view once" is actually viewable.
+// Back / Close (and Android system Back) always return to the same 1:1 thread.
 
 const VIEW_WINDOW_MS = 10_000;
+const CHAT_IMAGE_OVERLAY_ID = 'chat-image-viewer';
 
 interface ImageViewerProps {
   msg: Message;
@@ -1925,11 +2118,48 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
   );
   const [imgAttempt, setImgAttempt] = useState(0);
   const consumedRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const releaseOverlayRef = useRef<((opts?: { popEntry?: boolean }) => void) | null>(null);
   const baseUrl = getPhotoUrl(msg.media_url || undefined);
   const url =
     baseUrl && imgAttempt > 0
       ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}_retry=${imgAttempt}`
       : baseUrl;
+
+  const closeViewer = useCallback((fromUi: boolean) => {
+    releaseOverlayRef.current?.({ popEntry: fromUi });
+    releaseOverlayRef.current = null;
+    onCloseRef.current();
+  }, []);
+
+  // Trap browser / Android Back so it closes the viewer instead of leaving chat.
+  // Strict Mode remount-safe: cleanup does not history.back().
+  useEffect(() => {
+    const release = armOverlayBack(CHAT_IMAGE_OVERLAY_ID, () => {
+      releaseOverlayRef.current = null;
+      onCloseRef.current();
+    });
+    releaseOverlayRef.current = release;
+    return () => {
+      release();
+      if (releaseOverlayRef.current === release) {
+        releaseOverlayRef.current = null;
+      }
+    };
+  }, []);
+
+  // Escape always closes and returns to the thread.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeViewer(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [closeViewer]);
 
   // Disappearing images auto-close after the viewing window. Permanent images
   // stay open until the user closes them.
@@ -1939,12 +2169,12 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
     const tick = window.setInterval(() => {
       setSecondsLeft((s) => Math.max(0, s - 1));
     }, 1000);
-    const closer = window.setTimeout(onClose, VIEW_WINDOW_MS);
+    const closer = window.setTimeout(() => closeViewer(true), VIEW_WINDOW_MS);
     return () => {
       window.clearInterval(tick);
       window.clearTimeout(closer);
     };
-  }, [status, isPermanent, onClose]);
+  }, [status, isPermanent, closeViewer]);
 
   const handleLoad = async () => {
     if (consumedRef.current) {
@@ -1981,83 +2211,147 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex flex-col items-center justify-center"
+      className="fixed inset-0 z-[100] flex flex-col"
       data-testid="image-viewer"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Photo viewer"
       style={{ background: 'rgba(5,3,1,0.96)' }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close photo"
-        data-testid="image-viewer-close"
-        className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center"
-        style={{ background: 'rgba(30,21,8,0.9)', border: '1px solid var(--border-default)', color: 'var(--cream)' }}
+      {/* Obvious Back + Close chrome — safe-area aware for notched phones */}
+      <div
+        className="flex flex-shrink-0 items-center justify-between gap-2 px-2 sm:px-3"
+        style={{
+          paddingTop: 'max(0.75rem, env(safe-area-inset-top, 0px))',
+          paddingLeft: 'max(0.5rem, env(safe-area-inset-left, 0px))',
+          paddingRight: 'max(0.5rem, env(safe-area-inset-right, 0px))',
+        }}
+        data-testid="image-viewer-chrome"
       >
-        <CloseIcon className="w-5 h-5" />
-      </button>
+        <button
+          type="button"
+          onClick={() => closeViewer(true)}
+          aria-label="Back to chat"
+          data-testid="image-viewer-back"
+          className="inline-flex min-h-[44px] min-w-[44px] items-center gap-0.5 rounded-xl px-2 text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.15)] active:scale-[0.98]"
+        >
+          <ChevronLeftIcon className="h-6 w-6 shrink-0" />
+          <span className="pr-1 text-sm font-bold leading-none">Back</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => closeViewer(true)}
+          aria-label="Close photo"
+          data-testid="image-viewer-close"
+          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-xl px-3 text-[var(--cream)] transition-colors hover:bg-[rgba(196,131,42,0.15)] active:scale-[0.98]"
+          style={{ background: 'rgba(30,21,8,0.9)', border: '1px solid var(--border-default)' }}
+        >
+          <CloseIcon className="h-5 w-5" />
+          <span className="text-sm font-bold leading-none">Close</span>
+        </button>
+      </div>
 
-      {status === 'error' ? (
-        <div className="flex flex-col items-center gap-3 text-center px-8">
-          <FlameIcon className="w-8 h-8" style={{ color: '#C4832A' }} />
-          <p className="text-sm" style={{ color: 'var(--cream)' }}>
-            Couldn’t load this photo.
-          </p>
-          <p className="text-xs" style={{ color: 'var(--cream-muted)' }}>
-            No view was used. Check your connection and try again.
-          </p>
-          <button
-            type="button"
-            data-testid="image-viewer-retry"
-            onClick={handleRetry}
-            className="text-xs font-semibold px-5 py-2 rounded-full mt-1"
-            style={{ background: 'linear-gradient(135deg, #C4832A, #A45E18)', color: '#FFF5E6' }}
-          >
-            Retry
-          </button>
-        </div>
-      ) : (
-        <>
-          {status === 'loading' && (
-            <div className="absolute" data-testid="image-viewer-loading">
-              <PulseRing size={28} label="Loading photo" />
-            </div>
-          )}
-          {url && (
-            <img
-              key={imgAttempt}
-              src={url}
-              alt={msg.message || 'photo'}
-              data-testid="image-viewer-img"
-              draggable={false}
-              onLoad={handleLoad}
-              onError={handleError}
-              className="max-w-[92vw] max-h-[78vh] object-contain select-none"
-              style={{ opacity: status === 'shown' ? 1 : 0 }}
-            />
-          )}
-          {status === 'shown' && !isPermanent && (
-            <div
-              className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1"
-              data-testid="image-viewer-meta"
+      <div
+        className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))]"
+        // Tap empty chrome (not the photo) to close — same thread stays mounted.
+        onClick={(e) => {
+          if (e.target === e.currentTarget) closeViewer(true);
+        }}
+      >
+        {status === 'error' ? (
+          <div className="flex flex-col items-center gap-3 px-8 text-center">
+            <FlameIcon className="h-8 w-8" style={{ color: '#C4832A' }} />
+            <p className="text-sm" style={{ color: 'var(--cream)' }}>
+              Couldn’t load this photo.
+            </p>
+            <p className="text-xs" style={{ color: 'var(--cream-muted)' }}>
+              No view was used. Check your connection and try again.
+            </p>
+            <button
+              type="button"
+              data-testid="image-viewer-retry"
+              onClick={handleRetry}
+              className="mt-1 rounded-full px-5 py-2 text-xs font-semibold"
+              style={{ background: 'linear-gradient(135deg, #C4832A, #A45E18)', color: '#FFF5E6' }}
             >
-              <span
-                className="text-[11px] px-3 py-1 rounded-full"
+              Retry
+            </button>
+          </div>
+        ) : (
+          <>
+            {status === 'loading' && (
+              <div className="absolute" data-testid="image-viewer-loading">
+                <PulseRing size={28} label="Loading photo" />
+              </div>
+            )}
+            {url && (
+              // Standard open frame: every photo (tiny or huge) fits the same
+              // phone/desktop box — contain + centered letterbox/pillarbox.
+              <div
+                data-testid="image-viewer-frame"
+                className="flex items-center justify-center overflow-hidden"
                 style={{
-                  background: 'rgba(30,21,8,0.9)',
-                  border: '1px solid rgba(196,131,42,0.45)',
-                  color: 'var(--cream)',
+                  width: CHAT_IMAGE_VIEWER_FRAME.width,
+                  height: CHAT_IMAGE_VIEWER_FRAME.height,
+                  maxWidth: CHAT_IMAGE_VIEWER_FRAME.maxWidth,
+                  maxHeight: CHAT_IMAGE_VIEWER_FRAME.maxHeight,
+                  background: 'rgba(0,0,0,0.35)',
+                  borderRadius: 12,
                 }}
               >
-                {remainingViewsLabel(meta.remaining, meta.max)} · closes in {secondsLeft}s
-              </span>
-              <span className="text-[10px]" style={{ color: '#6B5035' }}>
-                Screenshots can’t be fully blocked on the web — view with trust.
-              </span>
-            </div>
-          )}
-        </>
-      )}
+                <SoftBlurMedia blurred={shouldBlurMedia(msg.media_clear)} className="h-full w-full">
+                  <img
+                    key={imgAttempt}
+                    src={url}
+                    alt={msg.message || 'photo'}
+                    data-testid="image-viewer-img"
+                    draggable={false}
+                    onLoad={handleLoad}
+                    onError={handleError}
+                    className="h-full w-full select-none object-contain"
+                    style={{ opacity: status === 'shown' ? 1 : 0 }}
+                  />
+                </SoftBlurMedia>
+              </div>
+            )}
+            {/* Captions under the photo — high contrast for phone distance (Al 5 Sep). */}
+            {status === 'shown' && (
+              <div
+                className="mt-3 flex w-full max-w-[min(90vw,720px)] flex-col items-center gap-2.5 px-2"
+                data-testid="image-viewer-meta"
+              >
+                {!isPermanent && (
+                  <span
+                    className="rounded-full px-4 py-2.5 text-base font-semibold leading-snug tabular-nums"
+                    data-testid="image-viewer-status"
+                    style={{
+                      background: 'rgba(5,3,1,0.94)',
+                      border: '1px solid rgba(196,131,42,0.65)',
+                      color: '#FFF5E6',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.75)',
+                    }}
+                  >
+                    {remainingViewsLabel(meta.remaining, meta.max)} · closes in {secondsLeft}s
+                  </span>
+                )}
+                <span
+                  className="max-w-[22rem] rounded-xl px-4 py-2.5 text-center text-base font-semibold leading-snug"
+                  data-testid="image-viewer-trust"
+                  style={{
+                    background: 'rgba(5,3,1,0.94)',
+                    border: '1px solid rgba(240,224,192,0.28)',
+                    color: '#FFF5E6',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.75)',
+                  }}
+                >
+                  Screenshots can’t be fully blocked on the web. View with trust.
+                </span>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 };
@@ -2198,33 +2492,32 @@ const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail, onWith
   const progressPct = duration > 0 ? Math.min(100, (position / duration) * 100) : 0;
 
   return (
-    <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
+    <div className={`flex max-w-full flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
       <div
-        className="flex items-center gap-3 px-3 py-2.5"
+        className="flex w-full min-w-0 max-w-full items-center gap-3 px-3 py-2.5"
         style={{
           background: isMine ? 'linear-gradient(135deg, #C4832A, #A45E18)' : 'var(--bg-elevated)',
           border: isMine ? 'none' : '1px solid var(--border-default)',
           color: isMine ? '#FFF5E6' : 'var(--cream)',
           borderRadius: radius,
           boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
-          minWidth: 200,
         }}
       >
         <button
           type="button"
           onClick={() => void togglePlay()}
           aria-label={playing ? 'Pause voice note' : 'Play voice note'}
-          className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center active:scale-95"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full active:scale-95"
           style={{
             background: isMine ? 'rgba(13,10,6,0.35)' : 'rgba(196,131,42,0.18)',
             color: isMine ? '#FFF5E6' : 'var(--copper)',
           }}
         >
-          {playing ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4 ml-0.5" />}
+          {playing ? <PauseIcon className="h-4 w-4" /> : <PlayIcon className="ml-0.5 h-4 w-4" />}
         </button>
-        <div className="flex-1 flex flex-col gap-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div
-            className="h-1.5 rounded-full overflow-hidden"
+            className="h-1.5 overflow-hidden rounded-full"
             style={{ background: isMine ? 'rgba(13,10,6,0.35)' : 'rgba(196,131,42,0.18)' }}
           >
             <div
@@ -2255,6 +2548,10 @@ const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail, onWith
 };
 
 // ── VideoBubble ──────────────────────────────────────────────────────────────
+// Progressive Range stream into <video> — do NOT await a JWT media-url refresh
+// (or full blob) before first frame. Lock play src so open-thread poll re-grants
+// cannot remount src every ~2.5s (that caused forever black + duration `--:--`).
+// Hard timeout → tap-to-retry; refresh grant only on retry / missing URL.
 
 interface VideoBubbleProps {
   msg: Message;
@@ -2265,13 +2562,87 @@ interface VideoBubbleProps {
 }
 
 const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWithdraw, withdrawing }) => {
-  const url = getPhotoUrl(msg.media_url || undefined);
+  const propUrl = getPhotoUrl(msg.media_url || undefined);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const loadGenRef = useRef(0);
+  const [loadState, setLoadState] = useState<ChatVideoLoadState>('idle');
+  const [playSrc, setPlaySrc] = useState<string | null>(null);
+  const [errorHint, setErrorHint] = useState<string | null>(null);
   const withdrawn = isWithdrawnMedia(msg);
   const radius = showTail
     ? isMine
       ? '18px 18px 4px 18px'
       : '18px 18px 18px 4px'
     : '18px';
+
+  useEffect(() => {
+    return () => {
+      loadGenRef.current += 1;
+    };
+  }, []);
+
+  // Wait for metadata / first frame (or short timeout / error) once src is locked.
+  // Keep error listeners through `ready` so a mid-play void surfaces retry UI
+  // instead of a forever-black native player with duration `--:--`.
+  useEffect(() => {
+    if ((loadState !== 'loading' && loadState !== 'ready') || !playSrc) return;
+    const el = videoRef.current;
+    if (!el) return;
+
+    const gen = loadGenRef.current;
+    let settled = loadState === 'ready';
+
+    const succeed = () => {
+      if (settled || gen !== loadGenRef.current) return;
+      settled = true;
+      setLoadState('ready');
+      void el.play().catch(() => undefined);
+    };
+
+    const fail = (hint: string) => {
+      if (gen !== loadGenRef.current) return;
+      settled = true;
+      setPlaySrc(null);
+      setErrorHint(hint);
+      setLoadState('error');
+    };
+
+    const onMeta = () => {
+      if (loadState === 'loading') succeed();
+    };
+    const onCanPlay = () => {
+      if (loadState === 'loading') succeed();
+    };
+    const onLoadedData = () => {
+      if (loadState === 'loading') succeed();
+    };
+    const onError = () => fail('Download failed. Tap to try again');
+
+    el.addEventListener('loadedmetadata', onMeta);
+    el.addEventListener('loadeddata', onLoadedData);
+    el.addEventListener('canplay', onCanPlay);
+    el.addEventListener('error', onError);
+
+    let timer: number | undefined;
+    if (loadState === 'loading') {
+      timer = window.setTimeout(
+        () => fail('Still downloading. Tap to try again'),
+        VIDEO_LOAD_TIMEOUT_MS,
+      );
+      // Cached / already-buffered
+      if (el.readyState >= HTMLMediaElement.HAVE_METADATA) {
+        succeed();
+      }
+    }
+
+    return () => {
+      el.removeEventListener('loadedmetadata', onMeta);
+      el.removeEventListener('loadeddata', onLoadedData);
+      el.removeEventListener('canplay', onCanPlay);
+      el.removeEventListener('error', onError);
+      if (timer != null) window.clearTimeout(timer);
+    };
+  }, [loadState, playSrc]);
 
   if (withdrawn) {
     return (
@@ -2290,25 +2661,141 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
     );
   }
 
+  const blurred = shouldBlurMedia(msg.media_clear);
+
+  const beginLoad = (opts?: { refreshGrant?: boolean }) => {
+    if (blurred) return;
+    const gen = ++loadGenRef.current;
+    const preferRefresh = opts?.refreshGrant === true;
+    setLoadState('loading');
+    setErrorHint(null);
+
+    // Fast path: stream the thread-signed URL immediately (progressive Range).
+    // Do not await JWT /media-url before first byte — that alone blew the 1–2s bar.
+    if (!preferRefresh && propUrl) {
+      setPlaySrc(propUrl);
+      return;
+    }
+
+    // Retry / missing URL: refresh grant, then stream the fresh signed URL.
+    setPlaySrc(null);
+    void (async () => {
+      let refreshed: string | null = null;
+      let mime: string | undefined;
+
+      if (msg.id) {
+        try {
+          const res = await messagesAPI.getMediaUrl(msg.id);
+          if (gen !== loadGenRef.current) return;
+          refreshed = getPhotoUrl(res.data.url) || null;
+          mime = res.data.mime_type;
+        } catch {
+          // Fall through to the thread URL if refresh fails.
+        }
+      }
+
+      if (gen !== loadGenRef.current) return;
+
+      const unsupported = chatVideoUnsupportedHint(mime);
+      if (unsupported) {
+        setErrorHint(unsupported);
+        setLoadState('error');
+        return;
+      }
+
+      const resolved = resolveChatVideoPlayUrl({
+        threadUrl: propUrl,
+        refreshedUrl: refreshed,
+        preferRefresh: true,
+      });
+
+      if (!resolved) {
+        setErrorHint('Video unavailable');
+        setLoadState('error');
+        return;
+      }
+
+      setPlaySrc(resolved);
+    })();
+  };
+
+  const showPlayer = (loadState === 'loading' || loadState === 'ready') && !!playSrc;
+  const showOverlay =
+    loadState === 'idle' || loadState === 'loading' || loadState === 'error' || blurred;
+
   return (
-    <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
+    <div className={`flex max-w-full flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
       <div
-        className="overflow-hidden"
+        className="relative w-full max-w-full overflow-hidden"
         style={{
           borderRadius: radius,
           border: isMine ? 'none' : '1px solid var(--border-default)',
-          maxWidth: 260,
           background: 'var(--bg-elevated)',
         }}
       >
-        {url ? (
-          <video
-            src={url}
-            controls
-            playsInline
-            preload="metadata"
-            className="block w-full max-h-[320px] bg-black"
-          />
+        {propUrl || showPlayer ? (
+          <SoftBlurMedia blurred={blurred} data-testid="video-bubble">
+            <div className="relative w-full bg-black">
+              {showPlayer ? (
+                <video
+                  ref={videoRef}
+                  key={playSrc}
+                  src={playSrc || undefined}
+                  controls={loadState === 'ready' && !blurred}
+                  playsInline
+                  {...{ 'webkit-playsinline': 'true' }}
+                  // auto + Accept-Ranges: short notes start painting before full file.
+                  preload="auto"
+                  className="block h-auto min-h-[180px] max-h-[320px] w-full bg-black"
+                  data-testid="video-bubble-player"
+                  data-load-state={loadState}
+                />
+              ) : (
+                <div className="h-[180px] w-full bg-black/90" aria-hidden />
+              )}
+
+              {showOverlay && !blurred ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 px-3">
+                  {loadState === 'loading' ? (
+                    <div
+                      className="flex flex-col items-center gap-2 text-[#F0E0C0]"
+                      data-testid="video-bubble-loading"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <PulseRing size={44} />
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
+                        Loading…
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => beginLoad({ refreshGrant: loadState === 'error' })}
+                      data-testid={loadState === 'error' ? 'video-bubble-retry' : 'video-bubble-open'}
+                      className="flex flex-col items-center justify-center gap-2 text-[#F0E0C0]"
+                      aria-label={loadState === 'error' ? 'Retry video' : 'Open video'}
+                    >
+                      <span
+                        className="flex h-12 w-12 items-center justify-center rounded-full bg-[#C4832A] text-lg font-extrabold text-[#1A0E03]"
+                        aria-hidden
+                      >
+                        {loadState === 'error' ? '↻' : '▶'}
+                      </span>
+                      <span className="text-center text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
+                        {loadState === 'error' ? 'Tap to try again' : 'Tap to open'}
+                      </span>
+                      {loadState === 'error' && errorHint ? (
+                        <span className="max-w-[16rem] text-center text-[10px] font-medium normal-case tracking-normal text-[#F0E0C0]/90">
+                          {errorHint}
+                        </span>
+                      ) : null}
+                    </button>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </SoftBlurMedia>
         ) : (
           <div className="px-4 py-6 text-xs text-[var(--cream-muted)]">Video unavailable</div>
         )}
@@ -2324,3 +2811,341 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
     </div>
   );
 };
+
+/**
+ * Isolated message list — keeps typing/composer state from re-rendering every bubble.
+ *
+ * PERF next pass: virtualize with @tanstack/react-virtual when threads regularly
+ * exceed ~80 messages on phone; preserve date separators + media bubbles + scroll restore.
+ */
+interface ChatThreadScrollProps {
+  messages: Message[];
+  userId?: string;
+  otherId?: string;
+  otherUser: OtherUser | null;
+  isOtherTyping: boolean;
+  withdrawingId: string | null;
+  sending: boolean;
+  historyReady: boolean;
+  loadingOlder: boolean;
+  hasMoreOlder: boolean;
+  messagesScrollRef: React.RefObject<HTMLDivElement | null>;
+  bottomRef: React.RefObject<HTMLDivElement | null>;
+  onScroll: () => void;
+  onOpenImage: (msg: Message) => void;
+  onWithdrawMedia: (id: string) => void | Promise<void>;
+  onSendIcebreaker: (text: string) => void | Promise<void>;
+}
+
+const ChatThreadScroll = memo(function ChatThreadScroll({
+  messages,
+  userId,
+  otherId,
+  otherUser,
+  isOtherTyping,
+  withdrawingId,
+  sending,
+  historyReady,
+  loadingOlder,
+  hasMoreOlder,
+  messagesScrollRef,
+  bottomRef,
+  onScroll,
+  onOpenImage,
+  onWithdrawMedia,
+  onSendIcebreaker,
+}: ChatThreadScrollProps) {
+  return (
+      <div
+        ref={messagesScrollRef}
+        onScroll={onScroll}
+        className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-clip overflow-y-auto px-3 py-4 sm:px-4 [content-visibility:auto] [overflow-anchor:none]"
+        style={{ scrollbarWidth: 'thin' }}
+        data-testid="chat-messages-scroll"
+        data-messaging-thread="1"
+        data-stick-policy="near-bottom-or-own-send"
+      >
+        {(loadingOlder || hasMoreOlder) && messages.length > 0 && (
+          <div
+            className="mb-3 flex justify-center"
+            data-testid="chat-load-older"
+            aria-hidden={!loadingOlder}
+          >
+            <span className="text-[10px] font-medium text-[var(--cream-muted)]">
+              {loadingOlder ? 'Loading earlier…' : hasMoreOlder ? 'Scroll for earlier' : ''}
+            </span>
+          </div>
+        )}
+        {messages.length === 0 &&
+          !sending &&
+          (!historyReady || threadLikelyHasHistory(otherId)) && (
+          <div
+            className="flex flex-col gap-3 pt-2"
+            data-testid="chat-history-loading"
+            aria-busy="true"
+            aria-label="Loading conversation"
+          >
+            {[0.92, 0.7, 0.84].map((width, i) => (
+              <div
+                key={i}
+                className={`h-11 animate-pulse rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] ${
+                  i % 2 === 0 ? 'self-start' : 'self-end'
+                }`}
+                style={{ width: `${Math.round(width * 100)}%`, maxWidth: 280 }}
+              />
+            ))}
+          </div>
+        )}
+
+        {messages.length === 0 &&
+          !sending &&
+          historyReady &&
+          !threadLikelyHasHistory(otherId) && (
+          <div
+            className="flex flex-col items-center justify-center h-full select-none px-4"
+            data-testid="chat-icebreakers"
+          >
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
+            >
+              <BubbleIcon className="w-8 h-8" style={{ color: 'var(--copper)', opacity: 0.5 }} />
+            </div>
+            <p className="font-medium text-base text-[var(--cream-muted)]">
+              No messages yet
+            </p>
+            <p className="text-sm mt-1 mb-4 text-center text-[var(--cream-muted)]">
+              Be direct. Consent first.
+            </p>
+            <div className="flex flex-col gap-2 w-full max-w-sm">
+              {ICEBREAKERS.map((line) => (
+                <button
+                  key={line}
+                  type="button"
+                  disabled={sending}
+                  onClick={() => void onSendIcebreaker(line)}
+                  className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-4 py-3 text-left text-base font-medium text-[var(--cream)] transition-colors hover:bg-[rgba(196,131,42,0.2)] disabled:opacity-50"
+                >
+                  {line}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.map((msg, i) => {
+          const isMine = msg.sender_id === userId;
+          const prevMsg = messages[i - 1];
+          const nextMsg = messages[i + 1];
+          const showDateSep = !isSameDay(prevMsg?.created_at, msg.created_at);
+          const showTail = !nextMsg || nextMsg.sender_id !== msg.sender_id;
+          const isGrouped = prevMsg && prevMsg.sender_id === msg.sender_id && !showDateSep;
+
+          if (isMissedCallMessage(msg)) {
+            return (
+              <React.Fragment key={msg.id ?? i}>
+                {showDateSep && (
+                  <div className="flex items-center gap-3 my-5">
+                    <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
+                    <span
+                      className="text-xs font-semibold px-3 py-1 rounded-full"
+                      style={{
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border-default)',
+                        color: 'var(--cream-muted)',
+                        letterSpacing: '0.06em',
+                      }}
+                    >
+                      {formatDateLabel(msg.created_at)}
+                    </span>
+                    <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
+                  </div>
+                )}
+                <div className="flex justify-center my-4" data-testid="missed-call-log">
+                  <div
+                    className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
+                    style={{
+                      background: 'rgba(176,67,46,0.12)',
+                      border: '1px solid rgba(217,106,82,0.35)',
+                      color: '#D96A52',
+                    }}
+                  >
+                    <MissedCallIcon size={14} className="shrink-0" />
+                    <span className="text-xs font-semibold">{MISSED_CALL_PREVIEW}</span>
+                    {msg.created_at && (
+                      <span className="text-[10px] opacity-80">{formatTime(msg.created_at)}</span>
+                    )}
+                  </div>
+                </div>
+              </React.Fragment>
+            );
+          }
+
+          return (
+            <React.Fragment key={msg.id ?? i}>
+              {/* Date separator */}
+              {showDateSep && (
+                <div className="flex items-center gap-3 my-5">
+                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
+                  <span
+                    className="text-xs font-semibold px-3 py-1 rounded-full"
+                    style={{
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border-default)',
+                      color: 'var(--cream-muted)',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    {formatDateLabel(msg.created_at)}
+                  </span>
+                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
+                </div>
+              )}
+
+              {/* Message row — min-w-0 so long/media bubbles cannot widen the phone viewport */}
+              <div
+                className={`flex min-w-0 max-w-full [content-visibility:auto] [contain-intrinsic-size:auto_72px] ${isMine ? 'justify-end' : 'justify-start'} ${
+                  isGrouped ? 'mt-0.5' : 'mt-3'
+                }`}
+              >
+                {/* Received: avatar placeholder for spacing */}
+                {!isMine && (
+                  <div className="mr-2 mb-1 flex w-7 flex-shrink-0 items-end">
+                    {showTail && otherId ? (
+                      <ProfilePhotoLink
+                        userId={otherId}
+                        name={otherUser?.name}
+                        className="block"
+                        data-testid={`chat-bubble-avatar-${otherId}`}
+                      >
+                        <ChatBubbleFace
+                          userId={otherId}
+                          name={otherUser?.name}
+                          photoUrl={otherUser?.photo_url}
+                        />
+                      </ProfilePhotoLink>
+                    ) : null}
+                  </div>
+                )}
+
+                <div
+                  className={`flex min-w-0 max-w-[min(78%,20rem)] flex-col overflow-hidden ${
+                    isMine ? 'items-end' : 'items-start'
+                  }`}
+                >
+                  {msg.media_type === 'image' ? (
+                    <ImageBubble
+                      msg={msg}
+                      isMine={isMine}
+                      showTail={showTail}
+                      onOpen={onOpenImage}
+                      onWithdraw={
+                        canWithdrawMedia(msg, userId)
+                          ? () => msg.id && void onWithdrawMedia(msg.id)
+                          : undefined
+                      }
+                      withdrawing={withdrawingId === msg.id}
+                    />
+                  ) : msg.media_type === 'audio' ? (
+                    <AudioBubble
+                      msg={msg}
+                      isMine={isMine}
+                      showTail={showTail}
+                      onWithdraw={
+                        canWithdrawMedia(msg, userId)
+                          ? () => msg.id && void onWithdrawMedia(msg.id)
+                          : undefined
+                      }
+                      withdrawing={withdrawingId === msg.id}
+                    />
+                  ) : msg.media_type === 'video' ? (
+                    <VideoBubble
+                      msg={msg}
+                      isMine={isMine}
+                      showTail={showTail}
+                      onWithdraw={
+                        canWithdrawMedia(msg, userId)
+                          ? () => msg.id && void onWithdrawMedia(msg.id)
+                          : undefined
+                      }
+                      withdrawing={withdrawingId === msg.id}
+                    />
+                  ) : msg.media_type === 'location' ? (
+                    <LocationBubble
+                      msg={msg}
+                      isMine={isMine}
+                      showTail={showTail}
+                      peerName={otherUser?.name}
+                      onWithdraw={
+                        canWithdrawMedia(msg, userId)
+                          ? () => msg.id && void onWithdrawMedia(msg.id)
+                          : undefined
+                      }
+                      withdrawing={withdrawingId === msg.id}
+                    />
+                  ) : (
+                    <div
+                      className="relative max-w-full break-words px-4 py-2.5 text-base leading-relaxed [overflow-wrap:anywhere]"
+                      style={
+                        isMine
+                          ? {
+                              background: 'linear-gradient(135deg, #C4832A, #A45E18)',
+                              color: '#FFF5E6',
+                              borderRadius: showTail
+                                ? '18px 18px 4px 18px'
+                                : '18px 18px 18px 18px',
+                              boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
+                            }
+                          : {
+                              background: 'var(--bg-card)',
+                              border: '1px solid var(--border-default)',
+                              color: 'var(--cream)',
+                              borderRadius: showTail
+                                ? '18px 18px 18px 4px'
+                                : '18px 18px 18px 18px',
+                            }
+                      }
+                    >
+                      {msg.message}
+                    </div>
+                  )}
+                  {/* Timestamp & double ticks */}
+                  {showTail && (
+                    <span
+                      className="inline-flex items-center text-xs mt-1 px-1 text-[var(--cream-muted)]"
+                    >
+                      {formatTime(msg.created_at)}
+                      {isMine && (
+                        <MessageReceiptTicks read={msg.read} isMine={isMine} />
+                      )}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </React.Fragment>
+          );
+        })}
+
+        {/* Typing indicator */}
+        {isOtherTyping && (
+          <div className="flex justify-start mt-3">
+            <div className="w-7 flex-shrink-0 mr-2" />
+            <div
+              className="px-4 py-3 rounded-[18px] rounded-bl-[4px] flex items-center gap-1.5"
+              style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-default)',
+              }}
+            >
+              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
+              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
+              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
+            </div>
+          </div>
+        )}
+
+        <div ref={bottomRef} />
+      </div>
+
+  );
+});

@@ -1,0 +1,808 @@
+{
+  "campaign": "oct1-2026",
+  "source": "docs/social-oct1-2026.md + seed-social-oct1-2026",
+  "note": "Local draft pack for Social Studio. Week 1 starts 21 Aug 2026 (Day 1 = today). TikTok omitted (not in Connections). Expand outlines before approve.",
+  "posts": [
+    {
+      "id": "2026-08-21:bluesky",
+      "platform": "bluesky",
+      "date": "2026-08-21",
+      "timeUk": "13:00",
+      "body": "MenRush is being built for men who want less noise and more right-now signal.\n\nOpens 1 October. Waitlist:\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-21:instagram",
+      "platform": "instagram",
+      "date": "2026-08-21",
+      "timeUk": "19:30",
+      "body": "Built for men who know what they want.\n\nNo endless noise. No pretending. No waiting around for a maybe.\n\nMenRush. 1 October. UK first.\n\nJoin the waitlist at menrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-21:reddit",
+      "platform": "reddit",
+      "date": "2026-08-21",
+      "timeUk": "15:00",
+      "body": "Title: What would make a dating app feel faster and less exhausting for men?\n\nBody:\nI am working on MenRush, a new app built around a simple question: who nearby is actually worth your attention right now?\n\nThe idea is less noise, less wasted motion, and more local signal. We open 1 October (UK first).\n\nI would genuinely like to know what makes apps feel immediate instead of endless for you.\n\nIf anyone wants to follow the build, the waitlist is at https://menrush.com",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-21:x:am",
+      "platform": "x",
+      "date": "2026-08-21",
+      "timeUk": "08:30",
+      "body": "Men are tired of apps that feel crowded, slow, and built for everyone except them.\n\nMenRush opens 1 October (UK first).\n\nBuilt for fast chemistry, local signal, and less noise.\n\nWaitlist:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-21:x:pm",
+      "platform": "x",
+      "date": "2026-08-21",
+      "timeUk": "19:30",
+      "body": "Built for men who know what they want.\n\nFast chemistry.\nNearby energy.\nNo wasted motion.\n\nOpens 1 October.\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-22:bluesky",
+      "platform": "bluesky",
+      "date": "2026-08-22",
+      "timeUk": "13:00",
+      "body": "Most apps optimize for time spent.\n\nMenRush is being built for momentum.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-22:instagram",
+      "platform": "instagram",
+      "date": "2026-08-22",
+      "timeUk": "19:30",
+      "body": "Not more swiping.\n\nMore signal.\nMore intent.\nMore right-now energy.\n\nmenrush.com. 1 October\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-22:x:am",
+      "platform": "x",
+      "date": "2026-08-22",
+      "timeUk": "08:30",
+      "body": "Most apps optimize for time spent.\n\nMenRush is being built for momentum.\n\nSee who is nearby. Feel the signal faster. Move with intention.\n\nOpens 1 October:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-22:x:pm",
+      "platform": "x",
+      "date": "2026-08-22",
+      "timeUk": "19:30",
+      "body": "You do not need more matches that go nowhere.\n\nYou need better timing.\nBetter local signal.\nLess noise.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-23:bluesky",
+      "platform": "bluesky",
+      "date": "2026-08-23",
+      "timeUk": "13:00",
+      "body": "Early MenRush waitlist members get 30 days of Premium free at launch.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-23:instagram",
+      "platform": "instagram",
+      "date": "2026-08-23",
+      "timeUk": "19:30",
+      "body": "Early gets rewarded.\n\nWaitlist members get 30 days of Premium free at launch.\n\nIf that sounds like your kind of app, get on the list.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-23:x:am",
+      "platform": "x",
+      "date": "2026-08-23",
+      "timeUk": "08:30",
+      "body": "If you are early, we remember it.\n\nWaitlist members get 30 days of Premium free when MenRush launches.\n\nJoin now:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-23:x:pm",
+      "platform": "x",
+      "date": "2026-08-23",
+      "timeUk": "19:30",
+      "body": "Early MenRush members get 30 days of Premium free at launch.\n\nNo code hunting. No gimmick. Just a thank-you for showing up first.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-24:bluesky",
+      "platform": "bluesky",
+      "date": "2026-08-24",
+      "timeUk": "13:00",
+      "body": "We are building in public because launches need attention, not silence.\n\nWaitlist:\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-24:instagram",
+      "platform": "instagram",
+      "date": "2026-08-24",
+      "timeUk": "19:30",
+      "body": "This is not vapor.\n\nWe are building MenRush in public, one sharp move at a time.\n\nJoin the list:\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-24:reddit",
+      "platform": "reddit",
+      "date": "2026-08-24",
+      "timeUk": "15:00",
+      "body": "Title: We are building a new app for men around speed, proximity, and intent\n\nBody:\nA lot of apps feel crowded, slow, and built to keep you scrolling.\n\nWe are trying something tighter with MenRush: more local context, faster chemistry, and less friction.\n\nStill early. we open 1 October (UK first). I would genuinely like to know what would make an app like that worth trying for you.\n\nWaitlist:\nhttps://menrush.com",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-24:x:am",
+      "platform": "x",
+      "date": "2026-08-24",
+      "timeUk": "08:30",
+      "body": "Built in public.\n\nReal product. Real pressure. Real launch clock. 1 October.\n\nIf you want in early:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-24:x:pm",
+      "platform": "x",
+      "date": "2026-08-24",
+      "timeUk": "19:30",
+      "body": "No audience, no launch.\n\nSo we are saying it plainly:\n\nMenRush is coming for men who want less friction and more signal.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-25:bluesky",
+      "platform": "bluesky",
+      "date": "2026-08-25",
+      "timeUk": "13:00",
+      "body": "MenRush is not trying to be everything.\n\nIt is trying to be sharp, local, and fast.\n\nJoin early:\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-25:instagram",
+      "platform": "instagram",
+      "date": "2026-08-25",
+      "timeUk": "19:30",
+      "body": "Less friction.\n\nMore intent.\n\nMore local energy.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-25:x:am",
+      "platform": "x",
+      "date": "2026-08-25",
+      "timeUk": "08:30",
+      "body": "You do not need more matches that go nowhere.\n\nYou need better timing, better proximity, and less friction.\n\nMenRush is on the way.\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-25:x:pm",
+      "platform": "x",
+      "date": "2026-08-25",
+      "timeUk": "19:30",
+      "body": "The first version should feel alive, not endless.\n\nThat is what we are building.\n\nWaitlist open:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-26:bluesky",
+      "platform": "bluesky",
+      "date": "2026-08-26",
+      "timeUk": "13:00",
+      "body": "The question behind MenRush:\n\nwho nearby is actually worth your attention right now?\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-26:instagram",
+      "platform": "instagram",
+      "date": "2026-08-26",
+      "timeUk": "19:30",
+      "body": "Who is around.\nWho is available.\nWho is worth your attention right now.\n\nThat is the question.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-26:reddit",
+      "platform": "reddit",
+      "date": "2026-08-26",
+      "timeUk": "15:00",
+      "body": "Title: What would you need to trust a nearby-availability app?\n\nBody:\nIf an app is built around nearby availability, what would you need to trust it? Better verification, clearer distance controls, stronger privacy settings, or something else?\n\nMenRush opens 1 October (UK first). Waitlist: https://menrush.com",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-26:x:am",
+      "platform": "x",
+      "date": "2026-08-26",
+      "timeUk": "08:30",
+      "body": "MenRush is being designed around one question:\n\nWho is actually around, available, and worth your attention right now?\n\nWaitlist:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-26:x:pm",
+      "platform": "x",
+      "date": "2026-08-26",
+      "timeUk": "19:30",
+      "body": "The product question is simple:\n\nWho nearby is actually worth your attention right now?\n\nThat is the lane.\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-27:bluesky",
+      "platform": "bluesky",
+      "date": "2026-08-27",
+      "timeUk": "13:00",
+      "body": "No audience, no launch.\n\nMenRush is coming for men who want less friction, more signal, and a room that actually moves.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-27:instagram",
+      "platform": "instagram",
+      "date": "2026-08-27",
+      "timeUk": "19:30",
+      "body": "If this sounds like your kind of app, you are exactly who we want early.\n\nWaitlist open now.\n\nmenrush.com. Opens 1 October\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-27:x:am",
+      "platform": "x",
+      "date": "2026-08-27",
+      "timeUk": "08:30",
+      "body": "Launches do not happen because products exist.\n\nThey happen because people feel something and tell someone else.\n\nIf MenRush sounds like your kind of app, join early:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-27:x:pm",
+      "platform": "x",
+      "date": "2026-08-27",
+      "timeUk": "19:30",
+      "body": "MenRush is for men who want the room to feel faster, closer, and more intentional.\n\nIf that is you, get on the list:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 1,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-28:bluesky",
+      "platform": "bluesky",
+      "date": "2026-08-28",
+      "timeUk": "13:00",
+      "body": "Proximity without the noise.\n\nMenRush opens 1 October (UK first).\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-28:instagram",
+      "platform": "instagram",
+      "date": "2026-08-28",
+      "timeUk": "19:30",
+      "body": "Map-first energy.\n\nWho is nearby.\nWho is available.\nWho is worth your attention right now.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-28:reddit",
+      "platform": "reddit",
+      "date": "2026-08-28",
+      "timeUk": "15:00",
+      "body": "Title: What does \"nearby now\" need to feel useful (not creepy) in a dating app?\n\nBody:\nBuilding MenRush around live proximity for men. Curious what distance, privacy, and intent controls would make you actually turn location on.\n\nWaitlist if you want to follow: https://menrush.com",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-28:x:am",
+      "platform": "x",
+      "date": "2026-08-28",
+      "timeUk": "08:30",
+      "body": "See who is near you right now.\n\nThat is the product truth MenRush is built around.\n\nMap-first. Local. Immediate.\n\nWaitlist. Opens 1 October:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-28:x:pm",
+      "platform": "x",
+      "date": "2026-08-28",
+      "timeUk": "19:30",
+      "body": "Not another endless grid.\n\nA clearer read on who is actually around. when it matters.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-29:bluesky",
+      "platform": "bluesky",
+      "date": "2026-08-29",
+      "timeUk": "13:00",
+      "body": "Less chat-for-weeks. More local signal.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-29:instagram",
+      "platform": "instagram",
+      "date": "2026-08-29",
+      "timeUk": "19:30",
+      "body": "Less chat-for-weeks. More local energy.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-29:x:am",
+      "platform": "x",
+      "date": "2026-08-29",
+      "timeUk": "08:30",
+      "body": "Tired of chatting for weeks and never meeting?\n\nMenRush is built around local signal, not endless delay.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-29:x:pm",
+      "platform": "x",
+      "date": "2026-08-29",
+      "timeUk": "19:30",
+      "body": "Less chat-for-weeks.\nMore local signal.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-30:bluesky",
+      "platform": "bluesky",
+      "date": "2026-08-30",
+      "timeUk": "13:00",
+      "body": "Rooms ship with the product. We'll say when they're open.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-30:instagram",
+      "platform": "instagram",
+      "date": "2026-08-30",
+      "timeUk": "19:30",
+      "body": "Intentional rooms. Coming at launch. No fake inventory.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-30:x:am",
+      "platform": "x",
+      "date": "2026-08-30",
+      "timeUk": "08:30",
+      "body": "Rooms are coming with the product. intentional spaces, not a fake live catalog.\n\nWaitlist:\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-30:x:pm",
+      "platform": "x",
+      "date": "2026-08-30",
+      "timeUk": "19:30",
+      "body": "Atmosphere first. Inventory when it's real.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-31:bluesky",
+      "platform": "bluesky",
+      "date": "2026-08-31",
+      "timeUk": "13:00",
+      "body": "Weekend proximity without the noise.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-31:instagram",
+      "platform": "instagram",
+      "date": "2026-08-31",
+      "timeUk": "19:30",
+      "body": "Night energy. Local presence.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-31:x:am",
+      "platform": "x",
+      "date": "2026-08-31",
+      "timeUk": "08:30",
+      "body": "Night energy. Weekend proximity. Who's actually around.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-08-31:x:pm",
+      "platform": "x",
+      "date": "2026-08-31",
+      "timeUk": "19:30",
+      "body": "The weekend should feel closer, not louder.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-09-01:bluesky",
+      "platform": "bluesky",
+      "date": "2026-09-01",
+      "timeUk": "13:00",
+      "body": "Nearby without oversharing.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-09-01:instagram",
+      "platform": "instagram",
+      "date": "2026-09-01",
+      "timeUk": "19:30",
+      "body": "Presence with discretion.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-09-01:reddit",
+      "platform": "reddit",
+      "date": "2026-09-01",
+      "timeUk": "15:00",
+      "body": "Title: Privacy vs proximity. what trade-offs would you accept?\n\nBody:\nCurious how men weigh live location vs discretion. MenRush opens 1 Oct. https://menrush.com",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-09-01:x:am",
+      "platform": "x",
+      "date": "2026-09-01",
+      "timeUk": "08:30",
+      "body": "Discretion + presence. Know who's around without broadcasting everything.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-09-01:x:pm",
+      "platform": "x",
+      "date": "2026-09-01",
+      "timeUk": "19:30",
+      "body": "Adult. Discreet. Nearby.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-09-02:bluesky",
+      "platform": "bluesky",
+      "date": "2026-09-02",
+      "timeUk": "13:00",
+      "body": "What nearby feature would you use first?\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-09-02:instagram",
+      "platform": "instagram",
+      "date": "2026-09-02",
+      "timeUk": "19:30",
+      "body": "What nearby feature would you use first?\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-09-02:x:am",
+      "platform": "x",
+      "date": "2026-09-02",
+      "timeUk": "08:30",
+      "body": "Soft ask: what nearby feature would you use first?\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-09-02:x:pm",
+      "platform": "x",
+      "date": "2026-09-02",
+      "timeUk": "19:30",
+      "body": "Map, rooms, or who liked you nearby. what matters first?\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-09-03:bluesky",
+      "platform": "bluesky",
+      "date": "2026-09-03",
+      "timeUk": "13:00",
+      "body": "Early waitlist members get 30 days of Premium free at launch.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-09-03:instagram",
+      "platform": "instagram",
+      "date": "2026-09-03",
+      "timeUk": "19:30",
+      "body": "Early gets rewarded. 30 days Premium free at launch.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-09-03:x:am",
+      "platform": "x",
+      "date": "2026-09-03",
+      "timeUk": "08:30",
+      "body": "Bridge to early Premium week. If you're early, we remember it.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-09-03:x:pm",
+      "platform": "x",
+      "date": "2026-09-03",
+      "timeUk": "19:30",
+      "body": "Waitlist → 30 days Premium free at launch.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 2,
+      "kind": "full"
+    },
+    {
+      "id": "2026-09-04:bluesky",
+      "platform": "bluesky",
+      "date": "2026-09-04",
+      "timeUk": "13:00",
+      "body": "[OUTLINE · week 3]\n\nEarly Premium: waitlist → 30 days Premium free at launch. Thank-you, not gimmick.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 3,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-04:instagram",
+      "platform": "instagram",
+      "date": "2026-09-04",
+      "timeUk": "19:30",
+      "body": "[OUTLINE · week 3]\n\nEarly Premium: waitlist → 30 days Premium free at launch. Thank-you, not gimmick.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 3,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-04:x:am",
+      "platform": "x",
+      "date": "2026-09-04",
+      "timeUk": "08:30",
+      "body": "[OUTLINE · week 3]\n\nEarly Premium: waitlist → 30 days Premium free at launch. Thank-you, not gimmick.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 3,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-04:x:pm",
+      "platform": "x",
+      "date": "2026-09-04",
+      "timeUk": "19:30",
+      "body": "[OUTLINE · week 3]\n\nEarly Premium: waitlist → 30 days Premium free at launch. Thank-you, not gimmick.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 3,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-11:bluesky",
+      "platform": "bluesky",
+      "date": "2026-09-11",
+      "timeUk": "13:00",
+      "body": "[OUTLINE · week 4]\n\nFounder / build-in-public. Real notes. Real launch clock.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 4,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-11:instagram",
+      "platform": "instagram",
+      "date": "2026-09-11",
+      "timeUk": "19:30",
+      "body": "[OUTLINE · week 4]\n\nFounder / build-in-public. Real notes. Real launch clock.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 4,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-11:x:am",
+      "platform": "x",
+      "date": "2026-09-11",
+      "timeUk": "08:30",
+      "body": "[OUTLINE · week 4]\n\nFounder / build-in-public. Real notes. Real launch clock.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 4,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-11:x:pm",
+      "platform": "x",
+      "date": "2026-09-11",
+      "timeUk": "19:30",
+      "body": "[OUTLINE · week 4]\n\nFounder / build-in-public. Real notes. Real launch clock.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 4,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-18:bluesky",
+      "platform": "bluesky",
+      "date": "2026-09-18",
+      "timeUk": "13:00",
+      "body": "[OUTLINE · week 5]\n\nTrust / discretion. Free verification. Obfuscated discovery. Adult & intentional.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 5,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-18:instagram",
+      "platform": "instagram",
+      "date": "2026-09-18",
+      "timeUk": "19:30",
+      "body": "[OUTLINE · week 5]\n\nTrust / discretion. Free verification. Obfuscated discovery. Adult & intentional.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 5,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-18:x:am",
+      "platform": "x",
+      "date": "2026-09-18",
+      "timeUk": "08:30",
+      "body": "[OUTLINE · week 5]\n\nTrust / discretion. Free verification. Obfuscated discovery. Adult & intentional.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 5,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-18:x:pm",
+      "platform": "x",
+      "date": "2026-09-18",
+      "timeUk": "19:30",
+      "body": "[OUTLINE · week 5]\n\nTrust / discretion. Free verification. Obfuscated discovery. Adult & intentional.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 5,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-25:bluesky",
+      "platform": "bluesky",
+      "date": "2026-09-25",
+      "timeUk": "13:00",
+      "body": "[OUTLINE · week 6]\n\nCountdown. Opens 1 October 2026, UK first. Keep cadence, do not spam.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 6,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-25:instagram",
+      "platform": "instagram",
+      "date": "2026-09-25",
+      "timeUk": "19:30",
+      "body": "[OUTLINE · week 6]\n\nCountdown. Opens 1 October 2026, UK first. Keep cadence, do not spam.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 6,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-25:x:am",
+      "platform": "x",
+      "date": "2026-09-25",
+      "timeUk": "08:30",
+      "body": "[OUTLINE · week 6]\n\nCountdown. Opens 1 October 2026, UK first. Keep cadence, do not spam.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 6,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-25:x:pm",
+      "platform": "x",
+      "date": "2026-09-25",
+      "timeUk": "19:30",
+      "body": "[OUTLINE · week 6]\n\nCountdown. Opens 1 October 2026, UK first. Keep cadence, do not spam.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 6,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-29:bluesky",
+      "platform": "bluesky",
+      "date": "2026-09-29",
+      "timeUk": "13:00",
+      "body": "[OUTLINE · week 7]\n\nFinal waitlist push. Opens Thursday.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 7,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-29:instagram",
+      "platform": "instagram",
+      "date": "2026-09-29",
+      "timeUk": "19:30",
+      "body": "[OUTLINE · week 7]\n\nFinal waitlist push. Opens Thursday.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 7,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-29:x:am",
+      "platform": "x",
+      "date": "2026-09-29",
+      "timeUk": "08:30",
+      "body": "[OUTLINE · week 7]\n\nFinal waitlist push. Opens Thursday.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 7,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-29:x:pm",
+      "platform": "x",
+      "date": "2026-09-29",
+      "timeUk": "19:30",
+      "body": "[OUTLINE · week 7]\n\nFinal waitlist push. Opens Thursday.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 7,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-30:bluesky",
+      "platform": "bluesky",
+      "date": "2026-09-30",
+      "timeUk": "13:00",
+      "body": "[OUTLINE · week 7]\n\nCalm confidence. Reply bank active.\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 7,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-30:instagram",
+      "platform": "instagram",
+      "date": "2026-09-30",
+      "timeUk": "19:30",
+      "body": "[OUTLINE · week 7]\n\nCalm confidence. Reply bank active.\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 7,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-30:x:am",
+      "platform": "x",
+      "date": "2026-09-30",
+      "timeUk": "08:30",
+      "body": "[OUTLINE · week 7]\n\nCalm confidence. Reply bank active.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 7,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-09-30:x:pm",
+      "platform": "x",
+      "date": "2026-09-30",
+      "timeUk": "19:30",
+      "body": "[OUTLINE · week 7]\n\nCalm confidence. Reply bank active.\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 7,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-10-01:bluesky",
+      "platform": "bluesky",
+      "date": "2026-10-01",
+      "timeUk": "13:00",
+      "body": "[OUTLINE · week 7]\n\nMenRush is open.\n\nUK first.\nBuilt for men who know what they want.\n\nSee who's near you right now.\nhttps://menrush.com\n\nhttps://menrush.com\n\n#GayMen #LGBTQ #GayUK",
+      "week": 7,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-10-01:instagram",
+      "platform": "instagram",
+      "date": "2026-10-01",
+      "timeUk": "19:30",
+      "body": "[OUTLINE · week 7]\n\nMenRush is open.\n\nUK first.\nBuilt for men who know what they want.\n\nSee who's near you right now.\nhttps://menrush.com\n\nmenrush.com\n\n#GayMen #LGBTQ #GayLondon #GayUK #GayDating",
+      "week": 7,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-10-01:x:am",
+      "platform": "x",
+      "date": "2026-10-01",
+      "timeUk": "08:30",
+      "body": "[OUTLINE · week 7]\n\nMenRush is open.\n\nUK first.\nBuilt for men who know what they want.\n\nSee who's near you right now.\nhttps://menrush.com\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 7,
+      "kind": "outline"
+    },
+    {
+      "id": "2026-10-01:x:pm",
+      "platform": "x",
+      "date": "2026-10-01",
+      "timeUk": "19:30",
+      "body": "[OUTLINE · week 7]\n\nMenRush is open.\n\nUK first.\nBuilt for men who know what they want.\n\nSee who's near you right now.\nhttps://menrush.com\n\nhttps://menrush.com\n\n#GayMen #GayUK",
+      "week": 7,
+      "kind": "outline"
+    }
+  ]
+}

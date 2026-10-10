@@ -1,10 +1,10 @@
 import { expect, test, request as apiRequest, type APIRequestContext, type BrowserContext } from '@playwright/test';
 import { ALICE, BOB, HOTSPOT_FILLERS, PREMIUM_TESTER, TEST_HOT_SPOT, TEST_PASSWORD } from './test-accounts';
+import { PLAYWRIGHT_BASE_URL as BASE_URL } from './support/base-url';
 
 // #67: unify Nearby into one map with independent People / Hot Spots layers.
 test.describe.configure({ mode: 'serial' });
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
 // Matches backend/scripts/seed-test-users.ts's TEST_LAT/TEST_LNG — the deterministic
 // e2e fixture Hot Spot (TEST_HOT_SPOT) always exists at this exact coordinate.
 const FIXTURE_GEO = { latitude: TEST_HOT_SPOT.lat, longitude: TEST_HOT_SPOT.lng };
@@ -67,7 +67,7 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
   }, result);
 }
 
-test('People and Hot Spots layer toggles default on and are independently switchable', async ({
+test('People and Cruise layer toggles default on and are independently switchable', async ({
   browser,
 }) => {
   const ctx = await browser.newContext({ geolocation: FIXTURE_GEO, permissions: ['geolocation'] });
@@ -140,8 +140,113 @@ test('/hot-spots route still loads directly for compatibility (no nav entry, rou
   const page = await ctx.newPage();
   await page.goto('/hot-spots');
 
-  await expect(page.getByRole('heading', { name: 'Hot Spots' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: 'Cruise' })).toBeVisible({ timeout: 20_000 });
   await expect(page).toHaveURL(/\/hot-spots$/);
+
+  await ctx.close();
+});
+
+// Al P0: zoomed-out Cruise/people pins must stay at true lng/lat — never a vertical
+// document-flow stack (Mapbox marker root must remain position:absolute).
+test('Nearby map Cruise pins stay geographically placed when zoomed out (no vertical stack)', async ({
+  browser,
+}) => {
+  const ctx = await browser.newContext({ geolocation: FIXTURE_GEO, permissions: ['geolocation'] });
+  await authenticate(ctx, alice);
+  const page = await ctx.newPage();
+  await page.goto('/discover');
+
+  await page.waitForResponse(
+    (r) => r.url().includes('/api/hot-spots') && r.request().method() === 'GET',
+    { timeout: 30_000 },
+  );
+
+  const mapToggle = page.getByTestId('nearby-map-grid-toggle');
+  if (await mapToggle.isVisible().catch(() => false)) {
+    const label = await mapToggle.getAttribute('aria-label');
+    if (label && /Show Map/i.test(label)) {
+      await mapToggle.click();
+    }
+  }
+
+  await expect(page.locator('.hotspot-pin').first()).toBeVisible({ timeout: 30_000 });
+
+  const diagnosis = await page.evaluate(() => {
+    const markers = Array.from(
+      document.querySelectorAll<HTMLElement>('.mapboxgl-marker:has(.hotspot-pin)'),
+    );
+    const positions = markers.map((el) => getComputedStyle(el).position);
+    const boxes = markers.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const p of boxes) {
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+    const xSpread = Number.isFinite(minX) ? maxX - minX : 0;
+    const ySpan = Number.isFinite(minY) ? maxY - minY : 0;
+    // Vertical stack signature: narrow X column + tall Y (Mapbox #4048).
+    const looksLikeVerticalStack = markers.length >= 4 && xSpread <= 28 && ySpan >= 120;
+    return {
+      count: markers.length,
+      allAbsolute: positions.every((p) => p === 'absolute'),
+      positions,
+      xSpread,
+      ySpan,
+      looksLikeVerticalStack,
+    };
+  });
+
+  expect(diagnosis.count).toBeGreaterThan(0);
+  expect(diagnosis.allAbsolute).toBe(true);
+  expect(diagnosis.looksLikeVerticalStack).toBe(false);
+
+  // Zoom out hard — still no vertical column.
+  await page.evaluate(() => {
+    const map = (window as unknown as { __menrushDiscoverMap?: { jumpTo: (o: { zoom: number }) => void } })
+      .__menrushDiscoverMap;
+    map?.jumpTo({ zoom: 5 });
+  });
+  await page.waitForTimeout(800);
+
+  const zoomedOut = await page.evaluate(() => {
+    const markers = Array.from(
+      document.querySelectorAll<HTMLElement>('.mapboxgl-marker:has(.hotspot-pin)'),
+    );
+    const boxes = markers.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const p of boxes) {
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+    const xSpread = Number.isFinite(minX) ? maxX - minX : 0;
+    const ySpan = Number.isFinite(minY) ? maxY - minY : 0;
+    return {
+      allAbsolute: markers.every((el) => getComputedStyle(el).position === 'absolute'),
+      looksLikeVerticalStack: markers.length >= 4 && xSpread <= 28 && ySpan >= 120,
+      count: markers.length,
+      xSpread,
+      ySpan,
+    };
+  });
+
+  expect(zoomedOut.allAbsolute).toBe(true);
+  expect(zoomedOut.looksLikeVerticalStack).toBe(false);
 
   await ctx.close();
 });
@@ -345,7 +450,7 @@ test('Free sees rounded 5+ Hot Spot count; Premium sees the exact count', async 
     const freePin = freePage.locator(`[data-hotspot-id="${TEST_HOT_SPOT.id}"]`);
     await expect(freePin).toBeVisible({ timeout: 30_000 });
     await freePin.click();
-    await expect(freePage.getByTestId('hotspot-sheet')).toContainText('5+ live');
+    await expect(freePage.getByTestId('hotspot-sheet-activity')).toHaveText('5+ checked in');
 
     const freeApiRes = await freePage.request.get('/api/hot-spots', {
       headers: { Authorization: `Bearer ${alice.token}` },
@@ -353,7 +458,8 @@ test('Free sees rounded 5+ Hot Spot count; Premium sees the exact count', async 
     });
     const freeSpot = (await freeApiRes.json()).spots.find((s: { id: string }) => s.id === TEST_HOT_SPOT.id);
     expect(freeSpot.live_count).toBe('5+');
-    expect(freeSpot.live_count_exact).toBe(5);
+    // Free never receives the exact number.
+    expect(freeSpot.live_count_exact).toBeNull();
     await freeCtx.close();
 
     const premiumCtx = await browser.newContext({ geolocation: FIXTURE_GEO, permissions: ['geolocation'] });
@@ -367,7 +473,7 @@ test('Free sees rounded 5+ Hot Spot count; Premium sees the exact count', async 
     const premiumPin = premiumPage.locator(`[data-hotspot-id="${TEST_HOT_SPOT.id}"]`);
     await expect(premiumPin).toBeVisible({ timeout: 30_000 });
     await premiumPin.click();
-    await expect(premiumPage.getByTestId('hotspot-sheet')).toContainText('5 live');
+    await expect(premiumPage.getByTestId('hotspot-sheet-activity')).toHaveText('5 checked in');
 
     const premiumApiRes = await premiumPage.request.get('/api/hot-spots', {
       headers: { Authorization: `Bearer ${premium.token}` },
@@ -386,4 +492,55 @@ test('Free sees rounded 5+ Hot Spot count; Premium sees the exact count', async 
     );
     await api.dispose();
   }
+});
+
+// Al order (post-#259): Legal quiet-face map disclaimer is dismissible once read,
+// persisted via localStorage so it does not nag every visit. Wording locked.
+const LEGAL_MAP_FACE =
+  'Map spots include independent venues and outdoor locations. 18+ only. Follow the law and any venue rules. MenRush does not run these places. No illegal activity. Consent first.';
+
+test('Hot Spots map Legal disclaimer dismisses with X and stays dismissed', async ({ browser }) => {
+  const ctx = await browser.newContext({ geolocation: FIXTURE_GEO, permissions: ['geolocation'] });
+  await authenticate(ctx, alice);
+  await ctx.addInitScript(() => {
+    localStorage.removeItem('menrush_hotspots_map_banner_dismissed');
+  });
+  const page = await ctx.newPage();
+  await page.goto('/discover');
+
+  const mapToggle = page.getByTestId('nearby-map-grid-toggle');
+  if (await mapToggle.isVisible().catch(() => false)) {
+    const label = await mapToggle.getAttribute('aria-label');
+    if (label && /Show Map/i.test(label)) {
+      await mapToggle.click();
+    }
+  }
+
+  const hotSpotsToggle = page.getByTestId('layer-toggle-hotspots');
+  await expect(hotSpotsToggle).toBeVisible({ timeout: 20_000 });
+  if ((await hotSpotsToggle.getAttribute('aria-pressed')) !== 'true') {
+    await hotSpotsToggle.click();
+  }
+
+  const helper = page.getByTestId('hotspots-map-helper');
+  await expect(helper).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('hotspots-map-helper-copy')).toHaveText(LEGAL_MAP_FACE);
+
+  await page.getByTestId('hotspots-map-helper-dismiss').click();
+  await expect(helper).toHaveCount(0);
+
+  const stored = await page.evaluate(() => localStorage.getItem('menrush_hotspots_map_banner_dismissed'));
+  expect(stored).toBe('1');
+
+  await page.reload();
+  if (await mapToggle.isVisible().catch(() => false)) {
+    const label = await mapToggle.getAttribute('aria-label');
+    if (label && /Show Map/i.test(label)) {
+      await mapToggle.click();
+    }
+  }
+  await expect(page.getByTestId('layer-toggle-hotspots')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('hotspots-map-helper')).toHaveCount(0);
+
+  await ctx.close();
 });

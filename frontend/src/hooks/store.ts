@@ -1,78 +1,131 @@
 import { create } from 'zustand';
+import {
+  clearAuthSession,
+  persistAuthSession,
+  persistAuthUser,
+  readAuthSnapshot,
+  type StoredAuthUser,
+} from '../lib/authSession';
+import { distanceMeters } from '../lib/discovery';
 import { syncLocaleCoords } from '../lib/localeUnits';
+import { applyLiveUpsert } from '../lib/notificationToasts';
 
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  age?: number;
-  bio?: string;
-  photo_url?: string;
-  is_verified?: boolean;
-  verification_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
-  is_premium?: boolean;
-  premium_tier?: 'free' | 'premium' | 'premium_plus';
-  /** True when open-beta Premium entitlement is active for this user. */
-  beta_premium_included?: boolean;
+/** Ignore GPS jitter so Discover/Chat subscribers are not redrawn every watch tick. */
+const LOCATION_STORE_MIN_METERS = 15;
+
+type User = StoredAuthUser;
+
+const REFRESH_TOKEN_KEY = 'refresh_token';
+
+function readStoredRefreshToken(): string | null {
+  try {
+    return localStorage.getItem(REFRESH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
 }
 
 interface AuthState {
   user: User | null;
   token: string | null;
-  setAuth: (user: User, token: string) => void;
+  refreshToken: string | null;
+  setAuth: (user: User, token: string, refreshToken?: string) => void;
+  setTokens: (token: string, refreshToken: string) => void;
+  /** Re-read localStorage/cookie into the store (PWA cold start / pageshow). */
+  rehydrateAuth: () => boolean;
   setVerified: (status: NonNullable<User['verification_status']>, isVerified: boolean) => void;
   setPremium: (tier: NonNullable<User['premium_tier']>, isPremium: boolean) => void;
   patchUser: (updates: Partial<User>) => void;
   logout: () => void;
 }
 
-function readStoredUser(): User | null {
-  try {
-    const raw = localStorage.getItem('user');
-    return raw ? (JSON.parse(raw) as User) : null;
-  } catch {
-    localStorage.removeItem('user');
-    return null;
-  }
-}
+const boot = readAuthSnapshot();
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: readStoredUser(),
-  token: localStorage.getItem('token'),
-  setAuth: (user, token) => {
-    localStorage.setItem('user', JSON.stringify(user));
-    localStorage.setItem('token', token);
-    set({ user, token });
+export const useAuthStore = create<AuthState>((set, get) => ({
+  user: boot.user,
+  token: boot.token,
+  refreshToken: readStoredRefreshToken(),
+  setAuth: (user, token, refreshToken) => {
+    persistAuthSession(user, token);
+    if (refreshToken) {
+      try {
+        localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+      } catch {
+        /* private mode / quota */
+      }
+    }
+    set((state) => ({
+      user,
+      token,
+      refreshToken: refreshToken ?? state.refreshToken,
+    }));
+  },
+  setTokens: (token, refreshToken) => {
+    const user = get().user;
+    if (user) {
+      persistAuthSession(user, token);
+    } else {
+      try {
+        localStorage.setItem('token', token);
+      } catch {
+        /* ignore */
+      }
+    }
+    try {
+      localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    } catch {
+      /* ignore */
+    }
+    set({ token, refreshToken });
+  },
+  rehydrateAuth: () => {
+    const snap = readAuthSnapshot();
+    if (!snap.token) return false;
+    const refreshToken = readStoredRefreshToken();
+    const current = get();
+    if (
+      current.token === snap.token
+      && current.user?.id === snap.user?.id
+      && current.refreshToken === refreshToken
+    ) {
+      return true;
+    }
+    set({ user: snap.user, token: snap.token, refreshToken });
+    return true;
   },
   setVerified: (status, isVerified) =>
     set((s) => {
       if (!s.user) return s;
       const next = { ...s.user, verification_status: status, is_verified: isVerified };
-      localStorage.setItem('user', JSON.stringify(next));
+      persistAuthUser(next);
       return { user: next };
     }),
   setPremium: (tier, isPremium) =>
     set((s) => {
       if (!s.user) return s;
       const next = { ...s.user, premium_tier: tier, is_premium: isPremium };
-      localStorage.setItem('user', JSON.stringify(next));
+      persistAuthUser(next);
       return { user: next };
     }),
   patchUser: (updates) =>
     set((s) => {
       if (!s.user) return s;
       const next = { ...s.user, ...updates };
-      localStorage.setItem('user', JSON.stringify(next));
+      persistAuthUser(next);
       return { user: next };
     }),
   logout: () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-    set({ user: null, token: null });
+    clearAuthSession();
+    try {
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+    } catch {
+      /* ignore */
+    }
+    set({ user: null, token: null, refreshToken: null });
     // Private notification content (message previews, etc.) must not linger
     // in memory once logged out — ToastNotifications is unmounted by the
     // token gate in App.tsx, but the store itself can still be read elsewhere.
-    useNotificationStore.getState().setFromServer([], 0);
+    useNotificationStore.getState().resetNotifications();
   },
 }));
 
@@ -110,10 +163,19 @@ if (initialLocation.lat != null && initialLocation.lng != null) {
   syncLocaleCoords(initialLocation.lat, initialLocation.lng);
 }
 
-export const useLocationStore = create<LocationState>((set) => ({
+export const useLocationStore = create<LocationState>((set, get) => ({
   lat: initialLocation.lat,
   lng: initialLocation.lng,
   setLocation: (lat, lng) => {
+    const prev = get();
+    if (
+      prev.lat != null &&
+      prev.lng != null &&
+      distanceMeters(prev.lat, prev.lng, lat, lng) < LOCATION_STORE_MIN_METERS
+    ) {
+      // Keep last pin; Discover still moves the self marker imperatively on GPS ticks.
+      return;
+    }
     syncLocaleCoords(lat, lng);
     try {
       localStorage.setItem(
@@ -204,12 +266,19 @@ interface NotificationState {
   notifications: Notification[];
   unreadCount: number;
   loadError: string | null;
+  /** True after the first successful (or intentional empty) server pull this session. */
+  serverSynced: boolean;
+  /** Live socket events queued for toast UI — never filled by setFromServer backfill. */
+  pendingToasts: Notification[];
   setFromServer: (notifications: Notification[], unreadCount: number) => void;
+  resetNotifications: () => void;
   upsertNotification: (notification: Notification) => void;
+  dismissToast: (id: string) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   deleteNotification: (id: string) => void;
   deleteAllRead: () => void;
+  deleteAllNotifications: () => void;
   setUnreadCount: (count: number) => void;
   setLoadError: (message: string | null) => void;
 }
@@ -218,22 +287,36 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   notifications: [],
   unreadCount: 0,
   loadError: null,
+  serverSynced: false,
+  pendingToasts: [],
+  // Backfill / poll: badge + list only. Never enqueue toasts.
   setFromServer: (notifications, unreadCount) =>
-    set({ notifications, unreadCount, loadError: null }),
+    set({ notifications, unreadCount, loadError: null, serverSynced: true }),
+  resetNotifications: () =>
+    set({
+      notifications: [],
+      unreadCount: 0,
+      loadError: null,
+      serverSynced: false,
+      pendingToasts: [],
+    }),
   upsertNotification: (notification) =>
     set((s) => {
-      const exists = s.notifications.some((n) => n.id === notification.id);
-      const notifications = [
+      const next = applyLiveUpsert(
+        {
+          notifications: s.notifications,
+          unreadCount: s.unreadCount,
+          serverSynced: s.serverSynced,
+          pendingToasts: s.pendingToasts,
+        },
         notification,
-        ...s.notifications.filter((n) => n.id !== notification.id),
-      ].slice(0, 100);
-      let unreadCount = s.unreadCount;
-      if (!exists && !notification.read) unreadCount += 1;
-      if (exists) {
-        unreadCount = notifications.filter((n) => !n.read).length;
-      }
-      return { notifications, unreadCount };
+      );
+      return next;
     }),
+  dismissToast: (id) =>
+    set((s) => ({
+      pendingToasts: s.pendingToasts.filter((t) => t.id !== id),
+    })),
   markAsRead: (id) =>
     set((s) => {
       const target = s.notifications.find((n) => n.id === id);
@@ -241,12 +324,14 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       return {
         notifications: s.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
         unreadCount: Math.max(0, s.unreadCount - 1),
+        pendingToasts: s.pendingToasts.filter((t) => t.id !== id),
       };
     }),
   markAllAsRead: () =>
     set((s) => ({
       notifications: s.notifications.map((n) => ({ ...n, read: true })),
       unreadCount: 0,
+      pendingToasts: [],
     })),
   deleteNotification: (id) =>
     set((s) => {
@@ -255,10 +340,13 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       return {
         notifications: s.notifications.filter((n) => n.id !== id),
         unreadCount: target.read ? s.unreadCount : Math.max(0, s.unreadCount - 1),
+        pendingToasts: s.pendingToasts.filter((t) => t.id !== id),
       };
     }),
   deleteAllRead: () =>
     set((s) => ({ notifications: s.notifications.filter((n) => !n.read) })),
+  deleteAllNotifications: () =>
+    set({ notifications: [], unreadCount: 0, pendingToasts: [] }),
   setUnreadCount: (unreadCount) => set({ unreadCount }),
   setLoadError: (loadError) => set({ loadError }),
 }));

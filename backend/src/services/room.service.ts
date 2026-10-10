@@ -1,8 +1,32 @@
 import { query } from '../db';
 import { v4 as uuidv4 } from 'uuid';
 import { premiumService, PremiumRequiredError } from './premium.service';
+import { notLocationHiddenFromViewerSql } from '../lib/locationHiddenSql';
 import { accessControl } from '../security/access';
+import {
+  ROOM_TEMP_IDENTITY_TTL_DAYS,
+  roomTempNameSql,
+  roomTempPhotoSql,
+  roomUsingTempIdentitySql,
+  sanitizeRoomPresence,
+} from './room-temp-identity';
+import { applyLiveRoomCounts, liveRoomCount } from './room-presence';
 
+/** Room chat is not a saved history. Messages older than this are deleted. */
+export const ROOM_MESSAGE_TTL_DAYS = 2;
+const ROOM_MESSAGE_PURGE_MS = 60 * 60 * 1000;
+
+export {
+  ROOM_TEMP_IDENTITY_TTL_DAYS,
+  ROOM_ANON_DISPLAY_NAME,
+  roomTempNameSql,
+  roomTempPhotoSql,
+  roomUsingTempIdentitySql,
+  sanitizeRoomPresence,
+  dropLeaverFromRoster,
+} from './room-temp-identity';
+
+const ROOM_TEMP_IDENTITY_PURGE_MS = 6 * 60 * 60 * 1000;
 interface CreateRoomData {
   name: string;
   description?: string;
@@ -78,9 +102,9 @@ export const roomService = {
     }
 
     const result = await query(
-      `INSERT INTO rooms (id, name, description, avatar_url, created_by, is_location_based, max_members, location, lat, lng, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, ${locationExpr}, ${latPlaceholder}, ${lngPlaceholder}, NOW(), NOW())
-       RETURNING id, name, description, avatar_url, created_by, is_location_based, max_members, lat, lng, created_at`,
+      `INSERT INTO rooms (id, name, description, avatar_url, created_by, is_location_based, max_members, location, lat, lng, is_official, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, ${locationExpr}, ${latPlaceholder}, ${lngPlaceholder}, FALSE, NOW(), NOW())
+       RETURNING id, name, description, avatar_url, created_by, is_location_based, is_official, max_members, lat, lng, created_at`,
       values
     );
 
@@ -111,7 +135,7 @@ export const roomService = {
   async getRoom(roomId: string, requestingUserId: string) {
     const roomResult = await query(
       `SELECT r.id, r.name, r.description, r.avatar_url, r.created_by, r.is_location_based,
-              r.max_members, r.lat, r.lng, r.created_at, r.updated_at,
+              r.is_official, r.official_slug, r.max_members, r.lat, r.lng, r.created_at, r.updated_at,
               COUNT(rm.id)::int AS member_count
        FROM rooms r
        LEFT JOIN room_members rm ON rm.room_id = r.id
@@ -125,6 +149,7 @@ export const roomService = {
     }
 
     const room = roomResult.rows[0];
+    room.member_count = liveRoomCount(roomId);
 
     const roleResult = await query(
       `SELECT role FROM room_members WHERE room_id = $1 AND user_id = $2`,
@@ -142,7 +167,7 @@ export const roomService = {
     // Rooms the user is a member of
     const memberRooms = await query(
       `SELECT r.id, r.name, r.description, r.avatar_url, r.created_by, r.is_location_based,
-              r.max_members, r.lat, r.lng, r.created_at,
+              r.is_official, r.official_slug, r.max_members, r.lat, r.lng, r.created_at,
               rm.role AS user_role,
               COUNT(rm2.id)::int AS member_count
        FROM rooms r
@@ -156,6 +181,23 @@ export const roomService = {
 
     const memberRoomIds: string[] = memberRooms.rows.map((r: any) => r.id);
 
+    // Official curated catalog — visible to any authenticated verified adult
+    // (route already uses verifiedMiddleware). Includes join status.
+    const officialRooms = await query(
+      `SELECT r.id, r.name, r.description, r.avatar_url, r.created_by, r.is_location_based,
+              r.is_official, r.official_slug, r.max_members, r.lat, r.lng, r.created_at,
+              rm.role AS user_role,
+              COUNT(rm2.id)::int AS member_count
+       FROM rooms r
+       LEFT JOIN room_members rm ON rm.room_id = r.id AND rm.user_id = $1
+       LEFT JOIN room_members rm2 ON rm2.room_id = r.id
+       WHERE r.is_official = TRUE
+         AND COALESCE(r.kind, 'room') = 'room'
+       GROUP BY r.id, rm.role
+       ORDER BY r.name ASC`,
+      [userId]
+    );
+
     let nearbyRooms: any[] = [];
     if (options?.lat !== undefined && options?.lng !== undefined) {
       const radiusMeters = (options.radius ?? 5) * 1000;
@@ -163,36 +205,41 @@ export const roomService = {
 
       const nearbyResult = await query(
         `SELECT r.id, r.name, r.description, r.avatar_url, r.created_by, r.is_location_based,
-                r.max_members, r.lat, r.lng, r.created_at,
+                r.is_official, r.official_slug, r.max_members, r.lat, r.lng, r.created_at,
                 NULL AS user_role,
                 COUNT(rm.id)::int AS member_count,
                 ST_Distance(r.location, ST_MakePoint($2, $1)::geography) AS distance_m
          FROM rooms r
          LEFT JOIN room_members rm ON rm.room_id = r.id
          WHERE r.is_location_based = true
+           AND COALESCE(r.is_official, false) = false
            AND r.id != ALL($5::uuid[])
            AND ST_DWithin(r.location, ST_MakePoint($2, $1)::geography, $3)
+           -- Hide my location from: a nearby room pins where its creator was.
+           AND (r.created_by IS NULL OR ${notLocationHiddenFromViewerSql('r.created_by', '$6')})
          GROUP BY r.id
          ORDER BY distance_m ASC
          LIMIT $4`,
-        [options.lat, options.lng, radiusMeters, limit, excludeIds]
+        [options.lat, options.lng, radiusMeters, limit, excludeIds, userId]
       );
       nearbyRooms = nearbyResult.rows;
     }
 
     return {
-      member_rooms: memberRooms.rows,
-      nearby_rooms: nearbyRooms,
+      member_rooms: applyLiveRoomCounts(memberRooms.rows),
+      nearby_rooms: applyLiveRoomCounts(nearbyRooms),
+      official_rooms: applyLiveRoomCounts(officialRooms.rows),
     };
   },
 
   async joinRoom(userId: string, roomId: string) {
     const roomResult = await query(
-      `SELECT r.max_members, r.is_location_based, COUNT(rm.id)::int AS member_count
+      `SELECT r.max_members, r.is_location_based, COALESCE(r.is_official, false) AS is_official,
+              COUNT(rm.id)::int AS member_count
        FROM rooms r
        LEFT JOIN room_members rm ON rm.room_id = r.id
        WHERE r.id = $1
-       GROUP BY r.max_members, r.is_location_based`,
+       GROUP BY r.max_members, r.is_location_based, r.is_official`,
       [roomId]
     );
 
@@ -201,11 +248,13 @@ export const roomService = {
     }
 
     const room = roomResult.rows[0];
-    if (!room.is_location_based) {
+    // Official catalog + location-based nearby rooms are open join.
+    // Private/custom groups stay invite-only (owner adds via addMember).
+    if (!room.is_location_based && !room.is_official) {
       throw new Error('This group is invite-only. Ask the owner to add you.');
     }
 
-    if (room.member_count >= room.max_members) {
+    if (liveRoomCount(roomId) >= room.max_members) {
       throw new Error('Room is full');
     }
 
@@ -218,11 +267,12 @@ export const roomService = {
     }
 
     const roomResult = await query(
-      `SELECT r.max_members, r.is_location_based, COUNT(rm.id)::int AS member_count
+      `SELECT r.max_members, r.is_location_based, COALESCE(r.is_official, false) AS is_official,
+              COUNT(rm.id)::int AS member_count
        FROM rooms r
        LEFT JOIN room_members rm ON rm.room_id = r.id
        WHERE r.id = $1
-       GROUP BY r.max_members, r.is_location_based`,
+       GROUP BY r.max_members, r.is_location_based, r.is_official`,
       [roomId]
     );
 
@@ -234,6 +284,10 @@ export const roomService = {
     if (room.is_location_based) {
       throw new Error('Use join to enter location-based rooms');
     }
+    // Official rooms are self-join via joinRoom — not the premium invite add path.
+    if (room.is_official) {
+      throw new Error('Use join to enter official rooms');
+    }
 
     const roleResult = await query(
       `SELECT role FROM room_members WHERE room_id = $1 AND user_id = $2`,
@@ -243,7 +297,7 @@ export const roomService = {
       throw new Error('Only the group owner can add members');
     }
 
-    if (room.member_count >= room.max_members) {
+    if (liveRoomCount(roomId) >= room.max_members) {
       throw new Error('Group is full');
     }
 
@@ -281,6 +335,7 @@ export const roomService = {
       `DELETE FROM room_members WHERE room_id = $1 AND user_id = $2`,
       [roomId, userId]
     );
+    await this.clearTempIdentityOnLeave(userId, roomId);
   },
 
   async sendMessage(userId: string, roomId: string, message: string, replyTo?: string) {
@@ -291,6 +346,9 @@ export const roomService = {
 
     const id = uuidv4();
     const sanitized = message.replace(/<script[^>]*>.*?<\/script>/gi, '').trim();
+    if (!sanitized) {
+      throw new Error('Message cannot be empty');
+    }
 
     const replyToVal = replyTo ?? null;
 
@@ -303,15 +361,40 @@ export const roomService = {
 
     const msg = result.rows[0] as any;
 
-    const senderRes = await query(`SELECT name FROM users WHERE id = $1`, [userId]);
+    // Display: active temp disguise, else profile identity. Never mutates users.*.
+    // Temp path without photo stays null photo (letter avatar) — never profile face.
+    const senderRes = await query(
+      `SELECT ${roomTempNameSql('$3')} AS sender_name,
+              ${roomTempPhotoSql('$3')} AS sender_photo_url
+         FROM users u
+         LEFT JOIN room_temp_identities ti
+           ON ti.user_id = u.id AND ti.room_id = $2
+        WHERE u.id = $1`,
+      [userId, roomId, String(ROOM_TEMP_IDENTITY_TTL_DAYS)],
+    );
     if (senderRes.rows[0]) {
-      msg.sender_name = senderRes.rows[0].name;
+      msg.sender_name = senderRes.rows[0].sender_name;
+      msg.sender_photo_url = senderRes.rows[0].sender_photo_url;
     }
 
     // Update room updated_at
     await query(`UPDATE rooms SET updated_at = NOW() WHERE id = $1`, [roomId]);
 
     return msg;
+  },
+
+  /**
+   * Attach an image into a room chat. room_messages is text-only, so we store a
+   * stable marker + public /uploads/rooms/… URL (same pattern the frontend parses).
+   */
+  async sendImageMessage(userId: string, roomId: string, publicUrl: string, caption?: string) {
+    if (!publicUrl.startsWith('/uploads/rooms/')) {
+      throw new Error('Invalid room media URL');
+    }
+    const body = caption?.trim()
+      ? `[[mr-img:${publicUrl}]]\n${caption.trim()}`
+      : `[[mr-img:${publicUrl}]]`;
+    return this.sendMessage(userId, roomId, body);
   },
 
   async getMessages(roomId: string, options: GetMessagesOptions) {
@@ -330,16 +413,23 @@ export const roomService = {
       }
     }
 
+    values.push(String(ROOM_TEMP_IDENTITY_TTL_DAYS));
+    const ttlParam = `$${values.length}`;
+
     const result = await query(
       `SELECT rm.id, rm.room_id, rm.sender_id, rm.message, rm.reply_to, rm.created_at,
-              u.name AS sender_name, u.photo_url AS sender_photo_url
+              ${roomTempNameSql(ttlParam)} AS sender_name,
+              ${roomTempPhotoSql(ttlParam)} AS sender_photo_url
        FROM room_messages rm
        JOIN users u ON u.id = rm.sender_id
+       LEFT JOIN room_temp_identities ti
+         ON ti.user_id = rm.sender_id AND ti.room_id = rm.room_id
        WHERE rm.room_id = $1
+         AND rm.created_at > NOW() - INTERVAL '${ROOM_MESSAGE_TTL_DAYS} days'
          ${cursorClause}
        ORDER BY rm.created_at DESC
        LIMIT $2`,
-      values
+      values,
     );
 
     return result.rows.reverse();
@@ -374,15 +464,192 @@ export const roomService = {
       throw new Error('You are not a member of this room');
     }
 
+    // Roster: active temp (photo optional), else profile name/photo. Verification badge
+    // still reflects the real account. Temp-without-photo must stay null (letter avatar).
     const result = await query(
-      `SELECT u.id, u.name, u.photo_url, rm.role
+      `SELECT u.id,
+              ${roomTempNameSql('$2')} AS name,
+              ${roomTempPhotoSql('$2')} AS photo_url,
+              rm.role,
+              COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified,
+              u.authenticity_status,
+              ${roomUsingTempIdentitySql('$2')} AS using_temp_identity
        FROM room_members rm
        JOIN users u ON u.id = rm.user_id
+       LEFT JOIN room_temp_identities ti
+         ON ti.user_id = u.id AND ti.room_id = $1
        WHERE rm.room_id = $1
-       ORDER BY u.name ASC`,
-      [roomId],
+       ORDER BY ${roomTempNameSql('$2')} ASC`,
+      [roomId, String(ROOM_TEMP_IDENTITY_TTL_DAYS)],
     );
     return result.rows;
+  },
+
+  async getTempIdentity(userId: string, roomId: string) {
+    // Soft TTL: treat expired saved rows as absent (purge cron also deletes them).
+    const res = await query(
+      `SELECT display_name, photo_url, save_name, save_photo, last_used_at, updated_at
+       FROM room_temp_identities
+       WHERE user_id = $1 AND room_id = $2
+         AND last_used_at > NOW() - ($3 || ' days')::interval`,
+      [userId, roomId, String(ROOM_TEMP_IDENTITY_TTL_DAYS)],
+    );
+    return res.rows[0] ?? null;
+  },
+
+  async setTempIdentity(
+    userId: string,
+    roomId: string,
+    data: {
+      display_name: string;
+      photo_url?: string | null;
+      save_name?: boolean;
+      save_photo?: boolean;
+    },
+  ) {
+    const photoUrl = data.photo_url?.trim() ? data.photo_url.trim() : null;
+    await query(
+      `INSERT INTO room_temp_identities
+         (user_id, room_id, display_name, photo_url, save_name, save_photo, last_used_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+       ON CONFLICT (user_id, room_id)
+       DO UPDATE SET display_name = EXCLUDED.display_name,
+                     photo_url = EXCLUDED.photo_url,
+                     save_name = EXCLUDED.save_name,
+                     save_photo = EXCLUDED.save_photo,
+                     last_used_at = NOW(),
+                     updated_at = NOW()`,
+      [
+        userId,
+        roomId,
+        data.display_name,
+        photoUrl,
+        data.save_name ?? false,
+        data.save_photo ?? false,
+      ],
+    );
+    return this.getTempIdentity(userId, roomId);
+  },
+
+  /** Refresh inactivity clock when a saved identity is actively used in-room. */
+  async touchTempIdentity(userId: string, roomId: string) {
+    await query(
+      `UPDATE room_temp_identities
+          SET last_used_at = NOW(), updated_at = NOW()
+        WHERE user_id = $1 AND room_id = $2
+          AND last_used_at > NOW() - ($3 || ' days')::interval`,
+      [userId, roomId, String(ROOM_TEMP_IDENTITY_TTL_DAYS)],
+    );
+  },
+
+  /**
+   * On leave / session exit: wipe unsaved temp identity.
+   * Saved name/photo for this room are kept for next entry prefill (until soft TTL).
+   * Never touches users/profiles.
+   */
+  async clearTempIdentityOnLeave(userId: string, roomId: string) {
+    await query(
+      `DELETE FROM room_temp_identities
+        WHERE user_id = $1 AND room_id = $2
+          AND save_name = FALSE AND save_photo = FALSE`,
+      [userId, roomId],
+    );
+    await query(
+      `UPDATE room_temp_identities
+          SET photo_url = NULL, updated_at = NOW()
+        WHERE user_id = $1 AND room_id = $2 AND save_photo = FALSE`,
+      [userId, roomId],
+    );
+    await query(
+      `UPDATE room_temp_identities
+          SET display_name = NULL, updated_at = NOW()
+        WHERE user_id = $1 AND room_id = $2 AND save_name = FALSE`,
+      [userId, roomId],
+    );
+  },
+
+  /** Manual clear: hard-delete immediately (do not wait for TTL). */
+  async deleteTempIdentity(userId: string, roomId: string) {
+    await query(
+      `DELETE FROM room_temp_identities WHERE user_id = $1 AND room_id = $2`,
+      [userId, roomId],
+    );
+  },
+
+  /**
+   * Soft TTL purge — disposable temp data only. Idempotent / safe to re-run.
+   * Returns deleted row count for monitoring.
+   */
+  async purgeExpiredTempIdentities(): Promise<number> {
+    const res = await query(
+      `DELETE FROM room_temp_identities
+        WHERE last_used_at < NOW() - ($1 || ' days')::interval
+        RETURNING user_id`,
+      [String(ROOM_TEMP_IDENTITY_TTL_DAYS)],
+    );
+    return res.rowCount ?? res.rows.length;
+  },
+
+  /** Resolve display name/photo for socket presence inside a room. */
+  async resolveRoomPresence(userId: string, roomId: string) {
+    const res = await query(
+      `SELECT ti.display_name AS temp_name,
+              ti.photo_url AS temp_photo,
+              u.name AS profile_name,
+              u.photo_url AS profile_photo,
+              COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified,
+              u.authenticity_status,
+              ${roomUsingTempIdentitySql('$3')} AS using_temp_identity
+         FROM users u
+         LEFT JOIN room_temp_identities ti
+           ON ti.user_id = u.id AND ti.room_id = $2
+        WHERE u.id = $1`,
+      [userId, roomId, String(ROOM_TEMP_IDENTITY_TTL_DAYS)],
+    );
+    if (res.rows[0]?.using_temp_identity) {
+      await this.touchTempIdentity(userId, roomId);
+    }
+    const safe = sanitizeRoomPresence({
+      tempName: res.rows[0]?.temp_name,
+      tempPhoto: res.rows[0]?.temp_photo,
+      tempActive: !!res.rows[0]?.using_temp_identity,
+      profileName: res.rows[0]?.profile_name,
+      profilePhoto: res.rows[0]?.profile_photo,
+    });
+    return {
+      name: safe.name,
+      photo_url: safe.photo_url,
+      is_verified: !!res.rows[0]?.is_verified,
+      authenticity_status: res.rows[0]?.authenticity_status ?? null,
+      using_temp_identity: safe.using_temp_identity,
+    };
+  },
+
+  /**
+   * Session exit: wipe unsaved temp identity and drop this account from the room.
+   * Occupancy is who is inside now. Owner rows stay so a private room still has an owner,
+   * but they do not count as present once they leave.
+   */
+  async exitRoomSession(userId: string, roomId: string): Promise<void> {
+    await this.clearTempIdentityOnLeave(userId, roomId);
+    const roleRes = await query(
+      `SELECT role FROM room_members WHERE room_id = $1 AND user_id = $2`,
+      [roomId, userId],
+    );
+    if (roleRes.rows.length === 0) return;
+    if (roleRes.rows[0].role === 'owner') return;
+    await query(`DELETE FROM room_members WHERE room_id = $1 AND user_id = $2`, [
+      roomId,
+      userId,
+    ]);
+  },
+
+  async purgeExpiredRoomMessages(): Promise<number> {
+    const result = await query(
+      `DELETE FROM room_messages
+        WHERE created_at < NOW() - INTERVAL '${ROOM_MESSAGE_TTL_DAYS} days'`,
+    );
+    return result.rowCount ?? 0;
   },
 
   async deleteRoom(userId: string, roomId: string) {
@@ -393,3 +660,35 @@ export const roomService = {
     await query(`DELETE FROM rooms WHERE id = $1`, [roomId]);
   },
 };
+
+export function startRoomTempIdentityPurgeCron(): NodeJS.Timeout {
+  const run = () =>
+    roomService.purgeExpiredTempIdentities()
+      .then((deleted) => {
+        if (deleted > 0) {
+          console.log(`[room-temp-identity] purged ${deleted} expired row(s)`);
+        }
+      })
+      .catch((err) => {
+        console.error('[room-temp-identity] purge failed:', err);
+      });
+
+  run();
+  return setInterval(run, ROOM_TEMP_IDENTITY_PURGE_MS);
+}
+
+export function startRoomMessagePurgeCron(): NodeJS.Timeout {
+  const run = () =>
+    roomService.purgeExpiredRoomMessages()
+      .then((deleted) => {
+        if (deleted > 0) {
+          console.log(`[room-messages] purged ${deleted} message(s) older than ${ROOM_MESSAGE_TTL_DAYS} days`);
+        }
+      })
+      .catch((err) => {
+        console.error('[room-messages] purge failed:', err);
+      });
+
+  run();
+  return setInterval(run, ROOM_MESSAGE_PURGE_MS);
+}

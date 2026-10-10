@@ -9,8 +9,24 @@
   padding: 0;
 }
 
+/*
+ * Phone-fit lock: layout width must equal the device width on first paint
+ * (Safari tab + Home Screen PWA). Nested horizontal scrollers (filters,
+ * Events rail) must not widen the document — iOS otherwise invites
+ * pinch-to-shrink. Keep pinch available for maps/video (do not set
+ * user-scalable=no here). overflow-x: clip where supported; hidden fallback.
+ *
+ * touch-action: manipulation kills double-tap zoom traps on chrome/lists
+ * without disabling intentional map pinch (Discover/Hot Spots force
+ * touch-action: none on map surfaces).
+ */
 html {
   -webkit-text-size-adjust: 100%;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
+  touch-action: manipulation;
 }
 
 body {
@@ -20,6 +36,63 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100dvh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
+  position: relative;
+  touch-action: manipulation;
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+
+/* Closed <details> must not leave wide children in the layout tree (iOS). */
+details:not([open]) > *:not(summary) {
+  display: none !important;
+}
+
+img,
+video {
+  max-width: 100%;
+}
+
+/*
+ * iOS Safari auto-zooms focused text controls when computed font-size < 16px.
+ * Unlayered rule beats Tailwind utilities (text-sm / text-[14px] / text-[15px]).
+ * File/checkbox/radio/range/button controls are excluded.
+ */
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='hidden']):not([type='button']):not([type='submit']):not([type='reset']):not([type='image']),
+textarea,
+select {
+  font-size: 16px;
+}
+
+/* Map surfaces keep intentional pan/pinch (overrides html/body manipulation). */
+.discover-map-surface,
+.discover-map-host,
+.hotspots-map-surface,
+[data-testid='hotspots-map'] .mapboxgl-map,
+[data-testid='hotspots-map'] .mapboxgl-canvas-container {
+  touch-action: none;
+}
+[data-testid='hotspots-map'] .mapboxgl-canvas {
+  touch-action: none;
+}
+
+/* Mapbox HTML markers must stay absolutely positioned at true lng/lat.
+   Overriding to relative/static stacks pins in a vertical column when zoomed out. */
+.discover-map-surface .mapboxgl-marker,
+.hotspots-map-surface .mapboxgl-marker,
+[data-testid='hotspots-map'] .mapboxgl-marker {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
 }
 
 input:-webkit-autofill,
@@ -88,6 +161,7 @@ input:-webkit-autofill:focus {
   font-weight: 900;
   line-height: 1.04;
   letter-spacing: -0.01em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.75);
 }
 
 .mr-auth-accent {
@@ -443,4 +517,21 @@ input:-webkit-autofill:focus {
   background: #c4832a;
   box-shadow: 0 0 0 4px rgba(196, 131, 42, 0.25);
   cursor: pointer;
+}
+
+/* Claude Design room icons (RoomAvatar): copper line on a soft copper tile,
+   matching the design board in dark and light. */
+.room-avatar--icon {
+  color: var(--copper);
+  background: linear-gradient(135deg, rgba(196, 131, 42, 0.24), rgba(139, 69, 19, 0.14));
+  border: 1px solid rgba(196, 131, 42, 0.38);
+}
+html.theme-light .room-avatar--icon {
+  background: rgba(196, 131, 42, 0.16);
+  border-color: rgba(184, 115, 42, 0.42);
+}
+.room-avatar__icon > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }

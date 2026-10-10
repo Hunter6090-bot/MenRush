@@ -78,3 +78,115 @@ export function normalizeProfileImageFile(file: File): { file: File | null; erro
   const ext = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg';
   return { file: new File([file], file.name || `photo.${ext}`, { type }) };
 }
+
+/** Chat send target — Android camera originals were multi‑MB → ~50s Al→Pete. */
+export const CHAT_IMAGE_MAX_EDGE = 1080;
+export const CHAT_IMAGE_QUALITY = 0.7;
+export const CHAT_IMAGE_SKIP_BYTES = 90_000;
+
+function loadImageElement(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('image_decode_failed'));
+    };
+    img.src = url;
+  });
+}
+
+async function canvasToJpegFile(
+  source: CanvasImageSource,
+  width: number,
+  height: number,
+  maxEdge: number,
+  quality: number,
+  basename: string,
+): Promise<File | null> {
+  const scale = Math.min(1, maxEdge / Math.max(width, height));
+  const w = Math.max(1, Math.round(width * scale));
+  const h = Math.max(1, Math.round(height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.drawImage(source, 0, 0, w, h);
+  const blob: Blob | null = await new Promise((resolve) =>
+    canvas.toBlob((b) => resolve(b), 'image/jpeg', quality),
+  );
+  if (!blob) return null;
+  return new File([blob], `${basename}.jpg`, {
+    type: 'image/jpeg',
+    lastModified: Date.now(),
+  });
+}
+
+/**
+ * Client-side compress for chat photo send — Android→iPhone was ~50s on
+ * camera originals. Falls back through createImageBitmap → HTMLImageElement.
+ */
+export async function compressChatImageFile(
+  file: File,
+  maxEdge = CHAT_IMAGE_MAX_EDGE,
+  quality = CHAT_IMAGE_QUALITY,
+): Promise<File> {
+  const normalized = normalizeProfileImageFile(file);
+  if (!normalized.file) return file;
+  const input = normalized.file;
+
+  if (input.size <= CHAT_IMAGE_SKIP_BYTES) return input;
+
+  const basename = input.name.replace(/\.[^.]+$/, '') || 'chat-photo';
+
+  try {
+    if (typeof createImageBitmap === 'function') {
+      try {
+        const bitmap = await createImageBitmap(input, {
+          resizeWidth: maxEdge,
+          resizeHeight: maxEdge,
+          resizeQuality: 'medium',
+        } as ImageBitmapOptions);
+        const out = await canvasToJpegFile(
+          bitmap,
+          bitmap.width,
+          bitmap.height,
+          maxEdge,
+          quality,
+          basename,
+        );
+        bitmap.close();
+        if (out && out.size < input.size) return out;
+      } catch {
+        const bitmap = await createImageBitmap(input);
+        const out = await canvasToJpegFile(
+          bitmap,
+          bitmap.width,
+          bitmap.height,
+          maxEdge,
+          quality,
+          basename,
+        );
+        bitmap.close();
+        if (out && out.size < input.size) return out;
+      }
+    }
+  } catch {
+    /* fall through to <img> path — some Android WebViews lack bitmap resize */
+  }
+
+  try {
+    const img = await loadImageElement(input);
+    const out = await canvasToJpegFile(img, img.naturalWidth, img.naturalHeight, maxEdge, quality, basename);
+    if (out && out.size < input.size) return out;
+  } catch {
+    /* keep original */
+  }
+
+  return input;
+}

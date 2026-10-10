@@ -1,20 +1,42 @@
 import type { NearbyUser } from '../components/ProfileCard';
+import { isUserOnlineNow } from './discovery';
 import {
+  RADIUS_KM_OPTIONS,
+  displayRadiusValueToKm,
   formatDistanceFromKm,
   formatRadiusFromKm,
+  kmToDisplayRadiusValue,
   resolveDistanceUnitSystem,
+  MAX_NEARBY_RADIUS_KM,
+  DISCOVERY_ALL_SCOPE_KM,
+  isDiscoveryAllScope,
   type DistanceUnitSystem,
 } from './localeUnits';
 
 const TRIBE_TAGS = [
-  'Twink', 'Twunk', 'Otter', 'Bear', 'Cub', 'Daddy', 'Wolf', 'Jock', 'Leather', 'Rugged', 'Geek',
+  'Twink',
+  'Twunk',
+  'Otter',
+  'Bear',
+  'Cub',
+  'Daddy',
+  'Wolf',
+  'Jock',
+  'Leather',
+  'Rugged',
+  'Geek',
+  'Pup',
+  'Chub',
+  'Muscle',
 ];
 
-/** Matches backend `/users/nearby` clamp: Math.min(Math.max(radius, 0.8), 161). */
-export const MAX_RADIUS_KM = 161;
+/** Widest Nearby radius (100 miles). Matches backend `/users/nearby` clamp. */
+export const MAX_RADIUS_KM = MAX_NEARBY_RADIUS_KM;
 
-/** "All" uses the widest search the API allows (100 miles). */
-export const RADIUS_ALL_KM = MAX_RADIUS_KM;
+/** "All" is UK + Ireland — not a radius. Sentinel only for client state. */
+export const RADIUS_ALL_KM = DISCOVERY_ALL_SCOPE_KM;
+
+export { isDiscoveryAllScope, DISCOVERY_ALL_SCOPE_KM };
 
 const KM_PER_MILE = 1.60934;
 
@@ -27,14 +49,16 @@ export const RADIUS_MILE_OPTIONS = [
 
 export type RadiusMilesSelection = 'all' | number;
 
-export const DEFAULT_RADIUS_KM = 5;
-
-export const INTENT_FILTERS = ['All', 'Chat', 'Drinks', 'Date', 'NSA'] as const;
+/** Legacy special nearby intents that still use the lookingFor API path (NSA only). */
+export const INTENT_FILTERS = ['All', 'NSA'] as const;
 export type IntentFilter = (typeof INTENT_FILTERS)[number];
 
 export function milesToKm(miles: number): number {
   return Math.round(miles * KM_PER_MILE * 10) / 10;
 }
+
+/** Default search radius: 5 miles (not 5 km — avoids header/pill label drift). */
+export const DEFAULT_RADIUS_KM = milesToKm(5);
 
 /** ~0.5 miles — matches the smallest dropdown option. */
 export const MIN_RADIUS_KM = milesToKm(0.5);
@@ -44,12 +68,21 @@ export function kmToMiles(km: number): number {
 }
 
 export function clampRadiusKm(km: number): number {
+  if (isDiscoveryAllScope(km)) return RADIUS_ALL_KM;
   return Math.min(Math.max(km, MIN_RADIUS_KM), MAX_RADIUS_KM);
 }
 
+/** Legacy stored All was 161 km (collapsed with 100 miles). Treat as All. */
+export function migrateStoredRadiusKm(km: number): number {
+  if (!Number.isFinite(km) || km <= 0) return DEFAULT_RADIUS_KM;
+  if (isDiscoveryAllScope(km)) return RADIUS_ALL_KM;
+  if (km >= 160.95 && km <= 161.05) return RADIUS_ALL_KM;
+  return clampRadiusKm(km);
+}
+
 export function kmToRadiusSelection(km: number): RadiusMilesSelection {
-  const clamped = clampRadiusKm(km);
-  if (clamped >= RADIUS_ALL_KM - 0.5) return 'all';
+  if (isDiscoveryAllScope(km) || (km >= 160.95 && km <= 161.05)) return 'all';
+  const clamped = Math.min(Math.max(km, MIN_RADIUS_KM), MAX_RADIUS_KM);
   const miles = kmToMiles(clamped);
   return RADIUS_MILE_OPTIONS.reduce((best, option) =>
     Math.abs(option - miles) < Math.abs(best - miles) ? option : best,
@@ -65,6 +98,43 @@ export function formatRadiusMiles(km: number, system?: DistanceUnitSystem): stri
   return formatRadiusFromKm(km, system ?? resolveDistanceUnitSystem());
 }
 
+/**
+ * Label for radius controls (header select + map pill).
+ * Snaps to the same discrete option the dropdown uses so both never disagree
+ * (e.g. 5 km must not show as "5 miles" in one place and "3 miles" in another).
+ */
+export function formatRadiusControlLabel(km: number, system?: DistanceUnitSystem): string {
+  const resolved = system ?? resolveDistanceUnitSystem();
+  if (isDiscoveryAllScope(km) || kmToRadiusSelection(km) === 'all') return 'All';
+  if (resolved === 'imperial') {
+    return formatRadiusMilesLabel(kmToRadiusSelection(km));
+  }
+  const clamped = clampRadiusKm(km);
+  const selection = kmToDisplayRadiusValue(clamped, 'metric');
+  if (selection === 'all') return 'All';
+  return formatRadiusFromKm(selection, 'metric');
+}
+
+/** Snap stored km onto the discrete picker option for the active unit system. */
+export function normalizeRadiusKm(km: number, system?: DistanceUnitSystem): number {
+  const resolved = system ?? resolveDistanceUnitSystem();
+  if (resolved === 'imperial') {
+    return radiusSelectionToKm(kmToRadiusSelection(km));
+  }
+  return displayRadiusValueToKm(kmToDisplayRadiusValue(km, 'metric'), 'metric');
+}
+
+/** Map +/− step values in km, aligned with the header radius dropdown. */
+export function radiusStepOptionsKm(system?: DistanceUnitSystem): number[] {
+  const resolved = system ?? resolveDistanceUnitSystem();
+  if (resolved === 'imperial') {
+    // Keep map chrome compact: subset of mile options + All.
+    const miles = [0.5, 1, 5, 10, 25, 50, 100] as const;
+    return [...miles.map((m) => milesToKm(m)), RADIUS_ALL_KM];
+  }
+  return [...RADIUS_KM_OPTIONS.filter((km) => km < MAX_NEARBY_RADIUS_KM), RADIUS_ALL_KM];
+}
+
 export function formatRadiusMilesLabel(selection: RadiusMilesSelection): string {
   if (selection === 'all') return 'All';
   const milesText = selection % 1 === 0 ? String(selection) : selection.toFixed(1);
@@ -77,7 +147,7 @@ export function formatDistanceMiles(user: NearbyUser): string {
 }
 
 export function formatActiveStatus(user: NearbyUser): string {
-  if (user.online) return 'Active now';
+  if (isUserOnlineNow(user)) return 'Active now';
   if (!user.last_seen) return 'Recently';
   const diffMs = Date.now() - new Date(user.last_seen).getTime();
   const mins = Math.floor(diffMs / 60000);
@@ -101,12 +171,6 @@ export function matchesIntentFilter(user: NearbyUser, filter: IntentFilter): boo
   const interests = (user.interests ?? []).map((t) => t.toLowerCase());
 
   switch (filter) {
-    case 'Chat':
-      return user.online || mood.includes('chat') || interests.includes('chat');
-    case 'Drinks':
-      return mood.includes('drink') || lookingFor.includes('drink') || interests.includes('drinks');
-    case 'Date':
-      return lookingFor.includes('dat') || mood.includes('date') || interests.includes('dating');
     case 'NSA':
       return lookingFor.includes('nsa') || mood.includes('nsa') || interests.includes('nsa');
     default:

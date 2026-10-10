@@ -2,14 +2,15 @@ import { useParams } from 'react-router-dom';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
 import { Rooms } from '../pages/Rooms';
 import { RoomChat } from '../pages/RoomChat';
-import { MessagingHub } from './MessagingHub';
+import { RoomsHub } from './RoomsHub';
 
+/** Video rooms are first-class — never routed through MessagingHub / Chat. */
 export const RoomsRoute = () => {
   const isDesktop = useIsDesktopLayout();
   const { roomId } = useParams<{ roomId?: string }>();
 
   if (isDesktop) {
-    return <MessagingHub />;
+    return <RoomsHub />;
   }
 
   if (roomId) {

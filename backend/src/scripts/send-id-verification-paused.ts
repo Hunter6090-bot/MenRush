@@ -1,5 +1,5 @@
 /**
- * Broadcast: ID verification paused for beta.
+ * Broadcast: ID verification paused.
  *
  * Default is dry-run. Does NOT send unless you pass --send.
  *
@@ -59,10 +59,10 @@ export function buildIdVerificationPausedEmail(displayName?: string | null): {
       'There is a problem with our ID verification system. Some of you got stuck on the scanner, saw confusing “accepted” messages, or couldn’t get past the confirm step. That is on us, and we are sorry for the friction.',
     ),
     transactionalParagraph(
-      'While we fix it, <strong style="color:#F0E0C0;">you can register and use the MenRush beta without ID verification</strong>. No copper checkmark required to get in and explore.',
+      'While we fix it, <strong style="color:#F0E0C0;">you can register and use MenRush without ID verification</strong>. No copper checkmark required to get in and explore.',
     ),
     transactionalParagraph(
-      'Once the scanner is repaired — and at grand opening — we will ask you to resubmit your ID when we request it. Verification stays part of how we keep MenRush real; we are only pausing the hard gate for this beta window.',
+      'Once the scanner is repaired, and at grand opening, we will ask you to resubmit your ID when we request it. Verification stays part of how we keep MenRush real; we are only pausing the hard gate for now.',
     ),
     transactionalParagraph(
       'We hope you enjoy the app. If anything feels broken, confusing, or off, reply to this email or write to <a href="mailto:hello@menrush.com" style="color:#C4832A;">hello@menrush.com</a> — your reports help us ship a better product.',
@@ -72,15 +72,15 @@ export function buildIdVerificationPausedEmail(displayName?: string | null): {
   ].join('');
 
   const html = buildTransactionalEmail({
-    title: 'ID verification paused for beta',
-    preheader: 'Sorry for the hassle — you can use the beta without verifying for now.',
-    eyebrow: 'Beta update',
+    title: 'ID verification paused',
+    preheader: 'Sorry for the hassle. You can use MenRush without verifying for now.',
+    eyebrow: 'Update',
     headlineHtml: 'ID check paused. <span style="color:#C4832A;">You&apos;re still in.</span>',
-    subheadline: 'We are fixing verification. Meanwhile, the beta is open without it.',
+    subheadline: 'We are fixing verification. Meanwhile, MenRush is open without it.',
     bodyHtml,
-    ctaUrl: 'https://menrush.com/beta',
-    ctaLabel: 'Open MenRush beta',
-    footerNote: 'You received this because you are on the MenRush beta or waitlist.',
+    ctaUrl: 'https://menrush.com/invite',
+    ctaLabel: 'Open MenRush',
+    footerNote: 'You received this because you are on MenRush or the waitlist.',
   });
 
   const text = [
@@ -90,9 +90,9 @@ export function buildIdVerificationPausedEmail(displayName?: string | null): {
     '',
     'There is a problem with our ID verification system. Some of you got stuck on the scanner, saw confusing “accepted” messages, or couldn’t get past the confirm step. That is on us, and we are sorry for the friction.',
     '',
-    'While we fix it, you can register and use the MenRush beta without ID verification. No copper checkmark required to get in and explore.',
+    'While we fix it, you can register and use MenRush without ID verification. No copper checkmark required to get in and explore.',
     '',
-    'Once the scanner is repaired — and at grand opening — we will ask you to resubmit your ID when we request it. Verification stays part of how we keep MenRush real; we are only pausing the hard gate for this beta window.',
+    'Once the scanner is repaired, and at grand opening, we will ask you to resubmit your ID when we request it. Verification stays part of how we keep MenRush real; we are only pausing the hard gate for now.',
     '',
     'We hope you enjoy the app. If anything feels broken, confusing, or off, reply to this email or write to hello@menrush.com — your reports help us ship a better product.',
     '',
@@ -100,11 +100,11 @@ export function buildIdVerificationPausedEmail(displayName?: string | null): {
     '',
     '— The MenRush team',
     '',
-    'Open beta: https://menrush.com/beta',
+    'Open: https://menrush.com/invite',
   ].join('\n');
 
   return {
-    subject: 'MenRush beta: ID verification paused (you can still get in)',
+    subject: 'MenRush: ID verification paused (you can still get in)',
     html,
     text,
   };

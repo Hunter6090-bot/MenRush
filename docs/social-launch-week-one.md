@@ -1,5 +1,9 @@
 # MenRush Social Launch: Week One
 
+> **Superseded for scheduling.** This June 2026 waitlist week never shipped.
+> Use **`docs/social-oct1-2026.md`** and campaign slug `oct1-2026` (opening day **1 October 2026**, UK-first).
+> Do not reuse these June dates. Cadence windows and Metricool notes below remain useful reference.
+
 Start date: 2026-06-02  
 Primary CTA: `https://menrush.com`  
 Approval model: draft first, human approve before publish.

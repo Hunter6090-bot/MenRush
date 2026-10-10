@@ -1,18 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useResolvingPhotoSrc } from './UserAvatar';
+import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { StatusBadge } from './StatusBadge';
-import { SilhouetteAvatar } from './SilhouetteAvatar';
-import { IconMatches } from './icons';
+import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
+import { IconMatches, IconChat } from './icons';
 import { usersAPI } from '../api/client';
 import { VerifiedBadge } from './VerifiedBadge';
 import { MoodBadge } from './MoodPicker';
 import { getDistanceLabel, isUserPulsing } from '../lib/discovery';
+import {
+  matchCtaAriaLabel,
+  matchCtaDisabled,
+  matchCtaLabel,
+  matchCtaToneClasses,
+  matchInterestState,
+} from '../lib/matchCta';
 
 export interface NearbyUser {
   id: string;
   name: string;
-  age: number;
+  age?: number;
   bio?: string;
   headline?: string;
   looking_for?: string;
@@ -20,9 +28,10 @@ export interface NearbyUser {
   cover_url?: string;
   interests?: string[];
   online: boolean;
-  distance_km: string | number;
-  /** Bucketed/privacy-safe distance label produced by the backend, e.g. "< 300 m", "1.5 km". */
-  distance_label?: string;
+  /** Coarse bucket (sorting). Absent when the member hides distance. */
+  distance_km?: string | number | null;
+  /** Coarse, Discretion-fuzzed label from the backend, e.g. "<1 mi", "3 mi". */
+  distance_label?: string | null;
   last_seen?: string;
   lat?: number;
   lng?: number;
@@ -33,6 +42,15 @@ export interface NearbyUser {
   pulse_expires_at?: string | null;
   /** Active mood (auto-expires after 6h server-side; null when unset/expired). */
   mood?: import('../api/client').Mood | null;
+  /**
+   * Account created_at (ISO) from `/users/nearby` — account age only for NEW badge.
+   * Not exact GPS; privacy-safe.
+   */
+  created_at?: string;
+  /** Active visitor fresh-face boost (left home area; TTL not expired). */
+  is_visitor?: boolean;
+  /** ISO expiry for visitor boost — null when not visiting. */
+  visitor_expires_at?: string | null;
 }
 
 interface ProfileCardProps {
@@ -53,12 +71,13 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   const [showMatch, setShowMatch] = useState(false);
   const [likeHint, setLikeHint] = useState<string | null>(null);
   const [liking, setLiking] = useState(false);
-  const distance = parseFloat(String(user.distance_km));
   const distanceLabel = getDistanceLabel(user);
   const { src: fullPhotoUrl, onError: onPhotoError } = useResolvingPhotoSrc(
     user.photo_url,
     user.age,
   );
+  // Empty / missing / /avatars/* → faded cutout (same as Grid + Matches). Never gold stub.
+  const showBrandEmpty = isNearbyPlaceholderFace(user.photo_url) || !fullPhotoUrl;
   const isPulsing = isUserPulsing(user);
 
   useEffect(() => {
@@ -71,10 +90,11 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (liking) return;
-    if (liked || isMutual) {
-      if (isMutual) navigate(`/messages/${user.id}`);
+    if (isMutual) {
+      navigate(`/messages/${user.id}`);
       return;
     }
+    if (liked) return;
 
     setLiking(true);
     setLikeHint(null);
@@ -102,6 +122,9 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
     }
   };
 
+  const matchState = matchInterestState({ liked, mutual: isMutual });
+  const matchDisabled = matchCtaDisabled(matchState, liking);
+
   return (
     <div className="group relative bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl shadow-card overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover hover:border-[#C4832A]/25 flex flex-col">
       {/* Match Overlay */}
@@ -121,56 +144,79 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         </div>
       )}
 
-      {/* Photo area */}
-      <div className="relative h-52 bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-card)] flex-shrink-0">
-        {fullPhotoUrl ? (
-          <img
-            src={fullPhotoUrl}
-            alt={user.name}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-            onError={onPhotoError}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <SilhouetteAvatar size={120} variant="card" />
-          </div>
-        )}
+      {/* Photo area — photo taps open profile; Match stays a separate control */}
+      <div className="relative h-44 md:h-40 lg:h-44 bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-card)] flex-shrink-0">
+        <ProfilePhotoLink
+          userId={user.id}
+          name={user.name}
+          className="absolute inset-0 z-0 block"
+          data-testid={`profile-card-photo-${user.id}`}
+        >
+          {showBrandEmpty ? (
+            <div
+              className="h-full w-full"
+              data-testid={`profile-card-photo-placeholder-${user.id}`}
+            >
+              <FadedBrandFace variant="tile" label={user.name} />
+            </div>
+          ) : (
+            <img
+              src={fullPhotoUrl}
+              alt={user.name}
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              onError={onPhotoError}
+            />
+          )}
+        </ProfilePhotoLink>
 
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-card)] via-transparent to-transparent" />
+        <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-[var(--bg-card)] via-transparent to-transparent" />
 
         {/* Status badge */}
-        <div className="absolute top-3 left-3">
+        <div className="pointer-events-none absolute top-3 left-3 z-[2]">
           <StatusBadge online={user.online} lastSeen={user.last_seen} pulsing={isPulsing} />
         </div>
 
         {/* Distance badge */}
-        <div className="absolute top-3 right-3">
+        <div className="pointer-events-none absolute top-3 right-3 z-[2]">
           <span className="flex items-center gap-1 bg-black/50 backdrop-blur-sm text-[var(--cream)]/80 text-xs font-medium px-2.5 py-1 rounded-full border border-[var(--border-default)]">
             <PinIcon className="w-3 h-3 text-[#C4832A]" />
             {distanceLabel}
           </span>
         </div>
 
+        {user.is_verified ? <VerifiedBadge compact className="absolute bottom-3 right-3 z-10" /> : null}
+
         {/* Match button overlay */}
         <button
+          type="button"
           onClick={handleLike}
-          className={`absolute bottom-3 right-3 w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-            liked
-              ? 'bg-nn-copper text-nn-on-copper shadow-glow-copper'
-              : 'bg-black/50 backdrop-blur-sm text-nn-copper-bright hover:bg-nn-copper/20 hover:scale-110'
-          } border border-nn-border z-10`}
+          disabled={matchDisabled}
+          aria-disabled={matchDisabled}
+          aria-label={matchCtaAriaLabel(matchState, user.name, { mutualOpensChat: true })}
+          title={matchState === 'mutual' ? 'Chat' : matchState === 'outgoing' ? 'Sent' : 'Match'}
+          data-testid={`profile-card-match-${user.id}`}
+          className={`absolute bottom-3 left-3 z-10 flex h-11 w-11 items-center justify-center rounded-full transition-all ${
+            matchState === 'outgoing'
+              ? 'bg-[var(--bg-card)] text-[var(--cream-muted)] opacity-70 cursor-not-allowed border border-[var(--border-default)]'
+              : matchState === 'mutual'
+                ? 'bg-nn-copper text-nn-on-copper shadow-glow-copper border border-nn-border'
+                : 'bg-black/50 backdrop-blur-sm text-nn-copper-bright hover:bg-nn-copper/20 hover:scale-110 border border-nn-border'
+          }`}
         >
-          <IconMatches size={20} />
+          {matchState === 'mutual' ? <IconChat size={20} /> : <IconMatches size={20} />}
         </button>
+
       </div>
 
       {/* Content */}
       <div className="p-4 flex-1 flex flex-col">
         <div className="flex items-center gap-2 mb-1">
           <h3 className="font-bold text-[var(--cream)] text-base">{user.name}</h3>
-          <span className="text-[var(--cream-muted)] text-sm">{user.age}</span>
-          {user.is_verified ? <VerifiedBadge /> : user.authenticity_status === 'verified' ? <VerifiedBadge level="authentic_person" /> : null}
+          {typeof user.age === 'number' ? (
+            <span className="text-[var(--cream-muted)] text-sm">{user.age}</span>
+          ) : null}
+
         </div>
 
         {user.headline && (
@@ -216,19 +262,34 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
 
         <button
           type="button"
-          disabled={liking || (liked && !isMutual)}
+          disabled={matchDisabled}
+          aria-disabled={matchDisabled}
+          aria-label={matchCtaAriaLabel(matchState, user.name, { mutualOpensChat: true })}
+          title={liking ? 'Sending…' : matchState === 'mutual' ? 'Chat' : matchState === 'outgoing' ? 'Sent' : 'Match'}
+          data-testid={`profile-card-match-cta-${user.id}`}
           onClick={
-            isMutual
+            matchState === 'mutual'
               ? (e) => {
                   e.stopPropagation();
                   navigate(`/messages/${user.id}`);
                 }
               : handleLike
           }
-          className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#A45E18] hover:from-[#D4943B] hover:to-[#C4832A] text-white text-sm font-semibold transition-all duration-200 hover:shadow-glow-blue active:scale-95 disabled:opacity-60"
+          className={`mt-4 w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
+            matchState === 'none'
+              ? 'bg-gradient-to-r from-[#C4832A] to-[#A45E18] hover:from-[#D4943B] hover:to-[#C4832A] text-white hover:shadow-glow-blue active:scale-95'
+              : matchCtaToneClasses(matchState)
+          }`}
         >
-          {liking ? 'Sending…' : isMutual ? 'Open chat' : liked ? 'Matched' : 'Match'}
+          {matchState === 'mutual' ? <IconChat size={18} /> : <IconMatches size={18} />}
+          <span>
+            {matchCtaLabel(matchState, user.name, {
+              sending: liking,
+              mutualLabel: 'chat',
+            })}
+          </span>
         </button>
+
         {likeHint ? (
           <p className="mt-2 text-center text-[11px] text-[var(--cream-muted)]" role="status">
             {likeHint}

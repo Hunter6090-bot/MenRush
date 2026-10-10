@@ -4,6 +4,15 @@ The default suite is intentionally safe to run against a local frontend or a
 deployed read-only target. It does not submit credentials, personal data,
 waitlist entries, contact messages, reports, blocks, or outbound email.
 
+## Base URL
+
+All helpers and specs use `e2e/support/base-url.ts`:
+
+- Default: `http://127.0.0.1:4173` (Playwright webServer / CI preview port)
+- Override: `PLAYWRIGHT_BASE_URL=...`
+
+Do **not** hardcode Vite's local-dev port `5173` in e2e helpers or specs.
+
 ## Run locally
 
 ```sh

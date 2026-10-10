@@ -21,8 +21,8 @@ export const EventsRail: React.FC<EventsRailProps> = ({ lat, lng, onSelect }) =>
   if (events.length === 0) return null;
 
   return (
-    <div className="overflow-x-auto px-4">
-      <div className="flex gap-3 pb-1">
+    <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain px-4 [-webkit-overflow-scrolling:touch]">
+      <div className="flex w-max max-w-none gap-3 pb-1">
         {events.map((event) => (
           <button
             key={event.id}

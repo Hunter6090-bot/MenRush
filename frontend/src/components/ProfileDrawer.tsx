@@ -1,15 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { NearbyUser } from "./ProfileCard";
-import { SilhouetteAvatar } from "./SilhouetteAvatar";
+import { FadedBrandFace } from "./FadedBrandFace";
 import { PulsingAvatar } from "./PulsingAvatar";
 import { useResolvingPhotoSrc } from "./UserAvatar";
-import { IconPulse, IconClose } from "./icons";
+import { ProfilePhotoViewer } from "./ProfilePhotoViewer";
+import { IconPulse, IconClose, IconMatches, IconChat, IconUnmatch } from "./icons";
 import { StatusBadge } from "./StatusBadge";
 import { DistancePill } from "./DistancePill";
 import { VerifiedBadge } from "./VerifiedBadge";
 import { ChatSafetyMenu } from "./ChatSafetyMenu";
-import { getDistanceLabel, isUserPulsing } from "../lib/discovery";
+import { isUserPulsing, memberDistanceLabel } from "../lib/discovery";
+import { profilePathForUser } from "../lib/profileLinks";
+import {
+  matchCtaAriaLabel,
+  matchCtaDisabled,
+  matchCtaToneClasses,
+  matchInterestState,
+} from "../lib/matchCta";
+import { useAuthStore } from "../hooks/store";
 import { useIsDesktopLayout } from "../hooks/useMediaQuery";
 
 type SheetSnap = "half" | "tall" | "full";
@@ -27,6 +36,7 @@ interface ProfileDrawerProps {
   mutual?: boolean;
   onClose: () => void;
   onLike: () => Promise<void> | void;
+  onUnmatch?: () => Promise<void> | void;
   onPass?: () => void;
   onMessage: () => void;
   onPulseBack?: () => Promise<void> | void;
@@ -55,6 +65,7 @@ export function ProfileDrawer({
   mutual = false,
   onClose,
   onLike,
+  onUnmatch,
   onPass,
   onMessage,
   onPulseBack,
@@ -62,6 +73,7 @@ export function ProfileDrawer({
   onBlocked,
 }: ProfileDrawerProps) {
   const navigate = useNavigate();
+  const authUserId = useAuthStore((s) => s.user?.id);
   const isDesktop = useIsDesktopLayout();
   const [mounted, setMounted] = useState(false);
   const [snap, setSnap] = useState<SheetSnap>("tall");
@@ -142,13 +154,20 @@ export function ProfileDrawer({
     user?.age,
   );
   const { src: cover, onError: onCoverError } = useResolvingPhotoSrc(user?.cover_url);
+  const [viewer, setViewer] = useState<{ src: string; alt: string } | null>(null);
 
   if (!user) return null;
 
-  const distance = parseFloat(String(user.distance_km));
-  const distLabel = getDistanceLabel(user);
+  // Server label is coarse and Discretion-fuzzed ("<1 mi", "3 mi"). No distance
+  // (member hides it, or no location) shows "Nearby" in the pill only.
+  const distLabel = memberDistanceLabel(user);
+  const pillLabel = distLabel ?? "Nearby";
   const isPulsing = isUserPulsing(user);
   const dragging = dragVh != null;
+  const matchState = matchInterestState({ liked, mutual });
+  const matchDisabled = matchCtaDisabled(matchState);
+  const heroEnlargeSrc = cover || photo || null;
+  const avatarEnlargeSrc = photo || null;
 
   return (
     <div
@@ -200,16 +219,17 @@ export function ProfileDrawer({
           onPointerCancel={endDrag}
         >
           <span className="h-1.5 w-11 rounded-full bg-[var(--border-strong)]" />
-          <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--cream-muted)]">
+          <span className="mt-1 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--cream-muted)]">
             Drag to resize
           </span>
         </div>
 
-        <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+        <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
           <div className="rounded-full bg-[color-mix(in_srgb,var(--bg-elevated)_88%,transparent)] border border-[var(--border-default)]">
             <ChatSafetyMenu
               peerId={user.id}
               peerName={user.name}
+              showHideLocation
               onNotice={onSafetyNotice}
               onBlocked={() => {
                 onBlocked?.();
@@ -226,83 +246,139 @@ export function ProfileDrawer({
           </button>
         </div>
 
-        <div
-          className="relative w-full shrink-0"
-          style={{
-            height: snap === "half" && !dragging ? 180 : 280,
-            maxHeight: "38%",
-            background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
-            transition: dragging ? "none" : "height 220ms ease",
-          }}
-        >
-          {cover ? (
-            <img src={cover} alt="" className="w-full h-full object-cover" onError={onCoverError} />
-          ) : photo ? (
-            <img
-              src={photo}
-              alt={user.name}
-              className="w-full h-full object-cover"
-              onError={onPhotoError}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <SilhouetteAvatar size={180} variant="card" />
-            </div>
-          )}
+        {/*
+          Hero + avatar live outside the scrollport so the circular face is never
+          clipped by overflow-y (the old -mt-12-inside-scroll pattern bisected
+          avatars on phone). Avatar is a full circle in its own row between photo
+          and name — no negative-margin hang into overflow-hidden bands.
+        */}
+        <div className="relative z-10 w-full shrink-0" data-testid="profile-sheet-hero">
           <div
-            className="absolute inset-0 pointer-events-none"
-            style={{ background: "linear-gradient(to top, var(--bg-elevated) 0%, transparent 60%)" }}
-          />
-          {isPulsing ? (
-            <div className="absolute top-3 left-3">
-              <StatusBadge online={false} pulsing />
+            className="relative w-full overflow-hidden"
+            style={{
+              height: isDesktop ? 360 : snap === "half" && !dragging ? 200 : 240,
+              maxHeight: isDesktop ? "46vh" : "36vh",
+              background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
+              transition: dragging ? "none" : "height 220ms ease",
+            }}
+          >
+            {heroEnlargeSrc ? (
+              <button
+                type="button"
+                data-testid="drawer-cover-enlarge"
+                aria-label={`Enlarge ${cover ? "cover" : "photo"}`}
+                className="absolute inset-0 block h-full w-full cursor-zoom-in p-0 border-0"
+                onClick={() =>
+                  setViewer({
+                    src: heroEnlargeSrc,
+                    alt: cover ? `${user.name}'s cover` : user.name,
+                  })
+                }
+              >
+                <img
+                  src={heroEnlargeSrc}
+                  alt=""
+                  className={`w-full h-full object-cover ${cover ? "object-center" : "object-top"}`}
+                  onError={cover ? onCoverError : onPhotoError}
+                />
+              </button>
+            ) : (
+              <div
+                className="h-full w-full"
+                data-testid={`drawer-hero-placeholder-${user.id}`}
+              >
+                <FadedBrandFace variant="tile" label={user.name} />
+              </div>
+            )}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  "linear-gradient(to top, var(--bg-elevated) 0%, transparent 38%)",
+              }}
+            />
+            {/* Status + distance in the top band — away from the face mid-frame */}
+            <div className="absolute top-3 left-3 z-[1] flex flex-col items-start gap-1.5 max-w-[70%] pointer-events-none">
+              {isPulsing ? (
+                <StatusBadge online={false} pulsing />
+              ) : user.online ? (
+                <StatusBadge online lastSeen={user.last_seen} size="xs" />
+              ) : null}
+              <DistancePill km={0} label={pillLabel} />
             </div>
-          ) : user.online ? (
-            <div className="absolute top-3 left-3">
-              <StatusBadge online lastSeen={user.last_seen} size="xs" />
-            </div>
-          ) : null}
-          <div className="absolute bottom-3 left-3">
-            <DistancePill km={distance} label={distLabel} />
+          </div>
+
+          {/* Full circular avatar — own padded row, never scroll-clipped or mid-cut */}
+          <div className="flex items-center px-5 pt-3 pb-1">
+            {avatarEnlargeSrc ? (
+              <button
+                type="button"
+                data-testid={`drawer-avatar-${user.id}`}
+                aria-label={`Enlarge ${user.name}'s photo`}
+                className="inline-flex shrink-0 rounded-full ring-2 ring-[var(--copper)] shadow-[0_4px_14px_rgba(0,0,0,0.4)] cursor-zoom-in p-0 border-0 bg-transparent"
+                onClick={() =>
+                  setViewer({ src: avatarEnlargeSrc, alt: user.name })
+                }
+              >
+                <PulsingAvatar isPulsing={isPulsing} size={72} intensity="subtle">
+                  <div
+                    className="w-full h-full rounded-full overflow-hidden flex items-center justify-center"
+                    style={{
+                      background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
+                    }}
+                  >
+                    <img
+                      src={avatarEnlargeSrc}
+                      alt=""
+                      className="w-full h-full object-cover object-top"
+                      onError={onPhotoError}
+                    />
+                  </div>
+                </PulsingAvatar>
+              </button>
+            ) : (
+              <div
+                className="inline-flex shrink-0 rounded-full ring-2 ring-[var(--copper)] shadow-[0_4px_14px_rgba(0,0,0,0.4)]"
+                data-testid={`drawer-avatar-${user.id}`}
+              >
+                <PulsingAvatar isPulsing={isPulsing} size={72} intensity="subtle">
+                  <div
+                    className="w-full h-full rounded-full overflow-hidden flex items-center justify-center"
+                    style={{
+                      background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
+                    }}
+                  >
+                    <FadedBrandFace variant="profile" size={72} label={user.name} />
+                  </div>
+                </PulsingAvatar>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4">
-          <div className="flex items-end justify-between gap-3 -mt-12 mb-4">
-            <PulsingAvatar isPulsing={isPulsing} size={64} intensity="subtle">
-              <div
-                className="w-full h-full rounded-full overflow-hidden border-2 flex items-center justify-center"
-                style={{
-                  background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
-                  borderColor: "var(--copper)",
-                }}
-              >
-                {photo ? (
-                  <img src={photo} alt="" className="w-full h-full object-cover" onError={onPhotoError} />
-                ) : (
-                  <SilhouetteAvatar size={56} variant="card" />
-                )}
-              </div>
-            </PulsingAvatar>
-          </div>
-
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
+        <div className="relative z-0 flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-2 pb-4">
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <h2 className="font-display text-2xl font-bold tracking-wide uppercase text-[var(--cream)] truncate">
               {user.name}
             </h2>
-            {user.age ? <span className="text-[var(--cream-soft)] text-lg font-semibold">{user.age}</span> : null}
-            {(user as { is_verified?: boolean }).is_verified ? <VerifiedBadge /> : (user as { authenticity_status?: string }).authenticity_status === 'verified' ? <VerifiedBadge level="authentic_person" /> : null}
+            {user.age ? (
+              <span className="text-[var(--cream-soft)] text-lg font-semibold">{user.age}</span>
+            ) : null}
+            {(user as { is_verified?: boolean }).is_verified ? <VerifiedBadge /> : null}
           </div>
-          <p className="text-sm font-medium text-[var(--cream-soft)]">
-            {user.online ? "Active now" : "Offline"} · {distLabel} away
+          {/* Distance shows once, in the pill in the photo band (no "away" repeat). */}
+          <p className="text-sm font-medium text-[var(--cream-soft)] leading-snug">
+            {user.online ? "Active now" : "Offline"}
           </p>
 
           {user.headline && (
-            <p className="mt-3 text-sm text-[var(--cream)] leading-relaxed italic">"{user.headline}"</p>
+            <p className="mt-3 text-sm text-[var(--cream)] leading-relaxed italic">
+              "{user.headline}"
+            </p>
           )}
 
           {user.looking_for ? (
-            <div className="mt-3" data-testid="drawer-looking-for">
+            <div className="mt-4" data-testid="drawer-looking-for">
               <p className="text-[10px] font-black text-[var(--cream-muted)] uppercase tracking-[.18em] mb-1">
                 Looking for
               </p>
@@ -311,8 +387,11 @@ export function ProfileDrawer({
           ) : null}
 
           {user.mood ? (
-            <p className="mt-2 text-[12px] text-[var(--cream-muted)]">
-              Mood: <span className="font-semibold text-[var(--cream)]">{String(user.mood).replace(/_/g, " ")}</span>
+            <p className="mt-2 text-[12px] text-[var(--cream-muted)] leading-snug">
+              Mood:{" "}
+              <span className="font-semibold text-[var(--cream)]">
+                {String(user.mood).replace(/_/g, " ")}
+              </span>
             </p>
           ) : null}
 
@@ -349,42 +428,67 @@ export function ProfileDrawer({
             type="button"
             onClick={() => {
               onClose();
-              navigate(`/profile/${user.id}`);
+              navigate(profilePathForUser(user.id, authUserId));
             }}
             className="w-full py-2.5 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream)] font-bold text-sm hover:border-[var(--copper)] hover:text-[var(--copper)] transition-colors"
           >
             View full profile
           </button>
           <div className="flex gap-2">
-            {onPass && (
+            {mutual ? (
+              <>
+                <button
+                  type="button"
+                  onClick={onMessage}
+                  data-testid="drawer-open-chat"
+                  title="Chat"
+                  aria-label={`Chat with ${user.name}`}
+                  className="flex-1 py-3 rounded-[var(--radius-md)] font-black text-sm tracking-wide transition-all border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)] flex items-center justify-center gap-2 hover:bg-[rgba(196,131,42,0.28)]"
+                >
+                  <IconChat size={18} />
+                  <span>Chat</span>
+                </button>
+                {onUnmatch && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const confirmed = window.confirm(
+                        `Unmatch with ${user.name}? Chat locks again until you both match.`,
+                      );
+                      if (confirmed) void onUnmatch();
+                    }}
+                    data-testid="drawer-unmatch"
+                    title="Unmatch"
+                    aria-label={`Unmatch with ${user.name}`}
+                    className="flex-1 py-3 rounded-[var(--radius-md)] font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream)] hover:border-[#c45a4a]/55 hover:text-[#e08a7a] flex items-center justify-center gap-2"
+                  >
+                    <IconUnmatch size={18} />
+                    <span>Unmatch</span>
+                  </button>
+                )}
+
+              </>
+            ) : (
               <button
-                onClick={onPass}
-                className="flex-1 py-3 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream)] font-bold text-sm hover:text-[var(--copper)] hover:border-[var(--copper)] transition-colors"
+                type="button"
+                disabled={matchDisabled}
+                aria-disabled={matchDisabled}
+                aria-label={matchCtaAriaLabel(matchState, user.name, {
+                  mutualOpensChat: true,
+                })}
+                title={matchState === "outgoing" ? "Sent" : "Match"}
+                onClick={() => {
+                  if (matchState === "none") void onLike();
+                }}
+                data-testid="drawer-match"
+                className={`flex-1 py-3.5 rounded-[var(--radius-md)] font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 ${
+                  matchState === "none" ? "uppercase active:scale-[0.98]" : ""
+                } ${matchCtaToneClasses(matchState)}`}
               >
-                Pass
+                <IconMatches size={18} />
+                <span>{matchState === "outgoing" ? "Sent" : "Match"}</span>
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => {
-                if (mutual) onMessage();
-                else if (liked) {
-                  onSafetyNotice?.(
-                    "Match sent — chat unlocks when he matches back · consent first.",
-                    "success",
-                  );
-                } else {
-                  void onLike();
-                }
-              }}
-              className={`flex-1 py-3 rounded-[var(--radius-md)] font-black text-sm tracking-wide active:scale-[0.98] transition-all ${
-                mutual || !liked
-                  ? "bg-[var(--copper)] text-[var(--nn-on-copper)] hover:bg-[var(--copper-light,#E0A14A)]"
-                  : "border border-[var(--copper)] bg-transparent text-[var(--copper)]"
-              }`}
-            >
-              {mutual ? "Open chat" : liked ? "Matched" : "Match"}
-            </button>
             {onPulseBack && isPulsing && (
               <button
                 type="button"
@@ -397,11 +501,21 @@ export function ProfileDrawer({
               </button>
             )}
           </div>
+
           <p className="text-center text-[11px] font-semibold tracking-wide text-[var(--cream-soft)]">
             Match is mutual interest · Chat with consent
           </p>
         </div>
       </div>
+      {viewer ? (
+        <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          <ProfilePhotoViewer
+            src={viewer.src}
+            alt={viewer.alt}
+            onClose={() => setViewer(null)}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

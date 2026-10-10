@@ -9,6 +9,32 @@ import { PulseRing } from '../components/PulseRing';
 import { MobileBackButton } from '../components/MobileBackButton';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
+import { getPhotoUrl } from '../components/UserAvatar';
+import { parseRoomImageMessage } from '../lib/roomMediaMessage';
+import { RoomTempIdentityGate } from '../components/RoomTempIdentityGate';
+import { RoomPresentPeopleList } from '../components/RoomPresentPeopleList';
+import { RoomInRoomDm, type InRoomDmMessage } from '../components/RoomInRoomDm';
+import { FadedBrandFace } from '../components/FadedBrandFace';
+import { RoomAvatar } from '../components/RoomAvatar';
+import {
+  presentOthers,
+  removePresentPerson,
+  replacePresentRoster,
+  upsertPresentPerson,
+  type PresentPerson,
+} from '../lib/roomPresentRoster';
+
+/** Drop a leaver from any in-room roster — leave leaves no trace. */
+function dropLeaverFromRoster<T extends { id?: string; user_id?: string }>(
+  roster: T[],
+  leaverId: string,
+): T[] {
+  return roster.filter((entry) => (entry.user_id ?? entry.id) !== leaverId);
+}
+
+const ROOM_EMOJI_PICKER = [
+  '😀', '😂', '🔥', '❤️', '👍', '👀', '😈', '🥵', '💪', '🎉', '😏', '🙌',
+] as const;
 
 interface RoomMessage {
   id?: string;
@@ -27,6 +53,8 @@ interface RoomInfo {
   member_count: number;
   user_role?: string | null;
   is_location_based?: boolean;
+  created_by?: string;
+  official_slug?: string | null;
 }
 
 interface RoomMember {
@@ -34,6 +62,9 @@ interface RoomMember {
   name: string;
   photo_url?: string;
   role?: string;
+  is_verified?: boolean;
+  authenticity_status?: string;
+  using_temp_identity?: boolean;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -57,15 +88,6 @@ function formatDateLabel(iso?: string): string {
 function isSameDay(a?: string, b?: string): boolean {
   if (!a || !b) return false;
   return new Date(a).toDateString() === new Date(b).toDateString();
-}
-
-function initials(name: string): string {
-  return name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
 }
 
 // Deterministic color per sender
@@ -107,9 +129,26 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [mediaError, setMediaError] = useState('');
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({}); // userId → name
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [identityReady, setIdentityReady] = useState(false);
+  const [loadingRoom, setLoadingRoom] = useState(true);
+  const [joinError, setJoinError] = useState<string | null>(null);
+  /** Present occupancy for side list — socket presence only, not DB membership. */
+  const [presentPeople, setPresentPeople] = useState<PresentPerson[]>([]);
+  const [peopleOpen, setPeopleOpen] = useState(true);
+  const [dmPeer, setDmPeer] = useState<{
+    id: string;
+    name: string;
+    photo_url?: string | null;
+  } | null>(null);
+  const [dmMessages, setDmMessages] = useState<InRoomDmMessage[]>([]);
+  const [dmNotice, setDmNotice] = useState<string | null>(null);
+  const [cameraMenuOpen, setCameraMenuOpen] = useState(false);
 
   const {
     participants,
@@ -118,38 +157,97 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     cameraOn,
     micMuted,
     mediaError: videoError,
-    loadMembers,
     applyPresenceSync,
     upsertParticipant,
-    markOffline,
+    removeParticipant,
     getStreamFor,
     toggleCamera,
     toggleMic,
+    stopCamera,
     photoUrl,
-  } = useRoomVideo({ roomId, userId: user?.id, enabled: !!roomId });
+    videoDevices,
+    currentCameraId,
+    switchCameraDevice,
+  } = useRoomVideo({ roomId, userId: user?.id, enabled: identityReady && !!roomId });
+
+  const leaveRoomSurface = useCallback(() => {
+    // Hard-stop local A/V before navigate so iOS camera indicator clears immediately.
+    stopCamera();
+    navigate('/rooms');
+  }, [navigate, stopCamera]);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Load room info + messages ────────────────────────────────────────────
+  // Load room; ensure membership; always gate on temp identity before video.
   useEffect(() => {
     if (!roomId) return;
-    roomsAPI.getRoom(roomId).then((r) => setRoom(r.data)).catch(() => {});
+    let cancelled = false;
+    setLoadingRoom(true);
+    setJoinError(null);
+    setIdentityReady(false);
+
+    (async () => {
+      try {
+        const r = await roomsAPI.getRoom(roomId);
+        if (cancelled) return;
+        const data = r.data as RoomInfo;
+        setRoom(data);
+
+        if (!data.user_role) {
+          try {
+            await roomsAPI.joinRoom(roomId);
+            const refreshed = await roomsAPI.getRoom(roomId);
+            if (cancelled) return;
+            setRoom(refreshed.data as RoomInfo);
+          } catch (err: unknown) {
+            const msg =
+              (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+            setJoinError(msg || 'Could not join this room.');
+            setLoadingRoom(false);
+            return;
+          }
+        }
+        setLoadingRoom(false);
+      } catch {
+        if (!cancelled) {
+          setJoinError('Could not load this room.');
+          setLoadingRoom(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      // Session exit: wipe unsaved temp identity (server also drops open-join membership).
+      void roomsAPI.clearTempIdentity(roomId).catch(() => {});
+    };
+  }, [roomId]);
+
+  // Load messages after identity confirmed. Occupancy comes from socket presence only —
+  // never seed the video grid from DB membership (that left stale AWAY tiles / profile flash).
+  useEffect(() => {
+    if (!roomId || !identityReady) return;
     roomsAPI.getMessages(roomId).then((r) => setMessages(r.data)).catch(() => {});
-    roomsAPI
-      .getMembers(roomId)
-      .then((r) => loadMembers(r.data.map((m) => ({ id: m.id, name: m.name, photo_url: m.photo_url }))))
-      .catch(() => {});
-  }, [roomId, loadMembers]);
+  }, [roomId, identityReady]);
 
   useEffect(() => {
     if (!roomId || !settingsOpen) return;
-    roomsAPI
-      .getMembers(roomId)
-      .then((r) => setMembers(r.data))
-      .catch(() => setMembers([]));
-  }, [roomId, settingsOpen]);
+    // In-room settings roster = live presence only (leave leaves no trace).
+    setMembers((prev) => {
+      const prevById = new Map(prev.map((m) => [m.id, m]));
+      return participants.map((p) => ({
+        id: p.user_id,
+        name: p.name,
+        photo_url: p.photo_url ?? undefined,
+        using_temp_identity: prevById.get(p.user_id)?.using_temp_identity ?? false,
+        role: prevById.get(p.user_id)?.role,
+        is_verified: prevById.get(p.user_id)?.is_verified,
+      }));
+    });
+  }, [roomId, settingsOpen, participants]);
 
   useEffect(() => {
     if (!addPanelOpen) return;
@@ -179,17 +277,20 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   }, [addPanelOpen, members, user?.id]);
 
   // ── Socket: join/leave ───────────────────────────────────────────────────
+  // CRITICAL: join only AFTER temp identity is saved. Early join broadcast
+  // resolveRoomPresence before the gate → real name/photo leak + dropped
+  // WebRTC offers (mesh handlers are disabled until identityReady).
   useEffect(() => {
-    if (!socket || !roomId) return;
+    if (!socket || !roomId || !identityReady) return;
     socket.emit('room:join', { roomId });
     return () => {
       socket.emit('room:leave', { roomId });
     };
-  }, [socket, roomId]);
+  }, [socket, roomId, identityReady]);
 
   // ── Socket: events ───────────────────────────────────────────────────────
   useEffect(() => {
-    if (!socket || !roomId) return;
+    if (!socket || !roomId || !identityReady) return;
 
     const onMessage = (data: RoomMessage) => {
       if (data.room_id !== roomId) return;
@@ -207,10 +308,28 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       user_id: string;
       name?: string;
       photo_url?: string | null;
+      using_temp_identity?: boolean;
     }) => {
       if (data.room_id !== roomId) return;
       if (data.type === 'leave') {
-        markOffline(data.user_id);
+        // Occupancy lock (#184): leave drops the tile — never markOffline / AWAY ghost.
+        removeParticipant(data.user_id);
+        setPresentPeople((prev) => removePresentPerson(prev, data.user_id));
+        setMembers((prev) => dropLeaverFromRoster(prev, data.user_id));
+        setTypingUsers((prev) => {
+          const next = { ...prev };
+          delete next[data.user_id];
+          return next;
+        });
+        // Peer left the group → this in-room 1:1 is gone.
+        setDmPeer((cur) => {
+          if (cur?.id === data.user_id) {
+            setDmMessages([]);
+            setDmNotice(null);
+            return null;
+          }
+          return cur;
+        });
         return;
       }
       upsertParticipant({
@@ -220,14 +339,69 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         isLive: true,
         isSelf: data.user_id === user?.id,
       });
+      setPresentPeople((prev) =>
+        upsertPresentPerson(prev, {
+          user_id: data.user_id,
+          name: data.name,
+          photo_url: data.photo_url,
+          using_temp_identity: !!data.using_temp_identity,
+        }),
+      );
+      setMembers((prev) => {
+        if (prev.some((m) => m.id === data.user_id)) {
+          return prev.map((m) =>
+            m.id === data.user_id
+              ? {
+                  ...m,
+                  name: data.name ?? m.name,
+                  photo_url: data.photo_url ?? m.photo_url,
+                  using_temp_identity: !!data.using_temp_identity,
+                }
+              : m,
+          );
+        }
+        return [
+          ...prev,
+          {
+            id: data.user_id,
+            name: data.name ?? 'Member',
+            photo_url: data.photo_url ?? undefined,
+            using_temp_identity: !!data.using_temp_identity,
+          },
+        ];
+      });
     };
 
     const onPresenceSync = (data: {
       room_id: string;
-      participants: Array<{ user_id: string; name: string; photo_url?: string | null }>;
+      participants: Array<{
+        user_id: string;
+        name: string;
+        photo_url?: string | null;
+        using_temp_identity?: boolean;
+      }>;
     }) => {
       if (data.room_id !== roomId) return;
       applyPresenceSync(data.participants);
+      const roster = replacePresentRoster(data.participants);
+      setPresentPeople(roster);
+      // Settings roster mirrors present people — leavers are not listed.
+      setMembers(
+        data.participants.map((p) => ({
+          id: p.user_id,
+          name: p.name,
+          photo_url: p.photo_url ?? undefined,
+          using_temp_identity: !!p.using_temp_identity,
+        })),
+      );
+      // If open DM peer is no longer present, drop the window.
+      setDmPeer((cur) => {
+        if (!cur) return cur;
+        if (roster.some((p) => p.user_id === cur.id)) return cur;
+        setDmMessages([]);
+        setDmNotice(null);
+        return null;
+      });
     };
 
     const onTyping = ({
@@ -259,17 +433,132 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       });
     };
 
+    const onOccupancy = (data: { room_id?: string; count?: number }) => {
+      if (!data?.room_id || data.room_id !== roomId || typeof data.count !== 'number') return;
+      setRoom((prev) => (prev ? { ...prev, member_count: data.count! } : prev));
+    };
+
     socket.on('room:message', onMessage);
     socket.on('room:presence', onPresence);
     socket.on('room:presence-sync', onPresenceSync);
     socket.on('room:typing', onTyping);
+    socket.on('room:occupancy', onOccupancy);
     return () => {
       socket.off('room:message', onMessage);
       socket.off('room:presence', onPresence);
+      socket.off('room:occupancy', onOccupancy);
       socket.off('room:presence-sync', onPresenceSync);
       socket.off('room:typing', onTyping);
     };
-  }, [socket, roomId, user?.id, upsertParticipant, markOffline, applyPresenceSync]);
+  }, [socket, roomId, identityReady, user?.id, upsertParticipant, removeParticipant, applyPresenceSync]);
+
+  // ── Socket: ephemeral in-room 1:1 ────────────────────────────────────────
+  useEffect(() => {
+    if (!socket || !roomId) return;
+
+    const onDmOpened = (data: {
+      room_id: string;
+      peer_id: string;
+      peer_name: string;
+      peer_photo_url?: string | null;
+    }) => {
+      if (data.room_id !== roomId) return;
+      setDmPeer({
+        id: data.peer_id,
+        name: data.peer_name,
+        photo_url: data.peer_photo_url,
+      });
+      setDmMessages([]);
+      setDmNotice(null);
+      setPeopleOpen(true);
+    };
+
+    const onDmMessage = (data: {
+      room_id: string;
+      id: string;
+      sender_id: string;
+      sender_name: string;
+      message: string;
+      created_at: string;
+      to?: string;
+    }) => {
+      if (data.room_id !== roomId) return;
+      const otherId = data.sender_id === user?.id ? data.to : data.sender_id;
+      if (!otherId) return;
+      setDmPeer((cur) => {
+        if (cur?.id === otherId) return cur;
+        // Auto-open window when peer messages us.
+        return {
+          id: otherId,
+          name: data.sender_id === user?.id ? cur?.name ?? 'Member' : data.sender_name,
+          photo_url: cur?.photo_url,
+        };
+      });
+      setDmMessages((prev) => {
+        if (prev.some((m) => m.id === data.id)) return prev;
+        return [
+          ...prev,
+          {
+            id: data.id,
+            sender_id: data.sender_id,
+            sender_name: data.sender_name,
+            message: data.message,
+            created_at: data.created_at,
+          },
+        ];
+      });
+    };
+
+    const onDmEnded = (data: {
+      room_id: string;
+      peer_id: string;
+      reason?: 'leave' | 'close';
+    }) => {
+      if (data.room_id !== roomId) return;
+      setDmPeer((cur) => {
+        if (!cur || cur.id !== data.peer_id) return cur;
+        setDmNotice(
+          data.reason === 'leave'
+            ? 'They left the room — this 1:1 is gone.'
+            : 'This 1:1 was closed.',
+        );
+        window.setTimeout(() => {
+          setDmPeer((still) => (still?.id === data.peer_id ? null : still));
+          setDmMessages([]);
+          setDmNotice(null);
+        }, 900);
+        return cur;
+      });
+    };
+
+    const onDmError = (data: { room_id?: string; error?: string }) => {
+      if (data.room_id && data.room_id !== roomId) return;
+      if (data.error === 'peer_not_present') {
+        setDmNotice('They are not in the room right now.');
+      } else if (data.error === 'dm_not_open') {
+        setDmNotice('Open a 1:1 from the side list first.');
+      }
+    };
+
+    socket.on('room:dm-opened', onDmOpened);
+    socket.on('room:dm-message', onDmMessage);
+    socket.on('room:dm-ended', onDmEnded);
+    socket.on('room:dm-error', onDmError);
+    return () => {
+      socket.off('room:dm-opened', onDmOpened);
+      socket.off('room:dm-message', onDmMessage);
+      socket.off('room:dm-ended', onDmEnded);
+      socket.off('room:dm-error', onDmError);
+    };
+  }, [socket, roomId, user?.id]);
+
+  // Reset present roster + DM when leaving this room surface.
+  useEffect(() => {
+    setPresentPeople([]);
+    setDmPeer(null);
+    setDmMessages([]);
+    setDmNotice(null);
+  }, [roomId]);
 
   // ── Scroll to bottom ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -301,6 +590,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
 
     const text = input.trim();
     setInput('');
+    setEmojiOpen(false);
     setSending(true);
     inputRef.current?.focus();
 
@@ -312,6 +602,53 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     } finally {
       setSending(false);
     }
+  };
+
+  const handleAttachClick = () => {
+    if (uploadingMedia || sending) return;
+    setMediaError('');
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !roomId || !user) return;
+    if (!file.type.startsWith('image/')) {
+      setMediaError('Only images can be attached in rooms.');
+      return;
+    }
+
+    setUploadingMedia(true);
+    setMediaError('');
+    setEmojiOpen(false);
+    try {
+      const res = await roomsAPI.sendMedia(roomId, file);
+      setMessages((prev) => [...prev, res.data]);
+      setChatOpen(true);
+    } catch (err: unknown) {
+      const code = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setMediaError(code || 'Failed to send file');
+    } finally {
+      setUploadingMedia(false);
+    }
+  };
+
+  const insertEmoji = (emoji: string) => {
+    const el = inputRef.current;
+    if (!el) {
+      setInput((prev) => prev + emoji);
+      return;
+    }
+    const start = el.selectionStart ?? input.length;
+    const end = el.selectionEnd ?? input.length;
+    const next = `${input.slice(0, start)}${emoji}${input.slice(end)}`;
+    setInput(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      const caret = start + emoji.length;
+      el.setSelectionRange(caret, caret);
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -330,9 +667,67 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     return `${names[0]} and ${names.length - 1} others are typing...`;
   })();
 
-  const liveCount = participants.filter((p) => p.isLive).length;
+  // Occupancy = currently present people (camera on or off). Left people are removed.
+  const presentCount = participants.length;
   const isOwner = room?.user_role === 'owner';
   const isPrivateGroup = room?.is_location_based === false;
+  const sidePeople = presentOthers(presentPeople, user?.id);
+
+  const openInRoomDm = useCallback(
+    (person: PresentPerson) => {
+      if (!socket || !roomId || !user?.id || person.user_id === user.id) return;
+      setDmPeer({
+        id: person.user_id,
+        name: person.name,
+        photo_url: person.photo_url,
+      });
+      setDmMessages([]);
+      setDmNotice(null);
+      socket.emit('room:dm-open', { roomId, to: person.user_id });
+    },
+    [socket, roomId, user?.id],
+  );
+
+  const sendInRoomDm = useCallback(
+    (text: string) => {
+      if (!socket || !roomId || !dmPeer || !user?.id) return;
+      const clientId =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `dm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      // Optimistic local append; server echoes to both.
+      setDmMessages((prev) => [
+        ...prev,
+        {
+          id: clientId,
+          sender_id: user.id,
+          sender_name: 'You',
+          message: text,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+      socket.emit('room:dm-message', {
+        roomId,
+        to: dmPeer.id,
+        message: text,
+        client_id: clientId,
+      });
+    },
+    [socket, roomId, dmPeer, user?.id],
+  );
+
+  const closeInRoomDm = useCallback(() => {
+    if (!socket || !roomId || !dmPeer) {
+      setDmPeer(null);
+      setDmMessages([]);
+      setDmNotice(null);
+      return;
+    }
+    socket.emit('room:dm-close', { roomId, to: dmPeer.id });
+    setDmPeer(null);
+    setDmMessages([]);
+    setDmNotice(null);
+  }, [socket, roomId, dmPeer]);
 
   const handleAddMember = async (targetId: string, targetName: string) => {
     if (!roomId || addingMemberId) return;
@@ -365,6 +760,121 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  if (loadingRoom) {
+    return (
+      <div
+        className={embedded ? 'flex h-full min-h-0 flex-col items-center justify-center' : 'fixed inset-0 flex flex-col items-center justify-center'}
+        style={{ background: 'var(--bg-primary)' }}
+      >
+        <PulseRing size={32} label="Loading room" />
+      </div>
+    );
+  }
+
+  if (joinError) {
+    return (
+      <div
+        className={embedded ? 'flex h-full min-h-0 flex-col' : 'fixed inset-0 flex flex-col'}
+        style={{ background: 'var(--bg-primary)' }}
+      >
+        <header className="flex shrink-0 items-center gap-2 border-b border-[var(--border-default)] px-3 py-3">
+          <MobileBackButton fallback="/rooms" onClick={leaveRoomSurface} className="-ml-1" />
+          <p className="flex-1 truncate text-sm font-semibold text-[var(--cream)]">Group</p>
+        </header>
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+          <p className="text-sm text-[var(--cream)]">{joinError}</p>
+          <button
+            type="button"
+            onClick={leaveRoomSurface}
+            className="rounded-xl bg-[var(--copper)] px-4 py-2 text-sm font-bold text-[#1A0E03]"
+          >
+            Back to rooms
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!identityReady && room) {
+    return (
+      <div
+        className={embedded ? 'flex h-full min-h-0 flex-col' : 'fixed inset-0 flex flex-col'}
+        style={{
+          background: 'var(--bg-primary)',
+          paddingTop: embedded ? undefined : 'env(safe-area-inset-top, 0px)',
+        }}
+      >
+        <RoomTempIdentityGate
+          roomId={roomId!}
+          roomName={room.name}
+          roomDescription={room.description}
+          activeCount={room.member_count}
+          roomTheme={room.name}
+          profileName={user?.name}
+          profilePhotoUrl={user?.photo_url}
+          onReady={async (choice) => {
+            if (choice.mode === 'profile') {
+              // Clear any leftover temp so presence resolves to profile.
+              try {
+                await roomsAPI.deleteTempIdentity(roomId!);
+              } catch {
+                /* still enter with local profile face */
+              }
+              const profileName = user?.name?.trim() || 'Member';
+              const profilePhoto = user?.photo_url ?? null;
+              if (user?.id) {
+                upsertParticipant({
+                  user_id: user.id,
+                  name: profileName,
+                  photo_url: profilePhoto,
+                  isLive: true,
+                  isSelf: true,
+                });
+                setMembers([
+                  {
+                    id: user.id,
+                    name: profileName,
+                    photo_url: profilePhoto ?? undefined,
+                    using_temp_identity: false,
+                  },
+                ]);
+              }
+              setIdentityReady(true);
+              return;
+            }
+
+            await roomsAPI.setTempIdentity(roomId!, {
+              display_name: choice.displayName,
+              photo_url: choice.photoUrl || undefined,
+              save_name: choice.saveName,
+              save_photo: choice.savePhoto,
+            });
+            // Temp path: name required, photo optional (null → letter avatar).
+            if (user?.id) {
+              upsertParticipant({
+                user_id: user.id,
+                name: choice.displayName,
+                photo_url: choice.photoUrl || null,
+                isLive: true,
+                isSelf: true,
+              });
+              setMembers([
+                {
+                  id: user.id,
+                  name: choice.displayName,
+                  photo_url: choice.photoUrl || undefined,
+                  using_temp_identity: true,
+                },
+              ]);
+            }
+            setIdentityReady(true);
+          }}
+          onCancel={leaveRoomSurface}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className={embedded ? 'flex h-full min-h-0 flex-col' : 'fixed inset-0 flex flex-col'}
@@ -382,30 +892,33 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       >
         <MobileBackButton
           fallback="/rooms"
-          onClick={() => navigate('/rooms')}
+          onClick={leaveRoomSurface}
           className="-ml-1"
         />
 
-        {/* Room avatar */}
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0"
-          style={{
+        {/* Room avatar: Claude Design icon, or letters when none matches */}
+        <RoomAvatar
+          name={room?.name}
+          officialSlug={room?.official_slug}
+          className="h-10 w-10 rounded-xl"
+          iconClassName="h-6 w-6"
+          letterClassName="text-sm font-bold"
+          letterStyle={{
             background: 'linear-gradient(135deg, rgba(196,131,42,0.3), rgba(139,69,19,0.2))',
             border: '1px solid rgba(196,131,42,0.3)',
             color: '#C4832A',
           }}
-        >
-          {room ? initials(room.name) : '…'}
-        </div>
+          placeholder="…"
+        />
 
         {/* Room name + members */}
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm leading-tight truncate text-[var(--cream)]">
+          <p className="font-semibold text-base leading-tight truncate text-[var(--cream)]">
             {room?.name ?? 'Room'}
           </p>
-          <p className="text-[10px] mt-0.5 text-[var(--cream-muted)]">
+          <p className="text-xs mt-0.5 text-[var(--cream-muted)]">
             <GroupIcon className="w-3 h-3 inline mr-0.5" />
-            {liveCount > 0 ? `${liveCount} live` : `${room?.member_count ?? '—'} members`}
+            {presentCount > 0 ? `${presentCount} here` : 'Waiting…'}
           </p>
         </div>
 
@@ -420,15 +933,63 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         >
           {micMuted ? <MicOffIcon className="w-5 h-5" /> : <MicIcon className="w-5 h-5" />}
         </button>
-        <button
-          type="button"
-          onClick={toggleCamera}
-          aria-label={cameraOn ? 'Turn camera off' : 'Turn camera on'}
-          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95"
-          style={{ color: cameraOn ? '#C4832A' : '#EF4444' }}
-        >
-          <CamIcon className="w-5 h-5" />
-        </button>
+        <div className="relative flex items-center">
+          <button
+            type="button"
+            onClick={toggleCamera}
+            aria-label={cameraOn ? 'Turn camera off' : 'Turn camera on'}
+            className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95"
+            style={{ color: cameraOn ? '#C4832A' : '#EF4444' }}
+          >
+            <CamIcon className="w-5 h-5" />
+          </button>
+          {videoDevices.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setCameraMenuOpen((v) => !v)}
+                aria-label="Select camera"
+                title="Select camera"
+                data-testid="room-camera-select-button"
+                className="flex-shrink-0 -ml-2 w-4 h-9 flex items-center justify-center text-[var(--cream-muted)] hover:text-[var(--cream)] transition-colors"
+              >
+                <ChevronDownIcon className="w-3 h-3" />
+              </button>
+              {cameraMenuOpen && (
+                <div
+                  className="absolute left-0 top-11 z-50 min-w-[200px] max-w-xs rounded-xl border p-1 shadow-2xl animate-scale-up"
+                  style={{
+                    background: 'var(--bg-card)',
+                    borderColor: 'var(--border-default)',
+                  }}
+                  data-testid="room-camera-dropdown"
+                >
+                  <p className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[#A89070]">
+                    Select camera
+                  </p>
+                  {videoDevices.map((d, i) => {
+                    const active = d.deviceId === currentCameraId;
+                    return (
+                      <button
+                        key={d.deviceId || i}
+                        type="button"
+                        onClick={() => {
+                          void switchCameraDevice(d.deviceId);
+                          setCameraMenuOpen(false);
+                        }}
+                        className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs transition-colors hover:bg-[var(--border-default)]/50"
+                        style={{ color: active ? '#C4832A' : 'var(--cream)' }}
+                      >
+                        <span className="truncate">{d.label || `Camera ${i + 1}`}</span>
+                        {active && <span className="ml-1.5 shrink-0 text-[#C4832A]">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => setChatOpen((v) => !v)}
@@ -437,6 +998,17 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           style={{ color: chatOpen ? '#C4832A' : '#A89070' }}
         >
           <BubbleIcon className="w-5 h-5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setPeopleOpen((v) => !v)}
+          aria-label={peopleOpen ? 'Hide people in room' : 'Show people in room'}
+          aria-pressed={peopleOpen}
+          data-testid="room-people-toggle"
+          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95"
+          style={{ color: peopleOpen ? '#C4832A' : '#A89070' }}
+        >
+          <GroupIcon className="w-5 h-5" />
         </button>
 
         {/* Settings */}
@@ -451,6 +1023,20 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           <GearIcon className="w-5 h-5" />
         </button>
       </header>
+
+      {settingsNotice && !settingsOpen && (
+        <div
+          className="flex-shrink-0 px-4 py-2 text-center text-xs font-medium border-b"
+          style={{
+            background: 'rgba(143,199,115,0.12)',
+            borderColor: 'var(--border-default)',
+            color: '#8FC773',
+          }}
+          data-testid="room-safety-notice"
+        >
+          {settingsNotice}
+        </div>
+      )}
 
       {/* ── Settings sheet ────────────────────────────────────────────────── */}
       {settingsOpen && (
@@ -489,6 +1075,27 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
               </div>
             )}
 
+            {videoDevices.length > 1 && (
+              <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border-default)' }}>
+                <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: '#6B5035' }}>
+                  Camera
+                </p>
+                <select
+                  value={currentCameraId}
+                  onChange={(e) => void switchCameraDevice(e.target.value)}
+                  className="w-full rounded-lg bg-[var(--bg-primary)] px-2.5 py-2 text-xs text-[var(--cream)] border border-[var(--border-default)] focus:outline-none focus:border-[#C4832A]"
+                  aria-label="Select camera"
+                  data-testid="room-camera-select-settings"
+                >
+                  {videoDevices.map((device, idx) => (
+                    <option key={device.deviceId || idx} value={device.deviceId}>
+                      {device.label || `Camera ${idx + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border-default)' }}>
               <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: '#6B5035' }}>
                 Members
@@ -496,18 +1103,30 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
               <div className="space-y-1">
                 {members.map((member) => (
                   <div key={member.id} className="flex items-center gap-2">
-                    <span className="flex-1 text-sm truncate" style={{ color: 'var(--cream)' }}>
-                      {member.name}
-                      {member.role === 'owner' ? (
-                        <span className="ml-1 text-[10px]" style={{ color: '#C4832A' }}>
-                          · owner
-                        </span>
-                      ) : null}
-                    </span>
+                    {/* Temp-identity rows never deep-link to the real profile. */}
+                    <div
+                      className="flex min-w-0 flex-1 items-center gap-2"
+                      data-testid={`room-member-${member.id}`}
+                    >
+                      <span className="flex-1 text-sm truncate" style={{ color: 'var(--cream)' }}>
+                        {member.name}
+                        {member.is_verified ? (
+                          <span className="ml-1 text-[10px]" style={{ color: '#8FC773' }} title="Adult assurance">
+                            · verified
+                          </span>
+                        ) : null}
+                        {member.role === 'owner' ? (
+                          <span className="ml-1 text-[10px]" style={{ color: '#C4832A' }}>
+                            · owner
+                          </span>
+                        ) : null}
+                      </span>
+                    </div>
                     {member.id !== user?.id && (
                       <ChatSafetyMenu
                         peerId={member.id}
                         peerName={member.name}
+                        threadId={roomId ? `room:${roomId}` : undefined}
                         onNotice={(msg) => setSettingsNotice(msg)}
                       />
                     )}
@@ -554,12 +1173,13 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             <button
               onClick={async () => {
                 if (!roomId) return;
+                stopCamera();
                 try {
                   await roomsAPI.leaveRoom(roomId);
-                  navigate('/rooms');
                 } catch {
-                  // ignore
+                  // ignore — still leave the surface so camera stays off
                 }
+                navigate('/rooms');
               }}
               className="w-full px-4 py-3 text-sm text-left transition-all duration-150 hover:bg-[var(--border-default)]/50"
               style={{ color: '#EF4444' }}
@@ -579,16 +1199,63 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         </div>
       )}
 
-      {/* ── Video gallery (primary surface) ─────────────────────────────── */}
-      <div className="min-h-0 flex-1">
-        <RoomGalleryGrid
-          participants={galleryParticipants}
-          pinnedId={pinnedId}
-          onPin={setPinnedId}
-          getStreamFor={getStreamFor}
-          photoUrl={photoUrl}
-          cameraOnForSelf={cameraOn}
-        />
+      {/* ── Video gallery + present people side list ──────────────────── */}
+      <div className="relative flex min-h-0 flex-1">
+        <div className="min-h-0 min-w-0 flex-1">
+          <RoomGalleryGrid
+            participants={galleryParticipants}
+            pinnedId={pinnedId}
+            onPin={setPinnedId}
+            getStreamFor={getStreamFor}
+            photoUrl={photoUrl}
+            cameraOnForSelf={cameraOn}
+          />
+        </div>
+
+        {peopleOpen ? (
+          <RoomPresentPeopleList
+            people={sidePeople}
+            activePeerId={dmPeer?.id}
+            onSelect={openInRoomDm}
+            className="hidden w-52 flex-shrink-0 sm:flex"
+          />
+        ) : null}
+
+        {/* Phone: slide-over present list */}
+        {peopleOpen ? (
+          <div
+            className="absolute inset-y-0 right-0 z-30 flex w-[min(16rem,78%)] sm:hidden"
+            data-testid="room-present-people-mobile"
+          >
+            <RoomPresentPeopleList
+              people={sidePeople}
+              activePeerId={dmPeer?.id}
+              onSelect={(person) => {
+                openInRoomDm(person);
+              }}
+              className="w-full shadow-[-8px_0_24px_rgba(0,0,0,0.35)]"
+            />
+          </div>
+        ) : null}
+
+        {/* In-room 1:1 window — overlays inside the group, not a new destination */}
+        {dmPeer && user?.id ? (
+          <div
+            className="absolute bottom-3 left-3 right-3 z-40 max-h-[55%] sm:left-auto sm:right-[13.5rem] sm:w-[22rem]"
+            style={{ maxHeight: peopleOpen ? '55%' : '60%' }}
+          >
+            <RoomInRoomDm
+              peerId={dmPeer.id}
+              peerName={dmPeer.name}
+              peerPhotoUrl={dmPeer.photo_url}
+              selfId={user.id}
+              messages={dmMessages}
+              onSend={sendInRoomDm}
+              onClose={closeInRoomDm}
+              notice={dmNotice}
+            />
+          </div>
+        ) : null}
       </div>
 
       {/* ── Chat drawer ───────────────────────────────────────────────── */}
@@ -607,10 +1274,10 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             >
               <BubbleIcon className="w-8 h-8" style={{ color: '#C4832A', opacity: 0.5 }} />
             </div>
-            <p className="font-medium text-sm" style={{ color: '#A89070' }}>
+            <p className="font-medium text-base" style={{ color: '#A89070' }}>
               No messages yet
             </p>
-            <p className="text-xs mt-1" style={{ color: '#6B5035' }}>
+            <p className="text-sm mt-1" style={{ color: '#6B5035' }}>
               Be the first to say something
             </p>
           </div>
@@ -633,7 +1300,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                 <div className="flex items-center gap-3 my-5">
                   <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                   <span
-                    className="text-[10px] font-semibold px-3 py-1 rounded-full"
+                    className="text-xs font-semibold px-3 py-1 rounded-full"
                     style={{
                       background: 'var(--bg-card)',
                       border: '1px solid var(--border-default)',
@@ -657,16 +1324,20 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                 {!isMine && (
                   <div className="w-8 flex-shrink-0 mr-2 flex items-end mb-1">
                     {showTail && (
+                      // Room chat avatars never deep-link to the real profile.
                       <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                        className="w-8 h-8 rounded-full overflow-hidden"
                         style={{
-                          background: `${color}22`,
                           border: `1px solid ${color}44`,
-                          color,
                           flexShrink: 0,
                         }}
+                        data-testid={`room-msg-avatar-${msg.sender_id}`}
+                        aria-hidden
                       >
-                        {initials(msg.sender_name)}
+                        {/* ONE Brand placeholder — no initials (Pete lock 6 Oct 2026). */}
+                        <span className="block h-full w-full overflow-hidden rounded-full">
+                          <FadedBrandFace variant="profile" size={30} label={msg.sender_name} />
+                        </span>
                       </div>
                     )}
                   </div>
@@ -678,7 +1349,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                   {/* Sender name — shown for others, first in a group */}
                   {showSenderName && (
                     <span
-                      className="text-[10px] font-semibold mb-1 px-1"
+                      className="text-xs font-semibold mb-1 px-1"
                       style={{ color }}
                     >
                       {msg.sender_name}
@@ -686,7 +1357,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                   )}
 
                   <div
-                    className="relative px-4 py-2.5 text-sm leading-relaxed"
+                    className="relative px-4 py-2.5 text-base leading-relaxed"
                     style={
                       isMine
                         ? {
@@ -707,10 +1378,28 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                           }
                     }
                   >
-                    {msg.message}
+                    {(() => {
+                      const image = parseRoomImageMessage(msg.message);
+                      if (image) {
+                        const src = getPhotoUrl(image.url);
+                        return (
+                          <div className="space-y-2" data-testid="room-image-message">
+                            {src ? (
+                              <img
+                                src={src}
+                                alt={image.caption || 'Attached image'}
+                                className="max-h-56 max-w-full rounded-xl object-cover"
+                              />
+                            ) : null}
+                            {image.caption ? <p>{image.caption}</p> : null}
+                          </div>
+                        );
+                      }
+                      return msg.message;
+                    })()}
                   </div>
                   {showTail && (
-                    <span className="text-[10px] mt-1 px-1" style={{ color: '#6B5035' }}>
+                    <span className="text-xs mt-1 px-1" style={{ color: '#6B5035' }}>
                       {formatTime(msg.created_at)}
                     </span>
                   )}
@@ -744,17 +1433,36 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       <div
         className="flex-shrink-0 border-t border-[var(--border-default)] px-4 py-3 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl"
       >
-        <form onSubmit={handleSend} className="flex items-center gap-2">
+        {mediaError ? (
+          <p className="mb-2 text-xs text-red-400" role="alert" data-testid="room-media-error">
+            {mediaError}
+          </p>
+        ) : null}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          aria-label="Choose from gallery"
+          onChange={(e) => void handleFileChange(e)}
+        />
+        <form onSubmit={handleSend} className="relative flex items-center gap-2">
           {/* Attachment icon */}
           <button
             type="button"
             aria-label="Attach file"
-            className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95"
+            onClick={handleAttachClick}
+            disabled={uploadingMedia || sending}
+            className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95 disabled:opacity-40"
             style={{ color: '#6B5035' }}
             onMouseEnter={(e) => (e.currentTarget.style.color = '#A89070')}
             onMouseLeave={(e) => (e.currentTarget.style.color = '#6B5035')}
           >
-            <AttachIcon className="w-5 h-5" />
+            {uploadingMedia ? (
+              <PulseRing size={16} label="Uploading" />
+            ) : (
+              <AttachIcon className="w-5 h-5" />
+            )}
           </button>
 
           {/* Text input */}
@@ -766,12 +1474,13 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             onKeyDown={handleKeyDown}
             placeholder="Message the room…"
             autoComplete="off"
-            className="flex-1 text-sm px-5 py-3 rounded-full focus:outline-none transition-all duration-200"
+            className="min-w-0 flex-1 px-5 py-3 text-[16px] rounded-full focus:outline-none transition-all duration-200"
             style={{
               background: 'var(--bg-card)',
               border: '1px solid var(--border-default)',
               color: 'var(--cream)',
               caretColor: '#C4832A',
+              fontSize: '16px',
             }}
             onFocus={(e) => {
               e.currentTarget.style.border = '1px solid rgba(196,131,42,0.5)';
@@ -787,10 +1496,16 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           <button
             type="button"
             aria-label="Emoji"
+            aria-expanded={emojiOpen}
+            onClick={() => setEmojiOpen((v) => !v)}
             className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95"
-            style={{ color: '#6B5035' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#A89070')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#6B5035')}
+            style={{ color: emojiOpen ? '#C4832A' : '#6B5035' }}
+            onMouseEnter={(e) => {
+              if (!emojiOpen) e.currentTarget.style.color = '#A89070';
+            }}
+            onMouseLeave={(e) => {
+              if (!emojiOpen) e.currentTarget.style.color = '#6B5035';
+            }}
           >
             <EmojiIcon className="w-5 h-5" />
           </button>
@@ -798,7 +1513,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           {/* Send button */}
           <button
             type="submit"
-            disabled={!input.trim() || sending}
+            disabled={!input.trim() || sending || uploadingMedia}
             aria-label="Send message"
             className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
             style={{
@@ -812,6 +1527,28 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
               <SendIcon className="w-4 h-4 text-white" />
             )}
           </button>
+
+          {emojiOpen ? (
+            <div
+              data-testid="room-emoji-picker"
+              className="absolute bottom-[calc(100%+0.5rem)] right-0 z-30 grid grid-cols-6 gap-1 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-2 shadow-[0_12px_32px_rgba(0,0,0,0.45)]"
+              role="listbox"
+              aria-label="Emoji picker"
+            >
+              {ROOM_EMOJI_PICKER.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  role="option"
+                  aria-label={`Insert ${emoji}`}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-lg transition-colors hover:bg-[var(--border-default)]/50"
+                  onClick={() => insertEmoji(emoji)}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </form>
       </div>
       </div>
@@ -907,5 +1644,11 @@ const MicOffIcon = ({ className }: { className?: string }) => (
 const CamIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M4 8h8a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4a2 2 0 012-2z" />
+  </svg>
+);
+
+const ChevronDownIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
   </svg>
 );

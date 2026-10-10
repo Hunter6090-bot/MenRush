@@ -1,23 +1,71 @@
 import { expect, test } from '@playwright/test';
 import { guardAgainstSideEffects } from './support/network-guard';
 
-/** Routes that share the locked public landing design (ComingSoon). */
+/** Routes that share the locked UK launch landing (ComingSoon). */
 const LANDING_PATHS = ['/', '/coming-soon'] as const;
 
 const FORBIDDEN_CTA_PATTERNS = [
   /^JOIN THE WAITLIST$/i,
   /^GET EARLY ACCESS$/i,
+  /^Join waitlist$/i,
 ];
 
 async function assertComingSoonDesignLock(page: import('@playwright/test').Page) {
-  const signInLink = page.getByRole('link', { name: /Already have an invite\? Sign in/i });
+  const header = page.locator('header').first();
+  const headerBrandLink = header.getByRole('link', { name: /^MenRush$/i });
+  await expect(headerBrandLink).toHaveCount(1);
+  await expect(headerBrandLink).toHaveAttribute('href', '/');
+  await expect(headerBrandLink.getByTestId('brand-mark')).toBeVisible();
+  await expect(headerBrandLink.locator('img[src*="medallion-transparent"]')).toBeVisible();
+
+  const signInLink = page.getByRole('link', { name: /^Sign in$/i });
   await expect(signInLink).toHaveCount(1);
   await expect(signInLink).toHaveAttribute('href', '/login');
+  await expect(header.getByRole('link', { name: /^Sign in$/i })).toBeVisible();
 
-  const heroHeading = page.locator('h1.mr-coming-soon-heading');
+  const heroHeading = page.getByRole('heading', {
+    level: 1,
+    name: /Real men\.\s*Verified profiles\.\s*Total discretion\./i,
+  });
   await expect(heroHeading).toBeVisible();
-  await expect(heroHeading).toContainText(/Real men/i);
-  await expect(heroHeading).toContainText(/Verified bodies/i);
+  await expect(heroHeading).toHaveClass(/mr-coming-soon-heading/);
+
+  await expect(page.getByText(/LIVE NOW\. UK OPEN/i)).toBeVisible();
+  await expect(page.getByText(/OPENS 1 OCTOBER 2026/i)).toHaveCount(0);
+  await expect(page.getByText(/leave your email/i)).toHaveCount(0);
+  await expect(page.getByText(/LONDON · MANCHESTER · BIRMINGHAM · BRIGHTON/i)).toHaveCount(0);
+
+  await expect(page.getByRole('heading', { name: /What you get/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Nearby$/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Matches$/i })).toBeVisible();
+  // Brand live-face kill: no Video rooms card on What you get (LIVE NOW + rooms read as open).
+  await expect(page.getByRole('heading', { name: /^Video rooms$/i })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: /^Rooms$/i })).toHaveCount(0);
+  await expect(
+    page.getByText('Group spaces for men who already know the vibe. Less noise. More signal.'),
+  ).toHaveCount(0);
+
+  // Period lock on card bodies — no em dash, en dash, or hyphen-as-aside (same as hero overline).
+  await expect(
+    page.getByText(
+      'See who is around you right now. Live proximity, not a stack of stale profiles.',
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Mutual interest opens chat. Direct when it is real. No endless maybe.'),
+  ).toBeVisible();
+
+  // Stale pre-1-Oct waitlist gift removed (live now). Quiet face: no BSF26 blast.
+  await expect(page.getByText(/Sign up before 1 October 2026/i)).toHaveCount(0);
+  await expect(page.getByText(/30 days of Premium free/i)).toHaveCount(0);
+  await expect(page.getByText(/A promo replaces that gift and does not stack/i)).toHaveCount(0);
+  await expect(page.getByText(/Pride promo replaces/i)).toHaveCount(0);
+  await expect(page.getByText(/BSF26|BearScotsFest|MR3FREE/i)).toHaveCount(0);
+  await expect(page.getByText(/invite-only until/i)).toHaveCount(0);
+  await expect(page.getByText(/Invite-only until then/i)).toHaveCount(0);
+  // Brand: referrals live on register/profile only — never on the landing face.
+  await expect(page.getByText(/referral/i)).toHaveCount(0);
+  await expect(page.getByTestId('register-referral-input')).toHaveCount(0);
 
   for (const pattern of FORBIDDEN_CTA_PATTERNS) {
     await expect(page.getByRole('button', { name: pattern })).toHaveCount(0);
@@ -25,9 +73,27 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   }
 
   await expect(page.locator('#waitlist')).toBeVisible();
-  await expect(page.locator('#waitlist-email')).toBeVisible();
-  await expect(page.getByRole('button', { name: /Join the verified waitlist/i })).toHaveCount(1);
-  await assertBrandMark(page);
+  await expect(page.locator('a[href="#waitlist"]')).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Email for waitlist' })).toHaveCount(0);
+  await expect(page.locator('#waitlist-email')).toHaveCount(0);
+
+  const signUpLink = page.getByRole('link', { name: /^Sign up free$/i });
+  await expect(signUpLink).toHaveCount(1);
+  await expect(signUpLink).toHaveAttribute('href', '/register');
+
+  const backToSignup = page.getByRole('link', { name: /^Back to signup$/i });
+  await expect(backToSignup).toHaveAttribute('href', '/register');
+
+  const inviteLink = page.getByRole('link', { name: /Enter your code/i });
+  await expect(inviteLink).toBeVisible();
+  await expect(inviteLink).toHaveAttribute('href', '/invite');
+
+  // Hero + header both use the official transparent cutout (no black-plate logos).
+  await expect(page.getByTestId('brand-mark')).toHaveCount(2);
+  await expect(page.locator('main img[src*="medallion-transparent"]')).toBeVisible();
+  await expect(page.locator('img[src*="menrush-logo-512"]')).toHaveCount(0);
+  await expect(page.locator('img[src*="menrush-logo-192"]')).toHaveCount(0);
+  await expect(page.locator('img[src*="medallion-480"]')).toHaveCount(0);
 }
 
 async function assertAuthShell(page: import('@playwright/test').Page) {
@@ -38,7 +104,8 @@ async function assertAuthShell(page: import('@playwright/test').Page) {
 async function assertBrandMark(page: import('@playwright/test').Page) {
   const mark = page.getByTestId('brand-mark').first();
   await expect(mark).toBeVisible();
-  await expect(mark.locator('img[src*="menrush-logo-512"]')).toBeVisible();
+  await expect(mark.locator('img[src*="medallion-transparent"]')).toBeVisible();
+  await expect(page.locator('img[src*="menrush-logo-512"]')).toHaveCount(0);
   await expect(page.locator('img[src*="medallion-480"]')).toHaveCount(0);
 }
 
@@ -53,7 +120,7 @@ async function assertCreamInputs(page: import('@playwright/test').Page) {
 
 test.describe('public design lock — landing', () => {
   for (const path of LANDING_PATHS) {
-    test(`${path} keeps minimal landing invariants`, async ({ page }) => {
+    test(`${path} keeps UK-open landing invariants`, async ({ page }) => {
       const network = await guardAgainstSideEffects(page);
       await page.goto(path);
       await assertComingSoonDesignLock(page);
@@ -63,34 +130,78 @@ test.describe('public design lock — landing', () => {
 });
 
 test.describe('public design lock — auth pages', () => {
-  test('/login uses auth shell and invite-holder copy', async ({ page }) => {
+  test('/login uses auth shell and open-signup copy', async ({ page }) => {
     const network = await guardAgainstSideEffects(page);
     await page.goto('/login');
     await assertAuthShell(page);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Sign in and see who's/i);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/near you right now/i);
-    await expect(page.getByText(/For invite holders only/i)).toBeVisible();
+    await expect(page.getByText(/For invite holders only/i)).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /Create an account/i })).toHaveAttribute(
+      'href',
+      '/register',
+    );
     expect(network.expectNoSideEffects()).toEqual([]);
   });
 
-  test('/beta validates invite UI shell', async ({ page }) => {
+  test('/invite keeps optional invite UI shell', async ({ page }) => {
     const network = await guardAgainstSideEffects(page);
-    await page.goto('/beta');
+    await page.goto('/invite');
     await assertAuthShell(page);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Beta access is/i);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/invite-only/i);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Have an invite/i);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Enter your code/i);
+    // Period lock on /invite hero: no em dash, en dash, or hyphen-as-aside.
+    await expect(
+      page.getByText(
+        'Optional. If you have a MENRUSH invite from email, enter it here. Otherwise sign up free. No code needed.',
+      ),
+    ).toBeVisible();
     await expect(page.locator('#beta-invite-code')).toBeVisible();
     await expect(page.getByRole('button', { name: /^Continue$/i })).toHaveCount(1);
+    await expect(page.getByRole('link', { name: /Sign up free/i })).toHaveAttribute(
+      'href',
+      '/register',
+    );
     expect(network.expectNoSideEffects()).toEqual([]);
   });
 
-  test('/register uses auth shell, cream inputs, and beta copy', async ({ page }) => {
+  test('/register stays open without invite bounce', async ({ page }) => {
     const network = await guardAgainstSideEffects(page);
-    await page.goto('/register?invite=MR-BETA-TEST1');
+    await page.goto('/register');
+    await expect(page).toHaveURL(/\/register/);
     await assertAuthShell(page);
     await assertCreamInputs(page);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/You're in/i);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Set up your account/i);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Create your account/i);
+    await expect(page.getByText(/You're in/i)).toHaveCount(0);
+    await expect(page.getByText(/^Pick a username and password\.$/)).toBeVisible();
+    await expect(page.getByText(/Optional Pride promo below/i)).toHaveCount(0);
+    await expect(page.getByText(/Your invite code checks out/i)).toHaveCount(0);
+    await expect(page.getByText(/use the email your invite was sent to/i)).toHaveCount(0);
+    await expect(page.getByTestId('register-username-input')).toBeVisible();
+    await expect(page.getByText(/^Promo code \(optional\)$/)).toBeVisible();
+    await expect(page.getByTestId('register-promo-input')).toBeVisible();
+    await expect(page.getByTestId('register-promo-input')).toHaveAttribute(
+      'placeholder',
+      'If you have one',
+    );
+    await expect(page.getByTestId('register-promo-input')).toHaveAttribute('aria-label', 'Promo code');
+    await expect(page.getByTestId('register-pride-note')).toHaveText(/Optional\. If you have one\.?/i);
+    await expect(page.getByTestId('register-pride-note')).not.toContainText(/Pride|BSF26|BearScots|MR3FREE/i);
+    await expect(page.getByTestId('register-referral-input')).toBeVisible();
+    await expect(page.getByTestId('register-referral-input')).toHaveAttribute(
+      'placeholder',
+      'If a friend shared one',
+    );
+    await expect(page.getByTestId('register-referral-note')).toHaveText(
+      /Optional\. Not required to sign up\.?/i,
+    );
+    // Referral sits after promo — not a gate.
+    const promoBox = await page.getByTestId('register-promo-input').boundingBox();
+    const refBox = await page.getByTestId('register-referral-input').boundingBox();
+    expect(promoBox && refBox && refBox.y > promoBox.y).toBeTruthy();
+    await expect(page.getByText(/PRIDE 3MONTH FREE or PRIDE-XXXX/i)).toHaveCount(0);
+    await expect(page.getByText(/BSF26|BearScotsFest|MR3FREE/i)).toHaveCount(0);
+    await expect(page.getByTestId('register-gift-note')).toHaveCount(0);
     expect(network.expectNoSideEffects()).toEqual([]);
   });
 });

@@ -1,5 +1,7 @@
 import axios from 'axios';
 import { useAuthStore } from '../hooks/store';
+import { readStoredToken } from '../lib/authSession';
+import { blobForUpload, extensionForMediaMime } from '../lib/mediaMime';
 
 /** Strip whitespace and accidental literal "\\n" from Vercel env paste mistakes. */
 function sanitizeEnvUrl(raw: unknown, fallback = ''): string {
@@ -30,7 +32,7 @@ function isPlausibleToken(token: unknown): token is string {
 
 apiClient.interceptors.request.use((config) => {
   // Prefer live store token so logout immediately stops Authorization headers.
-  const raw = useAuthStore.getState().token ?? localStorage.getItem('token');
+  const raw = useAuthStore.getState().token ?? readStoredToken();
   if (isPlausibleToken(raw)) {
     config.headers.Authorization = `Bearer ${raw}`;
   } else if (raw) {
@@ -44,9 +46,12 @@ apiClient.interceptors.request.use((config) => {
 const AUTH_CHALLENGE_PATHS = [
   '/auth/login',
   '/auth/register',
+  '/auth/adult-assurance',
   '/auth/2fa/verify',
   '/auth/forgot-password',
   '/auth/reset-password',
+  '/auth/confirm-email',
+  '/auth/resend-confirm',
   '/beta/validate-invite',
 ];
 
@@ -66,7 +71,7 @@ apiClient.interceptors.response.use(
 
     if (status === 401 && !isAuthChallenge && !sessionExpiredHandling) {
       const store = useAuthStore.getState();
-      const hadSession = Boolean(store.token || localStorage.getItem('token'));
+      const hadSession = Boolean(store.token || readStoredToken());
       if (hadSession) {
         sessionExpiredHandling = true;
         store.logout();
@@ -78,9 +83,68 @@ apiClient.interceptors.response.use(
 );
 
 export const authAPI = {
-  register: (data: unknown) => apiClient.post('/auth/register', data),
+  register: (data: unknown) =>
+    apiClient.post<{
+      ok?: boolean;
+      requiresEmailConfirm?: boolean;
+      email?: string;
+      message?: string;
+      // Present only in non-production / EMAIL_CONFIRM_EXPOSE_TOKEN — never a session JWT.
+      devConfirmToken?: string;
+      // Legacy session only while EMAIL_CONFIRM_MAIL_OPEN is false (non-Al signups).
+      user?: import('../lib/authSession').StoredAuthUser;
+      token?: string;
+    }>('/auth/register', data),
+  /** Signup 18+ liveness gate. Optional ID → Verified tick (same flow). */
+  adultAssuranceRequired: () =>
+    apiClient.get<{ required: boolean; fixtureAllowed: boolean }>('/auth/adult-assurance/required'),
+  startAdultAssurance: () =>
+    apiClient.post<{ sessionId: string; sessionUrl: string }>('/auth/adult-assurance/start'),
+  startAdultAssuranceId: (sessionId: string) =>
+    apiClient.post<{ sessionId: string; sessionUrl: string }>(
+      `/auth/adult-assurance/${sessionId}/start-id`,
+    ),
+  adultAssuranceStatus: (sessionId: string) =>
+    apiClient.get<{
+      sessionId: string;
+      status: string;
+      assurance_token?: string;
+      underage?: boolean;
+      id_verified?: boolean;
+      id_status?: string | null;
+    }>(`/auth/adult-assurance/${sessionId}`),
+  markAdultAssuranceSubmitted: (sessionId: string) =>
+    apiClient.post(`/auth/adult-assurance/${sessionId}/submitted`),
+  /** Non-prod BOA90 / CI fixture only — never in production. */
+  adultAssuranceFixture: (data: {
+    sessionId: string;
+    outcome: 'adult' | 'adult_with_id' | 'underage' | 'declined' | 'failed' | 'missing_dob';
+    yearsOld?: number;
+  }) =>
+    apiClient.post<{
+      handled: boolean;
+      adultStatus?: string;
+      assurance_token?: string;
+      id_verified?: boolean;
+    }>('/auth/adult-assurance/fixture', data),
   login: (data: { email: string; password: string; deviceTrustToken?: string }) =>
     apiClient.post('/auth/login', data),
+  logout: (refreshToken?: string | null) =>
+    apiClient.post('/auth/logout', { refresh_token: refreshToken ?? undefined }),
+  confirmEmail: (data: { token: string }) =>
+    apiClient.post<{
+      ok: boolean;
+      alreadyConfirmed?: boolean;
+      email?: string;
+      message?: string;
+      user?: import('../lib/authSession').StoredAuthUser;
+      token?: string;
+    }>('/auth/confirm-email', data),
+  resendConfirm: (data: { email: string }) =>
+    apiClient.post<{ ok: boolean; sent: boolean; message?: string; devConfirmToken?: string }>(
+      '/auth/resend-confirm',
+      data,
+    ),
   verifyTwoFactorLogin: (data: {
     pendingToken: string;
     code: string;
@@ -120,8 +184,37 @@ export const betaAPI = {
   validateInvite: (data: { code: string }) => apiClient.post('/beta/validate-invite', data),
 };
 
+export interface NearbyRosterResponse<T = any> {
+  users: T[];
+  total: number;
+  page: number;
+  limit: number;
+  has_more: boolean;
+}
+
 export const usersAPI = {
   getMe: () => apiClient.get('/users/me'),
+  getReferrals: () =>
+    apiClient.get<{
+      referral_code: string;
+      verified_count: number;
+      pending_count: number;
+      credited_count: number;
+      unlock_every: number;
+      progress_to_unlock: number;
+      unlocks_earned: number;
+      pending_payout_total: number;
+      referrals: Array<{
+        referred_user_id: string;
+        name: string | null;
+        status: 'pending' | 'verified' | 'credited';
+        payout_amount: number;
+        payout_status: 'none' | 'pending' | 'paid';
+        created_at: string;
+        verified_at: string | null;
+        credited_at: string | null;
+      }>;
+    }>('/users/me/referrals'),
   getNearby: (
     lat: number,
     lng: number,
@@ -131,11 +224,18 @@ export const usersAPI = {
       maxAge?: number;
       interests?: string[];
       onlyPulse?: boolean;
+      online?: boolean;
+      verified?: boolean;
+      new?: boolean;
       lookingFor?: string;
       mood?: string;
+      page?: number;
+      limit?: number;
+      offset?: number;
+      scope?: 'uk_ie';
     }
   ) =>
-    apiClient.get('/users/nearby', {
+    apiClient.get<NearbyRosterResponse | any[]>('/users/nearby', {
       params: {
         lat,
         lng,
@@ -144,15 +244,28 @@ export const usersAPI = {
         maxAge: filters?.maxAge,
         interests: filters?.interests?.join(','),
         onlyPulse: filters?.onlyPulse ? 'true' : undefined,
+        online: filters?.online ? 'true' : undefined,
+        verified: filters?.verified ? 'true' : undefined,
+        new: filters?.new ? 'true' : undefined,
         lookingFor: filters?.lookingFor,
         mood: filters?.mood,
+        page: filters?.page,
+        limit: filters?.limit,
+        offset: filters?.offset,
+        scope: filters?.scope,
       },
     }),
-  getProfile: (id: string) => apiClient.get(`/users/profile/${id}`),
-  searchProfiles: (q: string) =>
+  getProfile: (id: string, coords?: { lat?: number | null; lng?: number | null }) =>
+    apiClient.get(`/users/profile/${id}`, {
+      params:
+        coords?.lat != null && coords?.lng != null
+          ? { lat: coords.lat, lng: coords.lng }
+          : undefined,
+    }),
+  searchProfiles: (q: string, by: 'name' | 'place' = 'name') =>
     apiClient.get<Array<{ id: string; name: string; age?: number; photo_url?: string; bio?: string; headline?: string }>>(
       '/users/search',
-      { params: { q } },
+      { params: { q, by } },
     ),
   updateLocation: (lat: number, lng: number) =>
     apiClient.post('/users/location', { lat, lng }),
@@ -164,6 +277,7 @@ export const usersAPI = {
     looking_for?: string;
     photo_url?: string;
     cover_url?: string;
+    map_photo_url?: string | null;
     cover_position_x?: number;
     cover_position_y?: number;
     cover_zoom?: number;
@@ -176,6 +290,11 @@ export const usersAPI = {
     on_prep?: boolean | null;
     last_tested_at?: string | null;
     show_age?: boolean;
+    show_height?: boolean;
+    show_weight?: boolean;
+    show_relationship?: boolean;
+    /** Off = no distance shown to others ("Nearby"). Turning off is Premium (402). */
+    show_distance?: boolean;
   }) =>
     apiClient.post('/users/profile', data),
   uploadPhoto: (file: File) => {
@@ -192,7 +311,18 @@ export const usersAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  uploadMapPhoto: (file: File) => {
+    const formData = new FormData();
+    formData.append('photo', file);
+    return apiClient.post('/users/map-photo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  clearMapPhoto: () => apiClient.delete('/users/map-photo'),
   likeUser: (id: string) => apiClient.post(`/users/like/${id}`),
+  /** Unmatch — removes both like directions. Does not touch rooms. */
+  unmatchUser: (id: string) =>
+    apiClient.delete<{ unmatched: boolean; removed: number }>(`/users/like/${id}`),
   updateVisibility: (isVisible: boolean) =>
     apiClient.patch('/users/visibility', { is_visible: isVisible }),
   getMatches: () => apiClient.get('/users/matches'),
@@ -204,6 +334,22 @@ export const usersAPI = {
       is_premium: boolean;
       preview?: Array<{ id: string; name: string; age: number; photo_url?: string | null }>;
     }>('/users/likes/received/summary'),
+  /** Incoming likes (not yet mutual) — not gated behind MenRush+. */
+  getReceivedLikes: () =>
+    apiClient.get<
+      Array<{
+        id: string;
+        name: string;
+        age: number;
+        bio?: string;
+        photo_url?: string | null;
+        online?: boolean;
+        last_seen?: string;
+        liked_at?: string;
+        is_verified?: boolean;
+        authenticity_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
+      }>
+    >('/users/likes/received'),
   getProfileViews: () =>
     apiClient.get<{
       viewers: Array<{
@@ -234,8 +380,12 @@ export const usersAPI = {
         blocked_at: string;
       }>;
     }>('/users/blocks'),
-  reportUser: (id: string, reason: string, details?: string) =>
-    apiClient.post(`/users/report/${id}`, { reason, details }),
+  reportUser: (id: string, reason: string, details?: string, threadId?: string) =>
+    apiClient.post(`/users/report/${id}`, {
+      reason,
+      details,
+      ...(threadId ? { thread_id: threadId } : {}),
+    }),
   getTeamStatus: () => apiClient.get<{ is_team: boolean }>('/users/me/team'),
   listReports: () =>
     apiClient.get<{
@@ -281,6 +431,7 @@ export const notificationsAPI = {
   delete: (id: string) =>
     apiClient.delete<{ ok: boolean; unread_count: number }>(`/notifications/${id}`),
   deleteAllRead: () => apiClient.delete<{ ok: boolean; removed: number }>('/notifications'),
+  deleteAll: () => apiClient.delete<{ ok: boolean; removed: number }>('/notifications?all=true'),
 };
 
 export interface PulseStateDTO {
@@ -323,6 +474,13 @@ export interface MessageDTO {
   expired: boolean;
   /** Set when the sender withdraws media from the chat. */
   withdrawn_at?: string | null;
+  /**
+   * Verified backend Premium gate for Discreet media blur.
+   * false → soft-blur photos/videos for this viewer; omit/true → clear.
+   */
+  media_clear?: boolean;
+  read?: boolean;
+  delivered?: boolean;
 }
 
 export interface SendMediaOptions {
@@ -338,11 +496,26 @@ export interface SendMediaOptions {
 
 export const messagesAPI = {
   sendMessage: (receiver_id: string, message: string) =>
-    apiClient.post<MessageDTO>('/messages', { receiver_id, message }),
+    apiClient.post<MessageDTO>(
+      '/messages',
+      { receiver_id, message },
+      { timeout: 20_000 },
+    ),
   sendLocation: (receiver_id: string, lat: number, lng: number) =>
     apiClient.post<MessageDTO>('/messages/location', { receiver_id, lat, lng }),
-  getConversation: (otherId: string) =>
-    apiClient.get<MessageDTO[]>(`/messages/conversation/${otherId}`),
+  getConversation: (otherId: string, opts?: { before?: string; limit?: number }) =>
+    apiClient.get<MessageDTO[]>(`/messages/conversation/${otherId}`, {
+      params: {
+        ...(opts?.before ? { before: opts.before } : {}),
+        ...(opts?.limit != null ? { limit: opts.limit } : {}),
+      },
+    }),
+  /** Fresh signed media URL for video/audio/image open + retry (avoids expired cache grants). */
+  getMediaUrl: (messageId: string) =>
+    apiClient.get<{ url: string; mime_type: string; media_type: string | null }>(
+      `/messages/${messageId}/media-url`,
+      { timeout: 15_000 },
+    ),
   getConversations: () => apiClient.get('/messages/conversations'),
   getUnreadSummary: () =>
     apiClient.get<{ total: number; bySender: Record<string, number> }>('/messages/unread'),
@@ -354,46 +527,69 @@ export const messagesAPI = {
     if (opts.disappearing === true) fd.append('disappearing', 'true');
     if (opts.maxViews != null) fd.append('max_views', String(Math.round(opts.maxViews)));
     if (opts.durationMs != null) fd.append('duration_ms', String(Math.round(opts.durationMs)));
-    // Blobs from MediaRecorder don't have a filename — give them one so multer is happy.
+    // Strip MediaRecorder codec parameters before multipart — unquoted
+    // `codecs=vp8,opus` makes busboy report text/plain and the API rejects.
+    const upload = blobForUpload(file);
     const filename =
-      file instanceof File
+      file instanceof File && file.name
         ? file.name
-        : `${opts.kind}-${Date.now()}.${
-            opts.kind === 'audio' ? 'webm' : opts.kind === 'video' ? 'webm' : 'jpg'
-          }`;
-    fd.append('media', file, filename);
+        : `${opts.kind}-${Date.now()}.${extensionForMediaMime(upload.type, opts.kind)}`;
+    fd.append('media', upload, filename);
+    // Do not set Content-Type: axios must add the multipart boundary itself.
     return apiClient.post<MessageDTO>('/messages/media', fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      // Android→iPhone multi‑MB uploads were timing out / retrying (~50s then ~20s).
+      timeout: 180_000,
     });
   },
+  /**
+   * Attach an existing My Photos library photo into a 1:1 thread.
+   * Server copies bytes — does not delete, move, or change album visibility.
+   */
+  sendFromAlbum: (
+    receiver_id: string,
+    photo_id: string,
+    opts: { disappearing?: boolean; maxViews?: number; caption?: string } = {},
+  ) =>
+    apiClient.post<MessageDTO>(
+      '/messages/media/from-album',
+      {
+        receiver_id,
+        photo_id,
+        caption: opts.caption,
+        disappearing: opts.disappearing,
+        max_views: opts.maxViews,
+      },
+      { timeout: 60_000 },
+    ),
   markViewed: (messageId: string) =>
     apiClient.post<MessageDTO>(`/messages/${messageId}/view`),
   withdrawMedia: (messageId: string) =>
     apiClient.post<MessageDTO>(`/messages/${messageId}/withdraw`),
-};
-
-export interface MeetAgreementState {
-  my_confirmed: boolean;
-  peer_confirmed: boolean;
-  mutual: boolean;
-  my_confirmed_at: string | null;
-  peer_confirmed_at: string | null;
-}
-
-export const meetAPI = {
-  getState: (peerId: string) => apiClient.get<MeetAgreementState>(`/meet/${peerId}`),
-  confirm: (peerId: string) => apiClient.post<MeetAgreementState>(`/meet/${peerId}/confirm`),
-  revoke: (peerId: string) => apiClient.post<MeetAgreementState>(`/meet/${peerId}/revoke`),
+  withdrawLocation: (messageId: string) =>
+    apiClient.post<MessageDTO>(`/messages/${messageId}/withdraw`),
 };
 
 export const roomsAPI = {
   createRoom: (data: any) => apiClient.post('/rooms', data),
-  getRooms: () => apiClient.get('/rooms'),
+  getRooms: () =>
+    apiClient.get<{
+      member_rooms: Array<Record<string, unknown>>;
+      nearby_rooms: Array<Record<string, unknown>>;
+      official_rooms: Array<Record<string, unknown>>;
+    }>('/rooms'),
   getRoom: (roomId: string) => apiClient.get(`/rooms/${roomId}`),
   getMembers: (roomId: string) =>
-    apiClient.get<Array<{ id: string; name: string; photo_url?: string; role?: string }>>(
-      `/rooms/${roomId}/members`,
-    ),
+    apiClient.get<
+      Array<{
+        id: string;
+        name: string;
+        photo_url?: string;
+        role?: string;
+        is_verified?: boolean;
+        authenticity_status?: string;
+        using_temp_identity?: boolean;
+      }>
+    >(`/rooms/${roomId}/members`),
   addMember: (roomId: string, userId: string) =>
     apiClient.post(`/rooms/${roomId}/members`, { user_id: userId }),
   joinRoom: (roomId: string) => apiClient.post(`/rooms/${roomId}/join`),
@@ -402,6 +598,65 @@ export const roomsAPI = {
     apiClient.get(`/rooms/${roomId}/messages`, { params: { before } }),
   sendMessage: (roomId: string, message: string, replyTo?: string) =>
     apiClient.post(`/rooms/${roomId}/messages`, { message, reply_to: replyTo }),
+  sendMedia: (roomId: string, file: File | Blob, caption?: string) => {
+    const fd = new FormData();
+    const filename =
+      file instanceof File && file.name
+        ? file.name
+        : `room-media-${Date.now()}.jpg`;
+    fd.append('media', file, filename);
+    if (caption) fd.append('caption', caption);
+    return apiClient.post(`/rooms/${roomId}/messages/media`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  getTempIdentity: (roomId: string) =>
+    apiClient.get<{
+      display_name?: string | null;
+      photo_url?: string | null;
+      save_name?: boolean;
+      save_photo?: boolean;
+    }>(`/rooms/${roomId}/temp-identity`),
+  setTempIdentity: (
+    roomId: string,
+    data: {
+      display_name: string;
+      photo_url?: string;
+      save_name?: boolean;
+      save_photo?: boolean;
+    },
+  ) => apiClient.put(`/rooms/${roomId}/temp-identity`, data),
+  uploadTempPhoto: (roomId: string, file: File) => {
+    const fd = new FormData();
+    fd.append('photo', file);
+    return apiClient.post<{ photo_url: string }>(`/rooms/${roomId}/temp-identity/photo`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  clearTempIdentity: (roomId: string) =>
+    apiClient.post<{ cleared: true }>(`/rooms/${roomId}/temp-identity/clear`),
+  deleteTempIdentity: (roomId: string) =>
+    apiClient.delete(`/rooms/${roomId}/temp-identity`),
+};
+
+// ── Map feed (Sniffies-style location chat on Discover map) ─────────────────
+export interface MapFeedMessage {
+  id: string;
+  display_name: string;
+  photo_url?: string | null;
+  message: string;
+  created_at: string;
+  /** Distance bucket label e.g. "< 500m" */
+  distance_label?: string;
+}
+
+export const mapFeedAPI = {
+  list: (lat?: number, lng?: number, limit = 20) =>
+    apiClient.get<{ messages: MapFeedMessage[] }>('/map-feed', {
+      params: { lat, lng, limit },
+    }),
+  post: (data: { message: string; lat?: number; lng?: number; display_name?: string }) =>
+    apiClient.post<MapFeedMessage>('/map-feed', data),
 };
 
 export type ContactSubmitPayload = {
@@ -449,9 +704,15 @@ export const profileMetaAPI = {
     apiClient.get<{ enabled: boolean }>('/profile-meta/live-location-sharing'),
   setLiveLocationSharing: (enabled: boolean) =>
     apiClient.post<{ enabled: boolean }>('/profile-meta/live-location-sharing', { enabled }),
+  getMapPinFuzz: () =>
+    apiClient.get<{ map_pin_fuzz_m: number }>('/profile-meta/map-pin-fuzz'),
+  setMapPinFuzz: (map_pin_fuzz_m: number) =>
+    apiClient.post<{ map_pin_fuzz_m: number }>('/profile-meta/map-pin-fuzz', { map_pin_fuzz_m }),
 };
 
-// ── Albums ────────────────────────────────────────────────────────────────
+// ── Albums / My Photos ────────────────────────────────────────────────────
+export type PhotoVisibility = 'public' | 'view_once' | 'private';
+
 export interface AlbumDTO {
   id: string;
   user_id: string;
@@ -464,6 +725,8 @@ export interface AlbumDTO {
   updated_at: string;
   /** Present only when listing someone else's albums via /albums/user/:id. */
   unlocked?: boolean;
+  /** Verified backend Premium gate for cover blur when unlocked. */
+  media_clear?: boolean;
 }
 
 export interface AlbumPhotoDTO {
@@ -471,33 +734,83 @@ export interface AlbumPhotoDTO {
   photo_url: string;
   position: number;
   created_at: string;
+  visibility?: PhotoVisibility;
+  /** false soft-blurs — view-once until opened, or Discreet Mode when enabled. */
+  media_clear?: boolean;
+}
+
+export interface LibraryPhotoDTO {
+  id: string;
+  album_id: string;
+  photo_url: string;
+  visibility: PhotoVisibility;
+  position: number;
+  created_at: string;
+  media_clear: boolean;
+}
+
+export interface AlbumViewerDTO {
+  id: string;
+  name: string;
+  photo_url: string | null;
+  granted_at: string;
+}
+
+export interface MyPhotosLibraryDTO {
+  public_photos: LibraryPhotoDTO[];
+  view_once_photos: LibraryPhotoDTO[];
+  private_photos: LibraryPhotoDTO[];
+  private_album: AlbumDTO | null;
+  viewers: AlbumViewerDTO[];
+  photo_total: number;
+  free_cap: number;
+  albums: AlbumDTO[];
 }
 
 export const albumsAPI = {
-  listMine: () =>
-    apiClient.get<{ albums: AlbumDTO[]; photo_total: number; free_cap: number }>('/albums/mine'),
+  listMine: () => apiClient.get<MyPhotosLibraryDTO>('/albums/mine'),
   create: (data: { name: string; description?: string; is_locked?: boolean }) =>
     apiClient.post<AlbumDTO>('/albums', data),
   remove: (albumId: string) => apiClient.delete<{ deleted: true }>(`/albums/${albumId}`),
   removePhoto: (albumId: string, photoId: string) =>
     apiClient.delete<{ deleted: true }>(`/albums/${albumId}/photos/${photoId}`),
   listPhotos: (albumId: string) =>
-    apiClient.get<{ photos: AlbumPhotoDTO[]; unlocked: boolean; locked: boolean }>(
-      `/albums/${albumId}/photos`,
-    ),
-  upload: (albumId: string, file: File) => {
+    apiClient.get<{
+      photos: AlbumPhotoDTO[];
+      unlocked: boolean;
+      locked: boolean;
+      media_clear?: boolean;
+    }>(`/albums/${albumId}/photos`),
+  upload: (albumId: string, file: File, visibility: PhotoVisibility = 'private') => {
     const fd = new FormData();
     fd.append('photo', file);
-    return apiClient.post<{ photo_url: string }>(`/albums/${albumId}/upload`, fd, {
+    fd.append('visibility', visibility);
+    return apiClient.post<{
+      id: string;
+      photo_url: string;
+      media_clear: boolean;
+      visibility: PhotoVisibility;
+    }>(`/albums/${albumId}/upload`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  openPhoto: (photoId: string) =>
+    apiClient.post<{ opened: boolean; media_clear: boolean }>(`/albums/photos/${photoId}/open`),
   listForUser: (userId: string) =>
     apiClient.get<{ albums: AlbumDTO[] }>(`/albums/user/${userId}`),
+  listGrants: (albumId: string) =>
+    apiClient.get<{ viewers: AlbumViewerDTO[] }>(`/albums/${albumId}/grants`),
   grant: (albumId: string, viewerId: string) =>
     apiClient.post<{ granted: true }>(`/albums/${albumId}/grant`, { viewer_id: viewerId }),
   revoke: (albumId: string, viewerId: string) =>
     apiClient.delete<{ granted: false }>(`/albums/${albumId}/grant/${viewerId}`),
+  /** Viewers only — never wipes media. Photos stay on the owner's album. */
+  revokeAll: (albumId: string) =>
+    apiClient.delete<{
+      revoked: true;
+      viewers_removed: number;
+      photo_count: number;
+    }>(`/albums/${albumId}/grants`),
 };
 
 // ── Events (After Hours) ──────────────────────────────────────────────────
@@ -515,6 +828,12 @@ export interface EventDTO {
   member_count: number;
   distance_m: number | null;
   is_live: boolean;
+  spot_id?: string | null;
+  venue_claim_id?: string | null;
+  is_venue_managed?: boolean;
+  status?: string;
+  managed_label?: string | null;
+  ticket_url?: string | null;
 }
 
 export const eventsAPI = {
@@ -522,9 +841,12 @@ export const eventsAPI = {
     apiClient.get<EventDTO[]>('/events/nearby', {
       params: { lat, lng, radius: radiusKm, limit },
     }),
+  /** Free venue check-in — creates/uses a Cruise (Hot Spot) pin that expires after 4 hours. */
+  checkIn: (id: string, anonymous = false) =>
+    apiClient.post<{ ok: boolean; spot: HotSpotDTO }>(`/events/${id}/check-in`, { anonymous }),
 };
 
-// ── Hot Spots (venue check-ins — not user Pulse boost) ───────────────────
+// ── Cruise / Hot Spots (venue check-ins — not user Pulse boost; API path /hot-spots) ──
 export interface HotSpotCategoryDTO {
   id: number;
   slug: string;
@@ -545,18 +867,181 @@ export interface HotSpotDTO {
   category_name: string;
   category_icon: string;
   distance_km: number | null;
+  /** Display count from the server: exact for Premium; 0 to 4 exact, then '5+', for Free. */
   live_count: number | string;
-  live_count_exact: number;
+  /** Exact count, Premium only. Null for Free. Never render this; use live_count. */
+  live_count_exact: number | null;
   is_checked_in: boolean;
   my_checkin_anonymous: boolean | null;
+  /** Short-lived check-in window in hours (product default: 4). */
+  checkin_ttl_hours?: number;
+  /** True when at least one non-expired check-in is present. */
+  has_active_checkins?: boolean;
+  nation?: string | null;
+  venue_type?: string | null;
+  source_url?: string | null;
+  verified_at?: string | null;
+  last_activity_at?: string | null;
+  claimed_by_user_id?: string | null;
+  claim_status?: string;
+  is_calendar_managed?: boolean;
+  can_manage_calendar?: boolean;
+  rating_avg?: number | null;
+  review_count?: number;
+}
+
+export interface HotSpotReviewDTO {
+  id: string;
+  spot_id: string;
+  user_id: string;
+  rating: number;
+  body: string;
+  is_anonymous: boolean;
+  created_at: string;
+  updated_at: string;
+  author_name: string;
+  author_photo_url: string | null;
+  is_mine: boolean;
+}
+
+export interface HotSpotReviewsResponseDTO {
+  reviews: HotSpotReviewDTO[];
+  rating_avg: number | null;
+  review_count: number;
+}
+
+export interface VenueClaimDTO {
+  id: string;
+  spot_id: string;
+  user_id: string;
+  status: 'pending' | 'approved' | 'rejected' | 'disputed' | 'frozen';
+  venue_role: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone: string | null;
+  website_or_social_proof: string | null;
+  attestation_agreed: boolean;
+  attestation_text: string;
+  attested_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_notes: string | null;
+  dispute_reason: string | null;
+  disputed_at: string | null;
+  frozen_reason: string | null;
+  frozen_at: string | null;
+  domain_email: string | null;
+  domain_email_verified: boolean;
+  phone_otp: string | null;
+  phone_otp_verified: boolean;
+  companies_house_num: string | null;
+  companies_house_verified: boolean;
+  created_at: string;
+  updated_at: string;
+  spot_name?: string;
+  spot_city?: string | null;
+  applicant_name?: string;
+  applicant_email?: string;
+}
+
+export interface SubmitVenueClaimPayload {
+  venue_role: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone?: string | null;
+  website_or_social_proof?: string | null;
+  attestation_agreed: true;
+  attestation_text: string;
+  domain_email?: string | null;
+  phone_otp?: string | null;
+  companies_house_num?: string | null;
+}
+
+export interface DisputeVenueClaimPayload {
+  dispute_reason: string;
+}
+
+export interface VenueCalendarEventDTO {
+  id: string;
+  spot_id: string;
+  venue_claim_id: string;
+  name: string;
+  description: string | null;
+  venue_name: string | null;
+  starts_at: string;
+  ends_at: string | null;
+  lat: number;
+  lng: number;
+  status: 'published' | 'cancelled' | 'draft';
+  is_venue_managed: boolean;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
+  ticket_url: string | null;
+  member_count: number;
+  distance_m: number | null;
+  is_live: boolean;
+  created_at: string;
+  updated_at: string;
+  managed_label: 'Calendar managed by venue';
+}
+
+export interface VenueCalendarEventCreatePayload {
+  name: string;
+  description?: string | null;
+  starts_at: string;
+  ends_at?: string | null;
+  ticket_url?: string | null;
+}
+
+export interface VenueCalendarEventUpdatePayload {
+  name?: string;
+  description?: string | null;
+  starts_at?: string;
+  ends_at?: string | null;
+  ticket_url?: string | null;
+}
+
+export interface VenueCalendarEventCancelPayload {
+  cancellation_reason?: string | null;
 }
 
 export const hotSpotsAPI = {
   listCategories: () =>
     apiClient.get<{ categories: HotSpotCategoryDTO[] }>('/hot-spots/categories'),
-  listNearby: (lat: number, lng: number, radiusKm?: number, category?: string) =>
+  listNearby: (
+    lat: number,
+    lng: number,
+    radiusKm?: number,
+    category?: string,
+    options?: { outdoor?: boolean; q?: string; sort?: 'closest' | 'live'; limit?: number },
+  ) =>
     apiClient.get<{ spots: HotSpotDTO[] }>('/hot-spots', {
-      params: { lat, lng, radiusKm, category },
+      params: {
+        lat,
+        lng,
+        radiusKm,
+        category,
+        outdoor: options?.outdoor,
+        q: options?.q,
+        sort: options?.sort,
+        limit: options?.limit,
+      },
+    }),
+  searchCruising: (
+    lat: number,
+    lng: number,
+    query?: string,
+    radiusKm?: number,
+  ) =>
+    apiClient.get<{ spots: HotSpotDTO[] }>('/hot-spots', {
+      params: {
+        lat,
+        lng,
+        cruising: true,
+        sort: 'closest',
+        q: query?.trim() || undefined,
+        radiusKm: radiusKm || (query?.trim() ? undefined : 100),
+      },
     }),
   getSpot: (id: string) => apiClient.get<{ spot: HotSpotDTO }>(`/hot-spots/${id}`),
   checkIn: (id: string, anonymous = false) =>
@@ -567,6 +1052,181 @@ export const hotSpotsAPI = {
       : apiClient.post<{ ok: boolean }>('/hot-spots/check-out'),
   getMyCheckIn: () =>
     apiClient.get<{ check_in: unknown | null }>('/hot-spots/me/check-in'),
+
+  // ── Venue Claims & Calendar ──
+  getClaim: (spotId: string) =>
+    apiClient.get<{
+      claim_status: string;
+      is_claimed: boolean;
+      is_calendar_managed: boolean;
+      my_claim?: VenueClaimDTO | null;
+    }>(`/hot-spots/${spotId}/claim`),
+  submitClaim: (spotId: string, data: SubmitVenueClaimPayload) =>
+    apiClient.post<{ ok: boolean; claim: VenueClaimDTO; message: string }>(
+      `/hot-spots/${spotId}/claim`,
+      data,
+    ),
+  disputeClaim: (spotId: string, data: DisputeVenueClaimPayload) =>
+    apiClient.post<{ ok: boolean; claim: VenueClaimDTO; message: string }>(
+      `/hot-spots/${spotId}/claim/dispute`,
+      data,
+    ),
+  listMyClaims: () =>
+    apiClient.get<{ claims: VenueClaimDTO[] }>('/hot-spots/my/claims'),
+  listVenueEvents: (spotId: string) =>
+    apiClient.get<{
+      events: VenueCalendarEventDTO[];
+      venue_name: string;
+      is_claimed: boolean;
+      can_manage: boolean;
+      managed_label: string;
+    }>(`/hot-spots/${spotId}/events`),
+  createVenueEvent: (spotId: string, data: VenueCalendarEventCreatePayload) =>
+    apiClient.post<{ ok: boolean; event: VenueCalendarEventDTO }>(
+      `/hot-spots/${spotId}/events`,
+      data,
+    ),
+  updateVenueEvent: (
+    spotId: string,
+    eventId: string,
+    data: VenueCalendarEventUpdatePayload,
+  ) =>
+    apiClient.patch<{ ok: boolean; event: VenueCalendarEventDTO }>(
+      `/hot-spots/${spotId}/events/${eventId}`,
+      data,
+    ),
+  cancelVenueEvent: (
+    spotId: string,
+    eventId: string,
+    data: VenueCalendarEventCancelPayload,
+  ) =>
+    apiClient.post<{ ok: boolean; event: VenueCalendarEventDTO }>(
+      `/hot-spots/${spotId}/events/${eventId}/cancel`,
+      data,
+    ),
+  listReviews: (spotId: string) =>
+    apiClient.get<HotSpotReviewsResponseDTO>(`/hot-spots/${spotId}/reviews`),
+  submitReview: (
+    spotId: string,
+    rating: number,
+    body: string,
+    anonymous = true,
+  ) =>
+    apiClient.post<{ ok: boolean; review: HotSpotReviewDTO; spot: HotSpotDTO }>(
+      `/hot-spots/${spotId}/reviews`,
+      { rating, body, anonymous },
+    ),
+  deleteReview: (spotId: string, reviewId?: string) =>
+    reviewId
+      ? apiClient.delete<{ ok: boolean; spot: HotSpotDTO }>(
+          `/hot-spots/${spotId}/reviews/${reviewId}`,
+        )
+      : apiClient.delete<{ ok: boolean; spot: HotSpotDTO }>(
+          `/hot-spots/${spotId}/reviews/me`,
+        ),
+};
+
+export const adminVenueAPI = {
+  listPendingClaims: (adminToken: string) =>
+    apiClient.get<{ claims: VenueClaimDTO[] }>('/admin/venue-claims/pending', {
+      headers: { 'x-admin-token': adminToken },
+    }),
+  listAllClaims: (adminToken: string, status?: string) =>
+    apiClient.get<{ claims: VenueClaimDTO[] }>('/admin/venue-claims', {
+      params: { status },
+      headers: { 'x-admin-token': adminToken },
+    }),
+  approveClaim: (claimId: string, adminToken: string, notes?: string) =>
+    apiClient.post<{ ok: boolean; claim: VenueClaimDTO }>(
+      `/admin/venue-claims/${claimId}/approve`,
+      { notes },
+      { headers: { 'x-admin-token': adminToken } },
+    ),
+  rejectClaim: (claimId: string, adminToken: string, notes?: string) =>
+    apiClient.post<{ ok: boolean; claim: VenueClaimDTO }>(
+      `/admin/venue-claims/${claimId}/reject`,
+      { notes },
+      { headers: { 'x-admin-token': adminToken } },
+    ),
+  freezeClaim: (
+    claimId: string,
+    adminToken: string,
+    data: { frozen_reason: string; ban_user?: boolean },
+  ) =>
+    apiClient.post<{ ok: boolean; claim: VenueClaimDTO }>(
+      `/admin/venue-claims/${claimId}/freeze`,
+      data,
+      { headers: { 'x-admin-token': adminToken } },
+    ),
+};
+
+/** Community Space — short local text posts (≤280). Free for all. */
+export interface CommunityPostDTO {
+  id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+  author_name: string;
+  author_photo_url: string | null;
+  /** Coarse bucket (sorting). Absent when the author hides distance. */
+  distance_km?: string;
+  /** "<1 mi" or whole miles, to the author's fuzzed pin. Absent with distance_km. */
+  distance_label?: string;
+  comment_count?: number;
+}
+
+export interface CommunityCommentDTO {
+  id: string;
+  post_id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+  author_name: string;
+  author_photo_url: string | null;
+}
+
+export interface CommunityMentionSuggestionDTO {
+  id: string;
+  type: 'hot_spot' | 'match';
+  name: string;
+  subtitle?: string | null;
+  photo_url?: string | null;
+  icon?: string | null;
+  category_name?: string | null;
+  category_slug?: string | null;
+}
+
+export const communityAPI = {
+  listPosts: (lat: number, lng: number, radiusKm?: number) =>
+    apiClient.get<{ posts: CommunityPostDTO[] }>('/community/posts', {
+      params: { lat, lng, radiusKm },
+    }),
+  createPost: (body: string) =>
+    apiClient.post<{ post: CommunityPostDTO }>('/community/posts', { body }),
+  updatePost: (postId: string, body: string) =>
+    apiClient.put<{ post: CommunityPostDTO }>(`/community/posts/${postId}`, { body }),
+  deletePost: (postId: string) =>
+    apiClient.delete<{ ok: boolean }>(`/community/posts/${postId}`),
+  listComments: (postId: string) =>
+    apiClient.get<{ comments: CommunityCommentDTO[] }>(`/community/posts/${postId}/comments`),
+  createComment: (postId: string, body: string) =>
+    apiClient.post<{ comment: CommunityCommentDTO }>(`/community/posts/${postId}/comments`, {
+      body,
+    }),
+  updateComment: (postId: string, commentId: string, body: string) =>
+    apiClient.put<{ comment: CommunityCommentDTO }>(
+      `/community/posts/${postId}/comments/${commentId}`,
+      { body },
+    ),
+  deleteComment: (postId: string, commentId: string) =>
+    apiClient.delete<{ ok: boolean }>(`/community/posts/${postId}/comments/${commentId}`),
+  getMentionSuggestions: (q: string = '', limit: number = 10) =>
+    apiClient.get<{ suggestions: CommunityMentionSuggestionDTO[] }>(
+      '/community/mention-suggestions',
+      {
+        params: { q, limit },
+      },
+    ),
 };
 
 export const aiAPI = {
@@ -575,6 +1235,23 @@ export const aiAPI = {
       '/ai/generate-image',
       { prompt, numberOfImages }
     ),
+};
+
+export interface LocationHiddenPerson {
+  id: string;
+  name: string;
+  photo_url?: string | null;
+  hidden_at: string;
+}
+
+/** "Hide my location from" list. Premium to add; removing is always allowed. */
+export const locationPrivacyAPI = {
+  listHidden: () =>
+    apiClient.get<{ hidden: LocationHiddenPerson[]; limit: number }>('/location-privacy/hidden'),
+  hide: (id: string) =>
+    apiClient.post<{ hidden: true }>(`/location-privacy/hidden/${encodeURIComponent(id)}`),
+  unhide: (id: string) =>
+    apiClient.delete<{ hidden: false }>(`/location-privacy/hidden/${encodeURIComponent(id)}`),
 };
 
 export { apiClient };

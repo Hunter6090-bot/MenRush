@@ -55,6 +55,14 @@ async function main() {
   });
 
   let token = reg.body?.token;
+  if (!token && reg.body?.devConfirmToken) {
+    const confirm = await req('/api/auth/confirm-email', {
+      method: 'POST',
+      body: JSON.stringify({ token: reg.body.devConfirmToken }),
+    });
+    token = confirm.body?.token;
+    if (token) console.log('[smoke] register + confirm ok');
+  }
   if (!token) {
     console.log('[smoke] register skipped/failed:', reg.body?.error || reg.status);
     if (process.env.SMOKE_EMAIL && process.env.SMOKE_PASSWORD) {
@@ -73,6 +81,8 @@ async function main() {
       console.log('[smoke] PASS (partial)');
       return;
     }
+  } else if (reg.body?.requiresEmailConfirm) {
+    console.log('[smoke] register ok (unexpected: confirm required but token present)');
   } else {
     console.log('[smoke] register ok');
   }
@@ -89,7 +99,8 @@ async function main() {
     headers: auth,
   });
   assert(nearby.status === 200 || nearby.status === 400 || nearby.status === 403, `nearby ${nearby.status}`);
-  console.log('[smoke] nearby status', nearby.status, Array.isArray(nearby.body) ? `n=${nearby.body.length}` : '');
+  const nearbyCount = Array.isArray(nearby.body) ? nearby.body.length : (nearby.body?.users ? nearby.body.users.length : '');
+  console.log('[smoke] nearby status', nearby.status, nearbyCount !== '' ? `n=${nearbyCount}` : '');
 
   console.log('[smoke] PASS');
 }

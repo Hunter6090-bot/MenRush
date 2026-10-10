@@ -1,11 +1,11 @@
 import { expect, test, request as apiRequest, type BrowserContext, type Page } from '@playwright/test';
 import { TEST_PASSWORD, ALICE, BOB } from './test-accounts';
+import { PLAYWRIGHT_BASE_URL as BASE_URL } from './support/base-url';
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
 
-// A valid 1x1 PNG (correct signature, so it passes the backend's content check).
-const PNG_BUFFER = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+// Valid JPEG that sharp/libvips can optimize (tiny PNGs fail vipspng in CI).
+const JPEG_BUFFER = Buffer.from(
+  '/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgEBAQEBAUFBQUFBQYGBgYGBgYGBgYGBgYHBwcICAgHBwcGBgcHCAgICAkJCQgICAgJCQoKCgwMCwsODg4RERT/xABMAAEBAAAAAAAAAAAAAAAAAAAABAEBAQAAAAAAAAAAAAAAAAAAAAYQAQAAAAAAAAAAAAAAAAAAAAARAQAAAAAAAAAAAAAAAAAAAAD/wAARCABAAEADASIAAhEAAxEA/9oADAMBAAIRAxEAPwCwBDqgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB//2Q==',
   'base64',
 );
 
@@ -33,6 +33,13 @@ test.beforeAll(async () => {
   try {
     alice = await login(api, ALICE.email);
     bob = await login(api, BOB.email);
+    // Media send requires a mutual match — re-assert in case a prior Unmatch e2e cleared it.
+    await api.post(`/api/users/like/${bob.user.id}`, {
+      headers: { Authorization: `Bearer ${alice.token}` },
+    });
+    await api.post(`/api/users/like/${alice.user.id}`, {
+      headers: { Authorization: `Bearer ${bob.token}` },
+    });
   } finally {
     await api.dispose();
   }
@@ -42,13 +49,14 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
   await context.addInitScript(({ token, user }) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('menrush_install_prompt_dismissed', '1');
   }, result);
 }
 
 async function attachImage(page: Page) {
   await page
     .locator('input[type="file"][aria-label="Choose from gallery"]')
-    .setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: PNG_BUFFER });
+    .setInputFiles({ name: 'photo.jpg', mimeType: 'image/jpeg', buffer: JPEG_BUFFER });
 }
 
 /** Send with optional custom view count when rule is 'custom'. */
@@ -72,9 +80,17 @@ async function aliceSendsImage(
       await page.getByRole('button', { name: btn }).click();
     }
   }
+  // Wait out client-side compress ("Preparing…") so Send actually fires the upload.
+  await expect(page.getByTestId('image-composer-send')).toHaveText('Send', { timeout: 20_000 });
+  const sendResponse = page.waitForResponse(
+    (res) => res.url().includes('/api/messages/media') && res.request().method() === 'POST',
+    { timeout: 30_000 },
+  );
   await page.getByTestId('image-composer-send').click();
+  const uploaded = await sendResponse;
+  expect(uploaded.ok(), `media upload failed: ${uploaded.status()}`).toBeTruthy();
   // Composer closes once the upload completes.
-  await expect(page.getByTestId('image-composer')).toHaveCount(0);
+  await expect(page.getByTestId('image-composer')).toHaveCount(0, { timeout: 15_000 });
 }
 
 test('selecting an image shows a preview with view-rule and Send/Cancel controls', async ({
@@ -133,6 +149,38 @@ test('a permanent image stays available inline for the recipient', async ({ brow
   const bobPage = await bobCtx.newPage();
   await bobPage.goto(`/messages/${alice.user.id}`);
   // Recipient sees the image inline — no "tap to view", no tombstone.
+  await expect(bobPage.getByTestId('image-permanent').first()).toBeVisible();
+
+  await aliceCtx.close();
+  await bobCtx.close();
+});
+
+test('opening a permanent photo then Back returns to the same 1:1 thread', async ({ browser }) => {
+  const aliceCtx = await browser.newContext();
+  const bobCtx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  await authenticate(aliceCtx, alice);
+  await authenticate(bobCtx, bob);
+
+  const alicePage = await aliceCtx.newPage();
+  await aliceSendsImage(alicePage, 'permanent');
+
+  const bobPage = await bobCtx.newPage();
+  await bobPage.goto(`/messages/${alice.user.id}`);
+  await expect(bobPage.getByTestId('image-permanent').first()).toBeVisible();
+  const threadUrl = bobPage.url();
+
+  await bobPage.getByTestId('image-permanent').first().click();
+  await expect(bobPage.getByTestId('image-viewer')).toBeVisible();
+  await expect(bobPage.getByTestId('image-viewer-frame')).toBeVisible();
+  await expect(bobPage.getByTestId('image-viewer-back')).toBeVisible();
+  await bobPage.getByTestId('image-viewer-back').click();
+
+  await expect(bobPage.getByTestId('image-viewer')).toHaveCount(0);
+  expect(bobPage.url()).toBe(threadUrl);
   await expect(bobPage.getByTestId('image-permanent').first()).toBeVisible();
 
   await aliceCtx.close();

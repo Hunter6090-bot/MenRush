@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#16110A"/>
+      <stop offset="100%" stop-color="#0D0A06"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="28%" r="55%">
+      <stop offset="0%" stop-color="#C4832A" stop-opacity="0.34"/>
+      <stop offset="100%" stop-color="#0D0A06" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1080" height="1350" fill="url(#bg)"/>
+  <rect width="1080" height="1350" fill="url(#glow)"/>
+  <rect x="48" y="48" width="984" height="1254" fill="none" stroke="rgba(196,131,42,0.45)" stroke-width="2"/>
+  <circle cx="540" cy="260" r="70" fill="none" stroke="#C4832A" stroke-width="3"/>
+  <circle cx="540" cy="260" r="28" fill="#C4832A"/>
+  <text x="540" y="400" text-anchor="middle" fill="#C4832A" font-family="Avenir Next, Segoe UI, sans-serif" font-size="24" letter-spacing="0.4em">MENRUSH</text>
+  <text x="540" y="620" text-anchor="middle" fill="#F0E0C0" font-family="Georgia, Times New Roman, serif" font-size="78" font-weight="600">Nearby.</text>
+  <text x="540" y="730" text-anchor="middle" fill="#F0E0C0" font-family="Georgia, Times New Roman, serif" font-size="78" font-weight="600">Verified.</text>
+  <text x="540" y="840" text-anchor="middle" fill="#F0E0C0" font-family="Georgia, Times New Roman, serif" font-size="78" font-weight="600">Now.</text>
+  <text x="540" y="1020" text-anchor="middle" fill="rgba(240,224,192,0.7)" font-family="Avenir Next, Segoe UI, sans-serif" font-size="28" letter-spacing="0.06em">Opens 1 October 2026 · UK first</text>
+  <text x="540" y="1110" text-anchor="middle" fill="#C4832A" font-family="Avenir Next, Segoe UI, sans-serif" font-size="24">menrush.com</text>
+</svg>

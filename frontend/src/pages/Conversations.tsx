@@ -1,13 +1,21 @@
 import { Layout } from '../components/Layout';
 import { ConversationList } from '../components/ConversationList';
-import { MobileHubTabs } from '../components/MobileHubTabs';
 
+/** Mobile Chat list — no Rooms tab; Video rooms are a separate chrome entry. */
 export const Conversations = () => {
   return (
     <Layout>
-      <div className="flex h-[calc(100dvh-var(--mobile-header-height)-var(--mobile-tab-bar-height))] min-h-0 flex-col bg-[var(--bg-primary)]">
-        <MobileHubTabs active="messages" />
-        <ConversationList variant="sidebar" showHeader={false} className="min-h-0 flex-1" />
+      {/*
+        Fill the Layout page-enter flex slot (header/tab already padded).
+        Avoid 100dvh−chrome math after #224 — that double-counts safe-area and
+        can leave a vertical scrollport that fights visualViewport on iPhone.
+      */}
+      <div
+        className="flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-x-clip bg-[var(--bg-primary)]"
+        data-testid="messaging-inbox"
+        style={{ touchAction: 'manipulation' }}
+      >
+        <ConversationList variant="sidebar" showHeader={false} className="min-h-0 min-w-0 max-w-full flex-1" />
       </div>
     </Layout>
   );

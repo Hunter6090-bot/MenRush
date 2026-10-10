@@ -1,7 +1,11 @@
 import { createRoot, Root } from 'react-dom/client';
+import { memo } from 'react';
 import { PulsingAvatar } from './PulsingAvatar';
-import { SilhouetteAvatar } from './SilhouetteAvatar';
-import { useResolvingPhotoSrc } from './UserAvatar';
+import { DiscoveryPhotoFrame } from './DiscoveryPhotoFrame';
+import { useGridPhotoSrc } from '../lib/nearbyPhotoSrc';
+import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
+import { NewJoinerBadge } from './NewJoinerBadge';
+import { isUserOnlineNow } from '../lib/discovery';
 
 export interface MapMarkerUser {
   id: string;
@@ -10,6 +14,10 @@ export interface MapMarkerUser {
   age?: number;
   isPulsing: boolean;
   isVerified?: boolean;
+  /** Account age within NEW window — small corner pill on pin. */
+  isNew?: boolean;
+  online?: boolean;
+  last_seen?: string;
 }
 
 interface MapMarkerProps {
@@ -17,36 +25,49 @@ interface MapMarkerProps {
   size?: number;
 }
 
-export function MapMarker({ user, size = 44 }: MapMarkerProps) {
+export const MapMarker = memo(function MapMarker({ user, size = 44 }: MapMarkerProps) {
+  const online = isUserOnlineNow(user);
+
   return (
     <div
-      className={`cursor-pointer transition-transform duration-150 hover:scale-110 ${
+      className={`relative cursor-pointer transition-transform duration-150 hover:scale-110 ${
         user.isPulsing ? 'animate-pulse-breathe' : ''
       }`}
       style={{ width: size, height: size }}
+      data-testid="map-marker"
+      data-online={online ? 'true' : 'false'}
     >
       <PulsingAvatar
         isPulsing={user.isPulsing}
         size={size}
         intensity={user.isPulsing ? 'live' : 'subtle'}
-        isVerified={user.isVerified}
+        isVerified={false}
+        shape="circle"
       >
-        <div
-          className="w-full h-full rounded-full overflow-hidden flex items-center justify-center"
-          style={{
-            background: 'linear-gradient(135deg,#2A1C0A,#1E1508)',
-            border: user.isPulsing ? '3px solid var(--copper-light)' : '2px solid var(--copper)',
-            boxShadow: user.isPulsing
-              ? '0 0 20px rgba(196,131,42,0.75), 0 4px 14px rgba(196,131,42,0.55)'
-              : '0 3px 10px rgba(196,131,42,0.45)',
-          }}
+        <DiscoveryPhotoFrame
+          online={online}
+          verified={!!user.isVerified}
+          className="h-full w-full"
+          borderClassName="border-[3px]"
+          shape="circle"
         >
-          <MapPhoto name={user.name} photoUrl={user.photo_url} age={user.age} size={size} />
-        </div>
+          <div
+            className="flex h-full w-full items-center justify-center overflow-hidden rounded-full"
+            style={{
+              background: 'linear-gradient(135deg,#2A1C0A,#1E1508)',
+              boxShadow: user.isPulsing
+                ? '0 0 20px rgba(196,131,42,0.75), 0 4px 14px rgba(196,131,42,0.55)'
+                : '0 3px 10px rgba(196,131,42,0.45)',
+            }}
+          >
+            <MapPhoto name={user.name} photoUrl={user.photo_url} age={user.age} size={size} />
+          </div>
+        </DiscoveryPhotoFrame>
       </PulsingAvatar>
+      {user.isNew ? <NewJoinerBadge variant="dot" /> : null}
     </div>
   );
-}
+});
 
 function MapPhoto({
   name,
@@ -59,43 +80,48 @@ function MapPhoto({
   age?: number;
   size: number;
 }) {
-  const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
-  if (!src) {
-    // Always show a pin face — initial letter, never a blank hole on the map.
-    const initial = (name?.trim()?.[0] || '?').toUpperCase();
+  const { src, phase } = useGridPhotoSrc(photoUrl, age);
+  const trimmed = photoUrl?.trim() || '';
+  if (phase === 'loading' && trimmed.startsWith('/uploads/')) {
     return (
       <div
-        className="flex h-full w-full items-center justify-center font-extrabold text-[#F0E0C0]"
-        style={{ fontSize: Math.max(14, Math.round(size * 0.38)) }}
-        aria-label={name}
-      >
-        {initial}
-      </div>
+        className="h-full w-full rounded-full bg-[var(--bg-elevated)]"
+        data-testid="map-marker-photo-pending"
+        data-photo-phase={phase}
+        aria-hidden
+      />
     );
+  }
+  if (isNearbyPlaceholderFace(photoUrl, phase) || !src) {
+    // Faded official medallion — same empty face as Nearby Grid (Brand).
+    return <FadedBrandFace variant="pin" size={size} label={name} />;
   }
   return (
     <img
       src={src}
       alt={name}
-      className="w-full h-full object-cover"
+      className="h-full w-full rounded-full object-cover"
       draggable={false}
-      onError={onError}
+      decoding="async"
+      data-testid="map-marker-photo"
+      data-photo-phase={phase}
     />
   );
 }
 
 export function createMapMarkerElement(
   user: MapMarkerUser,
-  onTap: () => void,
+  _onTap: () => void,
   size = 44,
 ): { element: HTMLDivElement; root: Root } {
   const el = document.createElement('div');
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
-  el.addEventListener('click', (e) => {
-    e.stopPropagation();
-    onTap();
-  });
+  // Do not set position on this root — Mapbox needs absolute (see mapMarkerPlacement.ts).
+  // Canvas owns pan/pinch — markers must not capture touches (see mapMarkerHitTest).
+  // Tap opens profile via map click hit-test in Discover, not DOM click here.
+  el.style.touchAction = 'none';
+  el.style.pointerEvents = 'none';
   const root = createRoot(el);
   root.render(<MapMarker user={user} size={size} />);
   return { element: el, root };

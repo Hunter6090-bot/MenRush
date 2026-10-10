@@ -40,15 +40,33 @@ async function run() {
     ]);
     const seen: string[] = [];
     const sender = {
-      sendNotification: async (sub: any, body: string) => {
+      sendNotification: async (sub: any, body: string, options?: { urgency?: string; TTL?: number }) => {
         seen.push(sub.endpoint);
         assert.strictEqual(JSON.parse(body).url, '/messages/a', 'payload url forwarded');
+        assert.strictEqual(options?.urgency, 'high', 'messages send at high urgency');
       },
     };
     const res = await deliverPush({ runQuery, sender, enabled: true }, 'user-1', payload);
     assert.strictEqual(res.sent, 2, 'sent to both devices');
     assert.strictEqual(res.pruned, 0, 'nothing pruned');
     assert.deepStrictEqual(seen.sort(), ['e1', 'e2'], 'both endpoints contacted');
+  }
+
+  // 2b. Incoming calls use a short TTL so a stale ring does not sit in the tray.
+  {
+    const { runQuery } = makeQuery([{ endpoint: 'e1', p256dh: 'p1', auth: 'a1' }]);
+    let ttl: number | undefined;
+    const sender = {
+      sendNotification: async (_sub: any, _body: string, options?: { TTL?: number }) => {
+        ttl = options?.TTL;
+      },
+    };
+    await deliverPush(
+      { runQuery, sender, enabled: true },
+      'user-1',
+      { ...payload, kind: 'call', tag: 'call-a' },
+    );
+    assert.strictEqual(ttl, 45, 'call push TTL is 45s');
   }
 
   // 3. Prunes dead subscriptions (404 / 410) and still delivers the live one.

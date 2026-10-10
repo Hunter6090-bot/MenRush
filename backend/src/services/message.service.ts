@@ -6,6 +6,7 @@ import { accessControl, SecurityError } from '../security/access';
 import { isExhaustedMedia, resolveMediaPath, signedMediaUrl } from '../security/media';
 import type { MediaKind, MessageMediaKind } from '../types/validation';
 import { MISSED_CALL_MESSAGE, MISSED_CALL_PREVIEW } from '../constants/missedCall';
+import { computeMediaClear, isDiscreetMediaBlurEnabled, viewerSeesClearMedia } from './discreet-media';
 
 /**
  * Disappearing images use a view-count model (see migration 010):
@@ -24,6 +25,8 @@ interface ConversationRow {
   receiver_id: string;
   message: string;
   created_at: string;
+  read?: boolean;
+  delivered?: boolean;
   media_type: MessageMediaKind | null;
   media_url: string | null;
   media_storage_key?: string | null;
@@ -37,12 +40,14 @@ interface ConversationRow {
   remaining_views?: number | null;
   expired: boolean;
   withdrawn_at?: string | null;
+  /** Verified backend flag — false when Discreet blur applies for this viewer. */
+  media_clear?: boolean;
 }
 
 const mediaDir = path.resolve(__dirname, '../../uploads/messages');
 
 /** Columns returned for every message row sent to the client. */
-const MESSAGE_COLUMNS = `id, sender_id, receiver_id, message, created_at,
+const MESSAGE_COLUMNS = `id, sender_id, receiver_id, message, created_at, read,
                  media_type, media_url, audio_duration_ms,
                  is_disappearing, expires_at, viewed_at, max_views, view_count, withdrawn_at`;
 
@@ -54,7 +59,9 @@ function scrubExpired<T extends ConversationRow>(row: T): T {
         ? 'Voice note withdrawn'
         : row.media_type === 'video'
           ? 'Video withdrawn'
-          : 'Photo withdrawn';
+          : row.media_type === 'location'
+            ? 'Location withdrawn'
+            : 'Photo withdrawn';
     return {
       ...row,
       media_url: null,
@@ -87,8 +94,18 @@ function scrubExpired<T extends ConversationRow>(row: T): T {
   };
 }
 
-function presentMessage<T extends ConversationRow>(row: T, viewerId: string): T {
+function presentMessage<T extends ConversationRow>(
+  row: T,
+  viewerId: string,
+  viewerIsPremium: boolean,
+): T {
   const scrubbed = scrubExpired(row);
+  const media_clear = computeMediaClear({
+    enabled: isDiscreetMediaBlurEnabled(),
+    viewerIsPremium,
+    isOwnMedia: scrubbed.sender_id === viewerId,
+    mediaType: scrubbed.media_type,
+  });
   if (scrubbed.media_url) {
     const mediaPath = scrubbed.media_url.split('?', 1)[0];
     return {
@@ -96,9 +113,25 @@ function presentMessage<T extends ConversationRow>(row: T, viewerId: string): T 
       media_url: signedMediaUrl(mediaPath, viewerId),
       media_storage_key: undefined,
       media_mime_type: undefined,
+      media_clear,
     };
   }
-  return { ...scrubbed, media_storage_key: undefined, media_mime_type: undefined };
+  return {
+    ...scrubbed,
+    media_storage_key: undefined,
+    media_mime_type: undefined,
+    media_clear,
+  };
+}
+
+async function resolveViewerPremium(viewerId: string): Promise<boolean> {
+  if (!isDiscreetMediaBlurEnabled()) return true;
+  return viewerSeesClearMedia(viewerId);
+}
+
+async function presentForViewer<T extends ConversationRow>(row: T, viewerId: string): Promise<T> {
+  const viewerIsPremium = await resolveViewerPremium(viewerId);
+  return presentMessage(row, viewerId, viewerIsPremium);
 }
 
 async function attachSenderName<T extends { sender_id: string }>(
@@ -110,8 +143,8 @@ async function attachSenderName<T extends { sender_id: string }>(
 }
 
 export const messageService = {
-  forViewer<T extends ConversationRow>(message: T, viewerId: string): T {
-    return presentMessage(message, viewerId);
+  async forViewer<T extends ConversationRow>(message: T, viewerId: string): Promise<T> {
+    return presentForViewer(message, viewerId);
   },
 
   async sendMessage(senderId: string, receiverId: string, message: string) {
@@ -127,7 +160,7 @@ export const messageService = {
       [id, senderId, receiverId, sanitized]
     );
 
-    return attachSenderName(presentMessage(result.rows[0] as ConversationRow, senderId));
+    return attachSenderName(await presentForViewer(result.rows[0] as ConversationRow, senderId));
   },
 
   /** Call log row when a video call rings out without being answered. */
@@ -165,7 +198,7 @@ export const messageService = {
       [id, senderId, receiverId, payload],
     );
 
-    return attachSenderName(presentMessage(result.rows[0] as ConversationRow, senderId));
+    return attachSenderName(await presentForViewer(result.rows[0] as ConversationRow, senderId));
   },
 
   async sendMediaMessage(
@@ -225,7 +258,7 @@ export const messageService = {
       ]
     );
 
-    return attachSenderName(presentMessage(result.rows[0] as ConversationRow, senderId));
+    return attachSenderName(await presentForViewer(result.rows[0] as ConversationRow, senderId));
   },
 
   /**
@@ -264,10 +297,10 @@ export const messageService = {
     if (result.rows.length === 0) {
       throw new Error('message_not_found_or_not_recipient');
     }
-    return presentMessage(result.rows[0] as ConversationRow, viewerId);
+    return presentForViewer(result.rows[0] as ConversationRow, viewerId);
   },
 
-  /** Sender withdraws media from the chat — scrubs for both parties. */
+  /** Sender withdraws media or location from the chat — scrubs for both parties. */
   async withdrawMedia(senderId: string, messageId: string) {
     const existing = await query(
       `SELECT sender_id, receiver_id, media_storage_key, media_type, withdrawn_at
@@ -281,21 +314,26 @@ export const messageService = {
     if (row.withdrawn_at) {
       throw new Error('already_withdrawn');
     }
-    if (!row.media_storage_key) {
+    if (!row.media_storage_key && row.media_type !== 'location') {
       throw new Error('not_media');
     }
 
-    try {
-      fs.unlinkSync(resolveMediaPath(mediaDir, row.media_storage_key as string));
-    } catch {
-      /* file may already be gone */
+    if (row.media_storage_key) {
+      try {
+        fs.unlinkSync(resolveMediaPath(mediaDir, row.media_storage_key as string));
+      } catch {
+        /* file may already be gone */
+      }
     }
 
-    const label = row.media_type === 'audio'
-      ? 'Voice note withdrawn'
-      : row.media_type === 'video'
-        ? 'Video withdrawn'
-        : 'Photo withdrawn';
+    const label =
+      row.media_type === 'audio'
+        ? 'Voice note withdrawn'
+        : row.media_type === 'video'
+          ? 'Video withdrawn'
+          : row.media_type === 'location'
+            ? 'Location withdrawn'
+            : 'Photo withdrawn';
     const result = await query(
       `UPDATE messages SET
          media_url = NULL,
@@ -309,30 +347,72 @@ export const messageService = {
     );
 
     const updated = result.rows[0] as ConversationRow;
-    const forSender = presentMessage(updated, senderId);
-    const forReceiver = presentMessage(updated, row.receiver_id as string);
+    const forSender = await presentForViewer(updated, senderId);
+    const forReceiver = await presentForViewer(updated, row.receiver_id as string);
     return { forSender, forReceiver, receiverId: row.receiver_id as string };
   },
 
-  async getConversation(userId: string, otherId: string, limit: number = 50) {
+  /** Convenience alias for withdrawing a location share message. */
+  async withdrawLocation(senderId: string, messageId: string) {
+    return this.withdrawMedia(senderId, messageId);
+  },
+
+  async getConversation(
+    userId: string,
+    otherId: string,
+    limit: number = 50,
+    before?: string,
+  ) {
     await accessControl.assertInteraction(userId, otherId, { requireMatch: true });
+
+    const values: unknown[] = [userId, otherId];
+    let cursorClause = '';
+    if (before) {
+      const cursorResult = await query(
+        `SELECT created_at FROM messages WHERE id = $1
+           AND ((sender_id = $2 AND receiver_id = $3) OR (sender_id = $3 AND receiver_id = $2))`,
+        [before, userId, otherId],
+      );
+      if (cursorResult.rows.length > 0) {
+        values.push(cursorResult.rows[0].created_at);
+        cursorClause = `AND created_at < $${values.length}`;
+      }
+    }
+    values.push(limit);
+    const limitParam = `$${values.length}`;
+
     const result = await query(
       `SELECT ${MESSAGE_COLUMNS}
        FROM messages
-       WHERE (sender_id = $1 AND receiver_id = $2)
-          OR (sender_id = $2 AND receiver_id = $1)
+       WHERE ((sender_id = $1 AND receiver_id = $2)
+          OR (sender_id = $2 AND receiver_id = $1))
+         ${cursorClause}
        ORDER BY created_at DESC
-       LIMIT $3`,
-      [userId, otherId, limit]
+       LIMIT ${limitParam}`,
+      values,
     );
 
-    await query(
-      `UPDATE messages SET read = true
-       WHERE receiver_id = $1 AND sender_id = $2 AND read = false`,
-      [userId, otherId],
-    );
+    // Only mark read on the live (newest) page — older history fetches must not
+    // clear unread as a side effect of scroll-back.
+    if (!before) {
+      await query(
+        `UPDATE messages SET read = true
+         WHERE receiver_id = $1 AND sender_id = $2 AND read = false`,
+        [userId, otherId],
+      );
+      // Ticket 4: Opened thread / read messages clear related notifs (message, photo, voice, missed_call)
+      try {
+        const { notificationService } = await import('./notification.service');
+        await notificationService.clearForActor(userId, otherId, ['message', 'photo', 'voice', 'missed_call']);
+      } catch (err) {
+        console.error('[clearForActor]', err);
+      }
+    }
 
-    return result.rows.reverse().map((r) => presentMessage(r as ConversationRow, userId));
+    const viewerIsPremium = await resolveViewerPremium(userId);
+    return result.rows
+      .reverse()
+      .map((r) => presentMessage(r as ConversationRow, userId, viewerIsPremium));
   },
 
   async getUnreadSummary(userId: string) {
@@ -371,7 +451,18 @@ export const messageService = {
            CASE WHEN m.sender_id = $1 THEN m.receiver_id ELSE m.sender_id END AS other_user_id,
            u.name AS other_user_name,
            m.created_at AS last_message_time,
-           CASE WHEN m.message = $2 THEN $3 ELSE m.message END AS last_message,
+           CASE
+             WHEN m.message = $2 THEN $3
+             WHEN m.withdrawn_at IS NOT NULL THEN
+               CASE
+                 WHEN m.media_type = 'audio' THEN 'Voice note withdrawn'
+                 WHEN m.media_type = 'video' THEN 'Video withdrawn'
+                 WHEN m.media_type = 'location' THEN 'Location withdrawn'
+                 ELSE 'Photo withdrawn'
+               END
+             WHEN m.media_type = 'location' THEN '📍 Shared location'
+             ELSE m.message
+           END AS last_message,
            u.photo_url,
            COALESCE(p.online, false) AS online,
            (
@@ -402,28 +493,54 @@ export const messageService = {
   },
 
   async getMedia(viewerId: string, messageId: string) {
+    // Signed access token already binds viewerId. Re-running assertInteraction
+    // (multi-join match/block/verify) on every byte made iPhone chat video open
+    // ~12s — membership + block check here is enough for media bytes.
     const result = await query(
-      `SELECT id, sender_id, receiver_id, media_storage_key, media_mime_type,
+      `SELECT id, sender_id, receiver_id, media_type, media_storage_key, media_mime_type,
               is_disappearing, max_views, view_count, withdrawn_at
-       FROM messages
-       WHERE id = $1 AND media_storage_key IS NOT NULL`,
-      [messageId],
+       FROM messages m
+       WHERE m.id = $1
+         AND m.media_storage_key IS NOT NULL
+         AND (m.sender_id = $2 OR m.receiver_id = $2)
+         AND NOT EXISTS (
+           SELECT 1 FROM blocks b
+           WHERE (b.blocker_id = m.sender_id AND b.blocked_id = m.receiver_id)
+              OR (b.blocker_id = m.receiver_id AND b.blocked_id = m.sender_id)
+         )`,
+      [messageId, viewerId],
     );
     const row = result.rows[0];
-    if (!row || (row.sender_id !== viewerId && row.receiver_id !== viewerId)) {
+    if (!row) {
       throw new SecurityError('media_unavailable', 404, 'Media unavailable');
     }
     if (row.withdrawn_at) {
       throw new SecurityError('media_withdrawn', 410, 'Media withdrawn');
     }
-    const otherId = row.sender_id === viewerId ? row.receiver_id : row.sender_id;
-    await accessControl.assertInteraction(viewerId, otherId, { requireMatch: true });
     if (isExhaustedMedia(row.is_disappearing, row.max_views, row.view_count)) {
       throw new SecurityError('media_expired', 410, 'Media expired');
     }
     return {
       storageKey: row.media_storage_key as string,
       mimeType: row.media_mime_type as string,
+      senderId: row.sender_id as string,
+      mediaType: (row.media_type as string | null) ?? null,
+      isDisappearing: Boolean(row.is_disappearing),
     };
+  },
+
+  /** Server-side clear/blur decision for a media delivery (verified Premium when flag on). */
+  async viewerMediaClear(
+    viewerId: string,
+    ownerOrSenderId: string,
+    mediaType: string | null,
+  ): Promise<boolean> {
+    const viewerIsPremium = await resolveViewerPremium(viewerId);
+    return computeMediaClear({
+      enabled: isDiscreetMediaBlurEnabled(),
+      viewerIsPremium,
+      isOwnMedia: viewerId === ownerOrSenderId,
+      mediaType,
+    });
   },
 };

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCallStore } from '../hooks/store';
+import { FadedBrandFace } from './FadedBrandFace';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useSocket } from '../hooks/useSocket';
 import { createCallTone, type CallToneKind } from '../lib/callTones';
@@ -90,6 +91,8 @@ export function VideoCallModal() {
 
   const [remoteAudioBlocked, setRemoteAudioBlocked] = useState(false);
   const [remoteFramesReady, setRemoteFramesReady] = useState(false);
+  /** Probe only — 'generic' until Legal/Brand drop cleared Trim; never claim Trim in UI copy. */
+  const [incomingRingSource, setIncomingRingSource] = useState<'generic' | 'asset'>('generic');
   const [pip, setPip] = useState<PipState>(() => defaultPipPosition(PIP_DEFAULT.w, PIP_DEFAULT.h));
   const dragRef = useRef<{
     mode: 'move' | 'resize';
@@ -213,7 +216,10 @@ export function VideoCallModal() {
   useEffect(() => {
     if (!desiredTone) return;
     const player = createCallTone(desiredTone);
-    void player.start();
+    void player.start().then(() => {
+      const src = player.getSource();
+      if (src === 'asset' || src === 'generic') setIncomingRingSource(src);
+    });
     return () => player.stop();
   }, [desiredTone]);
 
@@ -335,13 +341,6 @@ export function VideoCallModal() {
     }
   };
 
-  const initials = (name: string) =>
-    name
-      .split(' ')
-      .map((w) => w[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
 
   const controlBtn = (
     active: boolean,
@@ -362,11 +361,14 @@ export function VideoCallModal() {
 
   if (callSetupError) {
     const offline = /offline/i.test(callSetupError);
+    const noAnswer = /pick up|didn’t pick|didn't pick/i.test(callSetupError);
     const insecure = /HTTPS|secure|camera and microphone/i.test(callSetupError);
-    const hint = offline
+    const hint = noAnswer
+      ? 'Their phone should have rung. If it didn’t, they need MenRush installed and notifications turned on.'
+      : offline
       ? 'Ask them to open menrush.com, stay on the chat screen, then try again. A push alone cannot answer the call.'
       : insecure
-        ? 'Open MenRush from its secure HTTPS address, then allow camera and microphone access.'
+        ? 'Please allow camera and microphone access in your browser or operating system settings, and ensure the site is open directly (not inside a sandboxed iframe).'
         : 'Check your connection and try again. Both of you need the app open.';
     return (
       <div
@@ -406,7 +408,13 @@ export function VideoCallModal() {
         className="fixed inset-0 z-[200] flex items-center justify-center px-6"
         style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(16px)' }}
       >
-        <span data-testid="call-tone" data-tone="incoming" className="sr-only" aria-hidden="true" />
+        <span
+          data-testid="call-tone"
+          data-tone="incoming"
+          data-source={incomingRingSource}
+          className="sr-only"
+          aria-hidden="true"
+        />
         <div
           className="flex w-full max-w-xs animate-scale-up flex-col items-center gap-6 rounded-3xl p-8"
           style={{
@@ -424,13 +432,10 @@ export function VideoCallModal() {
               }}
             />
             <div
-              className="relative z-10 flex h-20 w-20 items-center justify-center rounded-full text-2xl font-bold"
-              style={{
-                background: 'linear-gradient(135deg, #C4832A, #A45E18)',
-                color: '#FFF5E6',
-              }}
+              className="relative z-10 h-20 w-20 overflow-hidden rounded-full"
+              data-testid="call-peer-brand-face"
             >
-              {peerName ? initials(peerName) : '?'}
+              <FadedBrandFace variant="profile" size={80} label={peerName ?? 'MenRush'} />
             </div>
           </div>
           <div className="space-y-1 text-center">
@@ -492,13 +497,10 @@ export function VideoCallModal() {
         {(!localStream || isCameraOff) && (
           <div className="absolute inset-0 flex items-center justify-center" style={{ background: '#0D0A06' }}>
             <div
-              className="flex h-24 w-24 items-center justify-center rounded-full text-3xl font-bold"
-              style={{
-                background: 'linear-gradient(135deg, #C4832A, #A45E18)',
-                color: '#FFF5E6',
-              }}
+              className="h-24 w-24 overflow-hidden rounded-full"
+              data-testid="call-peer-brand-face"
             >
-              {peerName ? initials(peerName) : '?'}
+              <FadedBrandFace variant="profile" size={96} label={peerName ?? 'MenRush'} />
             </div>
           </div>
         )}
@@ -562,13 +564,10 @@ export function VideoCallModal() {
             data-testid="remote-waiting"
           >
             <div
-              className="flex h-24 w-24 items-center justify-center rounded-full text-3xl font-bold"
-              style={{
-                background: 'linear-gradient(135deg, #C4832A, #A45E18)',
-                color: '#FFF5E6',
-              }}
+              className="h-24 w-24 overflow-hidden rounded-full"
+              data-testid="call-peer-brand-face"
             >
-              {peerName ? initials(peerName) : '?'}
+              <FadedBrandFace variant="profile" size={96} label={peerName ?? 'MenRush'} />
             </div>
             <p className="text-center text-sm font-semibold" style={{ color: '#F0E0C0' }}>
               {!remoteReady

@@ -2,9 +2,10 @@
  * /api/campaigns — promotional campaign endpoints
  *
  * POST /api/campaigns/:campaignId/signup
- *   Body: { email: string }
+ *   Body: { email: string, adult_confirmed: true }
  *   Issues an email-locked promo code and sends it to the user.
  *   Idempotent: repeated calls for the same email re-send the existing code.
+ *   Requires adult_confirmed === true (18+ attestation on the claim form).
  *
  * POST /api/campaigns/promo/validate
  *   Body: { code: string, email: string }
@@ -22,8 +23,13 @@
 
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { promoService } from '../services/promo.service';
+import { personalPrideExpiredMessage, promoService } from '../services/promo.service';
+import {
+  PRIDE_WAITLIST_CAMPAIGN_ID,
+  prideInviteService,
+} from '../services/prideInvite.service';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 
 const router = Router();
 
@@ -31,29 +37,24 @@ const router = Router();
 // Rate limits
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Generous for signups — someone may refresh the form — but not brute-forceable */
+/**
+ * Waitlist signups. Per IP, and web users share a Vercel egress IP, so this
+ * is sized for many people behind one address (was 5).
+ */
 const signupLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
-  max: 5,
-  keyGenerator: (req) => {
-    const forwarded = req.headers['x-forwarded-for'];
-    const ip = Array.isArray(forwarded) ? forwarded[0] : (forwarded ?? req.ip ?? '');
-    return ip;
-  },
+  max: 30,
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please wait a few minutes and try again.' },
 });
 
-/** Tight limit for validation — prevent code enumeration */
+/** Promo code checks. Still well below enumeration speed; was 20 per IP. */
 const validateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
-  keyGenerator: (req) => {
-    const forwarded = req.headers['x-forwarded-for'];
-    const ip = Array.isArray(forwarded) ? forwarded[0] : (forwarded ?? req.ip ?? '');
-    return ip;
-  },
+  max: 60,
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests.' },
@@ -95,6 +96,10 @@ function requireAdminToken(req: Request, res: Response): boolean {
 
 const SignupSchema = z.object({
   email: z.string().email('Please enter a valid email address.').toLowerCase().trim(),
+  /** Required attestation for campaign claim forms (Brighton Pride and future). */
+  adult_confirmed: z.literal(true, {
+    errorMap: () => ({ message: 'You must confirm you are 18 or over.' }),
+  }),
 });
 
 const ValidateSchema = z.object({
@@ -114,7 +119,9 @@ const RedeemSchema = z.object({
 
 /**
  * POST /api/campaigns/:campaignId/signup
- * Public — rate limited. Issues an email-locked promo code.
+ * Public — rate limited.
+ * - pride26_waitlist (21–31 Aug UK): Pride-flagged MENRUSH invite (beta + booked Premium)
+ * - brightonpride26: closed
  */
 router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Response) => {
   const { campaignId } = req.params;
@@ -128,6 +135,19 @@ router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Resp
   const { email } = parsed.data;
 
   try {
+    if (campaignId === PRIDE_WAITLIST_CAMPAIGN_ID) {
+      const result = await prideInviteService.issueFromPridePage(email);
+      res.json({
+        ok: true,
+        message:
+          result.outcome === 'existing'
+            ? 'Check your inbox. We re-sent your Pride code. Enter it at register on the same email.'
+            : 'Check your inbox. Your Pride code is on its way. Enter it at register on the same email.',
+      });
+      console.log(`[campaigns] pride invite ${result.outcome} for ${email}`);
+      return;
+    }
+
     const result = await promoService.issueCode(email, campaignId);
     // Don't reveal whether the email was new or existing — prevents enumeration
     res.json({
@@ -136,8 +156,40 @@ router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Resp
     });
     console.log(`[campaigns] ${result.outcome} code for ${email} on ${campaignId}`);
   } catch (err: any) {
-    if (err.message?.startsWith('Unknown campaign')) {
+    if (err.message?.startsWith('Unknown campaign') || err.message === 'use_pride_invite') {
       res.status(404).json({ error: 'Campaign not found.' });
+      return;
+    }
+    if (err.message === 'campaign_closed') {
+      res.status(410).json({
+        error: 'This claim form is closed. Use the Pride offer at /pride.',
+        code: 'campaign_closed',
+        redirect: '/pride',
+      });
+      return;
+    }
+    if (err.message === 'issue_window_closed') {
+      res.status(410).json({
+        error:
+          'The Pride claim window closed after 31 August 2026. If you already claimed, use the same email on /pride to resend your code.',
+        code: 'issue_window_closed',
+      });
+      return;
+    }
+    if (err.message === 'other_pride_path') {
+      res.status(409).json({
+        error:
+          'This email already has a Pride grant. Use your existing code at register. One grant only, no stacking.',
+        code: 'other_pride_path',
+      });
+      return;
+    }
+    if (err.message === 'email_send_failed') {
+      res.status(502).json({
+        error:
+          'We saved your request but could not send the invite email just now. Please try again in a few minutes, or contact Support if it stays late.',
+        code: 'email_send_failed',
+      });
       return;
     }
     console.error(`[campaigns] signup error for ${email}:`, err);
@@ -172,7 +224,7 @@ router.post('/promo/validate', validateLimiter, async (req: Request, res: Respon
         result.reason === 'already_redeemed'
           ? 'This code has already been used.'
           : result.reason === 'expired'
-            ? 'This code has expired.'
+            ? personalPrideExpiredMessage(result.expiresAt)
             : 'This code is not valid for this email address.';
       res.json({ valid: false, message: userMessage });
     }

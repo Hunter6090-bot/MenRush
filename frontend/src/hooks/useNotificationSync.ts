@@ -20,9 +20,11 @@ export function useNotificationSync() {
   const setFromServer = useNotificationStore((s) => s.setFromServer);
   const setLoadError = useNotificationStore((s) => s.setLoadError);
 
+  const resetNotifications = useNotificationStore((s) => s.resetNotifications);
+
   const sync = useCallback(async (): Promise<'ok' | 'auth' | 'error'> => {
     if (!token || !localStorage.getItem('token')) {
-      setFromServer([], 0);
+      resetNotifications();
       return 'ok';
     }
     try {
@@ -37,7 +39,7 @@ export function useNotificationSync() {
       setLoadError('Could not load alerts. Pull down or reopen this page to retry.');
       return 'error';
     }
-  }, [token, setFromServer, setLoadError]);
+  }, [token, setFromServer, setLoadError, resetNotifications]);
 
   useEffect(() => {
     void sync();

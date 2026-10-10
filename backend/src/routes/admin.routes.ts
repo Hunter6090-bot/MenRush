@@ -4,6 +4,8 @@ import { getEmailStatus, sendEmail } from '../services/mailer.service';
 import { verificationService } from '../services/verification.service';
 import { authenticityService } from '../services/verification/authenticity.service';
 import { inviteCodeService } from '../services/invite-code.service';
+import { venueClaimService } from '../services/venue-claim.service';
+import { FreezeVenueClaimSchema } from '../types/validation';
 import {
   buildTransactionalEmail,
   transactionalParagraph,
@@ -155,18 +157,9 @@ const GenerateInviteCodesSchema = z.object({
   note: z.string().max(200).optional(),
 });
 
-router.post('/verification/:id/approve', async (req: Request, res: Response) => {
+router.post('/verification/:id/approve', (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
-  try {
-    await verificationService.approveSubmission(req.params.id);
-    return res.json({ ok: true });
-  } catch (err: any) {
-    if (err?.code === 'submission_not_found') {
-      return res.status(404).json({ error: 'submission_not_found' });
-    }
-    console.error('[admin] verification approve error:', err);
-    return res.status(500).json({ error: 'verification_approve_failed' });
-  }
+  return res.status(409).json({ error: 'veriff_approval_required' });
 });
 
 router.post('/verification/:id/reject', async (req: Request, res: Response) => {
@@ -313,6 +306,30 @@ const VerifyUserBodySchema = z.object({
   verified: z.boolean().default(true),
 });
 
+router.get('/referrals', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { query } = await import('../db');
+    const limit = Math.min(parseInt(String(req.query.limit || '100'), 10) || 100, 500);
+    const result = await query(
+      `SELECT r.id, r.referrer_id, ru.name AS referrer_name, ru.referral_code,
+              r.referred_user_id, du.name AS referred_name,
+              r.status, r.payout_amount, r.payout_status, r.payment_amount,
+              r.created_at, r.verified_at, r.credited_at
+         FROM referrals r
+         JOIN users ru ON ru.id = r.referrer_id
+         JOIN users du ON du.id = r.referred_user_id
+        ORDER BY r.created_at DESC
+        LIMIT $1`,
+      [limit],
+    );
+    return res.json({ referrals: result.rows });
+  } catch (err) {
+    console.error('[admin] referrals list error:', err);
+    return res.status(500).json({ error: 'referrals_list_failed' });
+  }
+});
+
 router.post('/users/verify', async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const parsed = VerifyUserBodySchema.safeParse(req.body ?? {});
@@ -321,6 +338,7 @@ router.post('/users/verify', async (req: Request, res: Response) => {
     const { query } = await import('../db');
     const email = parsed.data.email.trim().toLowerCase();
     const verified = parsed.data.verified;
+    if (verified) return res.status(409).json({ error: 'veriff_approval_required' });
     const result = await query(
       `UPDATE users SET
          is_verified = $2,
@@ -334,6 +352,14 @@ router.post('/users/verify', async (req: Request, res: Response) => {
       [email, verified, verified ? 'verified' : 'unverified'],
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'user_not_found' });
+    if (verified) {
+      try {
+        const { referralService } = await import('../services/referral.service');
+        await referralService.onUserVerified(result.rows[0].id);
+      } catch (err) {
+        console.error('[admin] referral onUserVerified failed', err);
+      }
+    }
     return res.json({ ok: true, user: result.rows[0] });
   } catch (err) {
     console.error('[admin] users/verify error:', err);
@@ -379,13 +405,11 @@ router.post('/users/test-pair', async (req: Request, res: Response) => {
            age_assurance_status, age_assured_at,
            bio, looking_for, interests, photo_url
          ) VALUES (
-           $1,$2,$3,$4,28,true,'verified',NOW(),'verified',NOW(),'confirmed',NOW(),
+           $1,$2,$3,$4,28,false,'unverified',NULL,'unverified',NULL,'self_attested',NULL,
            $5,'video call testing',ARRAY['chat'],$6
          )
          ON CONFLICT (email) DO UPDATE SET
            password_hash = EXCLUDED.password_hash,
-           is_verified = true,
-           verification_status = 'verified',
            name = EXCLUDED.name,
            photo_url = EXCLUDED.photo_url`,
         [id, a.email, hash, a.name, 'Ops test pair for video calls.', a.photo],
@@ -443,6 +467,88 @@ router.delete('/users/test/:email', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[admin] delete test user error:', err);
     return res.status(500).json({ error: 'delete_test_user_failed' });
+  }
+});
+
+/**
+ * GET /api/admin/venue-claims/pending
+ * Ops review queue: list pending venue claims.
+ */
+router.get('/venue-claims/pending', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const claims = await venueClaimService.listPendingClaims();
+    return res.json({ claims });
+  } catch (err: unknown) {
+    console.error('[admin] venue-claims pending error:', err);
+    return res.status(500).json({ error: 'venue_claims_list_failed' });
+  }
+});
+
+/**
+ * GET /api/admin/venue-claims
+ * Ops: list all venue claims (with optional status query param).
+ */
+router.get('/venue-claims', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const claims = await venueClaimService.listAllClaims(status);
+    return res.json({ claims });
+  } catch (err: unknown) {
+    console.error('[admin] venue-claims error:', err);
+    return res.status(500).json({ error: 'venue_claims_list_failed' });
+  }
+});
+
+/**
+ * POST /api/admin/venue-claims/:id/approve
+ * Ops human approve gate: grants calendar management rights.
+ */
+router.post('/venue-claims/:id/approve', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const notes = typeof req.body?.notes === 'string' ? req.body.notes : undefined;
+    const claim = await venueClaimService.approveClaim(req.params.id, 'ops-admin', notes);
+    return res.json({ ok: true, claim });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Claim approval failed';
+    return res.status(400).json({ error: message });
+  }
+});
+
+/**
+ * POST /api/admin/venue-claims/:id/reject
+ * Ops reject claim.
+ */
+router.post('/venue-claims/:id/reject', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const notes = typeof req.body?.notes === 'string' ? req.body.notes : undefined;
+    const claim = await venueClaimService.rejectClaim(req.params.id, 'ops-admin', notes);
+    return res.json({ ok: true, claim });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Claim rejection failed';
+    return res.status(400).json({ error: message });
+  }
+});
+
+/**
+ * POST /api/admin/venue-claims/:id/freeze
+ * Ops freeze claim / false-claim ban path.
+ */
+router.post('/venue-claims/:id/freeze', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const parsed = FreezeVenueClaimSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.errors[0]?.message || 'Invalid freeze input' });
+  }
+  try {
+    const claim = await venueClaimService.freezeClaim(req.params.id, 'ops-admin', parsed.data);
+    return res.json({ ok: true, claim });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Claim freeze failed';
+    return res.status(400).json({ error: message });
   }
 });
 

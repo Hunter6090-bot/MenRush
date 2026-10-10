@@ -9,6 +9,11 @@ import {
   getIceServers,
   waitForSocket,
 } from '../lib/webrtcCall';
+import {
+  closeRoomPeerConnection,
+  stopMediaStreamTracks,
+  teardownRoomLocalMedia,
+} from '../lib/roomMediaTeardown';
 
 export interface RoomParticipant {
   user_id: string;
@@ -75,16 +80,22 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
   const [participants, setParticipants] = useState<RoomParticipant[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
-  const [cameraOn, setCameraOn] = useState(true);
+  // Idle until local media is actually live — copper "video on" glyph must not linger after leave.
+  const [cameraOn, setCameraOn] = useState(false);
   const [micMuted, setMicMuted] = useState(false);
   const [pinnedId, setPinnedId] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState('');
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [currentCameraId, setCurrentCameraId] = useState<string>('');
 
+  const selectedCameraIdRef = useRef<string>('');
   const streamRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, PeerSlot>>(new Map());
   const earlyIceRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const pendingOffersRef = useRef<Map<string, RTCSessionDescriptionInit>>(new Map());
   const iceServersRef = useRef<RTCIceServer[] | null>(null);
+  /** Bumped on every hangup so in-flight getUserMedia cannot orphan a live stream. */
+  const mediaSessionRef = useRef(0);
   const roomIdRef = useRef(roomId);
   const userIdRef = useRef(userId);
   const socketRef = useRef<Socket | null>(socket);
@@ -114,27 +125,15 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     (peerId: string) => {
       const slot = peersRef.current.get(peerId);
       if (slot) {
-        try {
-          slot.pc.ontrack = null;
-          slot.pc.onicecandidate = null;
-          slot.pc.onnegotiationneeded = null;
-          slot.pc.close();
-        } catch {
-          /* ignore */
-        }
+        closeRoomPeerConnection(slot.pc);
         peersRef.current.delete(peerId);
       }
       earlyIceRef.current.delete(peerId);
+      pendingOffersRef.current.delete(peerId);
       clearRemoteStream(peerId);
     },
     [clearRemoteStream],
   );
-
-  const closeAllPeers = useCallback(() => {
-    for (const peerId of Array.from(peersRef.current.keys())) {
-      closePeer(peerId);
-    }
-  }, [closePeer]);
 
   const flushPendingIce = useCallback(async (peerId: string, pc: RTCPeerConnection) => {
     if (!pc.remoteDescription) return;
@@ -212,10 +211,16 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
         };
 
         pc.onconnectionstatechange = () => {
-          if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-            // Keep slot for a soft reconnect attempt via re-offer from the impolite side.
-            if (pc.connectionState === 'closed') {
-              closePeer(peerId);
+          const state = pc.connectionState;
+          if (state === 'closed') {
+            closePeer(peerId);
+            return;
+          }
+          if (state === 'failed') {
+            // Soft reconnect: impolite peer re-offers after tearing down the dead PC.
+            closePeer(peerId);
+            if (streamRef.current && shouldCreateOffer(myId, peerId)) {
+              void ensurePeer(peerId, { initiate: true });
             }
           }
         };
@@ -253,19 +258,25 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
   const upsertParticipant = useCallback((entry: RoomParticipant) => {
     setParticipants((prev) => {
       const idx = prev.findIndex((p) => p.user_id === entry.user_id);
-      if (idx === -1) return [...prev, { ...entry, isLive: true }];
+      if (idx === -1) {
+        return [...prev, { ...entry, isLive: entry.isLive ?? true }];
+      }
       const next = [...prev];
-      next[idx] = { ...next[idx], ...entry, isLive: true };
+      next[idx] = {
+        ...next[idx],
+        ...entry,
+        isLive: entry.isLive ?? true,
+      };
       return next;
     });
   }, []);
 
-  const markOffline = useCallback(
-    (offlineUserId: string) => {
-      setParticipants((prev) =>
-        prev.map((p) => (p.user_id === offlineUserId ? { ...p, isLive: false } : p)),
-      );
-      closePeer(offlineUserId);
+  /** Leave / disconnect: drop the tile entirely (not AWAY). AWAY is camera-off only. */
+  const removeParticipant = useCallback(
+    (goneUserId: string) => {
+      setParticipants((prev) => prev.filter((p) => p.user_id !== goneUserId));
+      setPinnedId((prev) => (prev === goneUserId ? null : prev));
+      closePeer(goneUserId);
     },
     [closePeer],
   );
@@ -294,15 +305,60 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
       setCameraOn(false);
       return;
     }
+
+    const session = ++mediaSessionRef.current;
+
     try {
       // iOS Safari: keep getUserMedia early in this call stack (no await before it).
-      const stream = await acquireLocalMedia();
-      streamRef.current?.getTracks().forEach((track) => track.stop());
+      const stream = await acquireLocalMedia('user', selectedCameraIdRef.current || undefined);
+
+      // Hangup / leave / unmount won the race — never keep an orphan stream.
+      if (session !== mediaSessionRef.current) {
+        stopMediaStreamTracks(stream);
+        return;
+      }
+
+      stopMediaStreamTracks(streamRef.current);
       streamRef.current = stream;
       setLocalStream(stream);
       setCameraOn(true);
       setMicMuted(false);
+
+      const activeVideoTrack = stream.getVideoTracks()[0];
+      if (activeVideoTrack) {
+        const settings = activeVideoTrack.getSettings?.();
+        if (settings?.deviceId) {
+          selectedCameraIdRef.current = settings.deviceId;
+          setCurrentCameraId(settings.deviceId);
+        }
+      }
+      if (typeof navigator.mediaDevices?.enumerateDevices === 'function') {
+        navigator.mediaDevices
+          .enumerateDevices()
+          .then((devices) => {
+            const cams = devices.filter((d) => d.kind === 'videoinput');
+            setVideoDevices(cams);
+          })
+          .catch(() => {});
+      }
+
+      const myId = userIdRef.current;
+      if (myId) {
+        setParticipants((prev) =>
+          prev.map((p) => (p.user_id === myId ? { ...p, isLive: true } : p)),
+        );
+      }
       await replaceLocalTracksOnPeers(stream);
+
+      if (session !== mediaSessionRef.current) {
+        stopMediaStreamTracks(stream);
+        if (streamRef.current === stream) {
+          streamRef.current = null;
+          setLocalStream(null);
+          setCameraOn(false);
+        }
+        return;
+      }
 
       const activeSocket = socketRef.current;
       if (activeSocket) {
@@ -313,10 +369,21 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
         }
       }
 
+      if (session !== mediaSessionRef.current) {
+        stopMediaStreamTracks(stream);
+        if (streamRef.current === stream) {
+          streamRef.current = null;
+          setLocalStream(null);
+          setCameraOn(false);
+        }
+        return;
+      }
+
       // Answer offers that arrived before getUserMedia finished.
       const pending = Array.from(pendingOffersRef.current.entries());
       pendingOffersRef.current.clear();
       for (const [peerId, offer] of pending) {
+        if (session !== mediaSessionRef.current) break;
         try {
           await ensurePeer(peerId, { initiate: false });
           const slot = peersRef.current.get(peerId);
@@ -336,8 +403,19 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
         }
       }
 
+      if (session !== mediaSessionRef.current) {
+        stopMediaStreamTracks(stream);
+        if (streamRef.current === stream) {
+          streamRef.current = null;
+          setLocalStream(null);
+          setCameraOn(false);
+        }
+        return;
+      }
+
       emitMediaState(false, true);
     } catch (error: unknown) {
+      if (session !== mediaSessionRef.current) return;
       setCameraOn(false);
       const name = (error as { name?: string })?.name;
       setMediaError(
@@ -348,25 +426,36 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     }
   }, [enabled, roomId, replaceLocalTracksOnPeers, emitMediaState, ensurePeer, flushPendingIce]);
 
-  // Once local media is live, mesh to every other live participant.
+  // Once local media is live, mesh to every other present participant (camera on or off).
   useEffect(() => {
     if (!localStream || !userId) return;
     for (const p of participants) {
-      if (p.isLive && p.user_id !== userId) {
+      if (p.user_id !== userId) {
         void ensurePeer(p.user_id);
       }
     }
   }, [localStream, participants, userId, ensurePeer]);
 
   const stopCamera = useCallback(() => {
-    closeAllPeers();
-    streamRef.current?.getTracks().forEach((track) => track.stop());
+    // Invalidate any in-flight acquireLocalMedia / join.
+    mediaSessionRef.current += 1;
+
+    const pcs = Array.from(peersRef.current.values()).map((slot) => slot.pc);
+    teardownRoomLocalMedia({
+      localStream: streamRef.current,
+      peerConnections: pcs,
+    });
+    peersRef.current.clear();
+    earlyIceRef.current.clear();
+    pendingOffersRef.current.clear();
+
     streamRef.current = null;
     setLocalStream(null);
     setRemoteStreams({});
     setCameraOn(false);
+    setMicMuted(false);
     emitMediaState(true, false);
-  }, [closeAllPeers, emitMediaState]);
+  }, [emitMediaState]);
 
   const toggleCamera = useCallback(() => {
     if (!localStream) {
@@ -376,9 +465,16 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     const track = localStream.getVideoTracks()[0];
     if (!track) return;
     track.enabled = !track.enabled;
-    setCameraOn(track.enabled);
-    emitMediaState(micMuted, track.enabled);
-  }, [localStream, startCamera, micMuted, emitMediaState]);
+    const on = track.enabled;
+    setCameraOn(on);
+    // AWAY = still in room with camera off (not left).
+    if (userId) {
+      setParticipants((prev) =>
+        prev.map((p) => (p.user_id === userId ? { ...p, isLive: on } : p)),
+      );
+    }
+    emitMediaState(micMuted, on);
+  }, [localStream, startCamera, micMuted, emitMediaState, userId]);
 
   const toggleMic = useCallback(() => {
     if (!localStream) return;
@@ -390,17 +486,102 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     emitMediaState(muted, cameraOn);
   }, [localStream, cameraOn, emitMediaState]);
 
+  const switchCameraDevice = useCallback(
+    async (deviceId: string) => {
+      if (!deviceId) return;
+      selectedCameraIdRef.current = deviceId;
+      setCurrentCameraId(deviceId);
+
+      const curStream = streamRef.current;
+      if (!curStream) return;
+
+      try {
+        const oldTrack = curStream.getVideoTracks()[0];
+        const gumStream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: deviceId } },
+          audio: false,
+        });
+        const newTrack = gumStream.getVideoTracks()[0];
+        if (!newTrack) return;
+
+        if (oldTrack) {
+          try {
+            curStream.removeTrack?.(oldTrack);
+          } catch {
+            /* ignore */
+          }
+          oldTrack.stop();
+        }
+        try {
+          curStream.addTrack?.(newTrack);
+        } catch {
+          /* ignore */
+        }
+        newTrack.enabled = cameraOn;
+
+        await replaceLocalTracksOnPeers(curStream);
+        setLocalStream(new MediaStream(curStream.getTracks()));
+      } catch (err) {
+        console.error('[room-video] switch camera failed', err);
+      }
+    },
+    [cameraOn, replaceLocalTracksOnPeers],
+  );
+
   useEffect(() => {
-    if (!enabled || !roomId) return;
+    if (typeof navigator.mediaDevices?.enumerateDevices !== 'function') return;
+    const updateDevices = () => {
+      navigator.mediaDevices
+        .enumerateDevices()
+        .then((devices) => {
+          const cams = devices.filter((d) => d.kind === 'videoinput');
+          setVideoDevices(cams);
+        })
+        .catch(() => {});
+    };
+    updateDevices();
+    navigator.mediaDevices.addEventListener?.('devicechange', updateDevices);
+    return () => {
+      navigator.mediaDevices.removeEventListener?.('devicechange', updateDevices);
+    };
+  }, []);
+
+  // Join / leave lifecycle: start when enabled, hard-stop on disable/unmount.
+  useEffect(() => {
+    if (!enabled || !roomId) {
+      stopCamera();
+      return;
+    }
     void startCamera();
     return () => {
-      closeAllPeers();
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
+      stopCamera();
     };
-    // Intentionally only re-run on room/enabled — not on startCamera identity.
+    // Intentionally only re-run on room/enabled — stopCamera/startCamera identities churn.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, roomId]);
+
+  // pagehide / freeze / background: release camera so iOS indicator goes off immediately.
+  useEffect(() => {
+    if (!enabled || !roomId) return;
+
+    const hardStop = () => {
+      stopCamera();
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') hardStop();
+    };
+
+    window.addEventListener('pagehide', hardStop);
+    window.addEventListener('freeze', hardStop);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      window.removeEventListener('pagehide', hardStop);
+      window.removeEventListener('freeze', hardStop);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [enabled, roomId, stopCamera]);
 
   useEffect(() => {
     if (!userId) return;
@@ -409,48 +590,43 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     );
   }, [userId]);
 
-  const loadMembers = useCallback(
-    (members: Array<{ id: string; name: string; photo_url?: string }>) => {
-      setParticipants((prev) => {
-        const liveMap = new Map(prev.map((p) => [p.user_id, p]));
-        return members.map((m) => {
-          const existing = liveMap.get(m.id);
-          return {
-            user_id: m.id,
-            name: m.name,
-            photo_url: m.photo_url,
-            isLive: existing?.isLive ?? false,
-            isMuted: existing?.isMuted ?? false,
-            isSelf: m.id === userId,
-          };
-        });
-      });
-    },
-    [userId],
-  );
-
+  /**
+   * Replace grid with socket-present people only.
+   * Do not seed from DB membership — that left AWAY tiles for everyone who ever joined.
+   * isLive = camera on (LIVE badge); camera-off while present = AWAY (still in room).
+   */
   const applyPresenceSync = useCallback(
     (list: Array<{ user_id: string; name: string; photo_url?: string | null }>) => {
+      const presentIds = new Set(list.map((e) => e.user_id));
+
       setParticipants((prev) => {
-        const byId = new Map(prev.map((p) => [p.user_id, p]));
-        list.forEach((entry) => {
-          byId.set(entry.user_id, {
-            ...(byId.get(entry.user_id) ?? {
-              user_id: entry.user_id,
-              name: entry.name,
-              photo_url: entry.photo_url,
-            }),
+        const prevById = new Map(prev.map((p) => [p.user_id, p]));
+        const next: RoomParticipant[] = [];
+        for (const entry of list) {
+          const existing = prevById.get(entry.user_id);
+          next.push({
             user_id: entry.user_id,
             name: entry.name,
-            photo_url: entry.photo_url,
-            isLive: true,
+            photo_url: entry.photo_url ?? existing?.photo_url,
+            // Keep camera-off AWAY if we already know; new joiners default live until media-state.
+            isLive: existing?.isLive ?? true,
+            isMuted: existing?.isMuted ?? false,
             isSelf: entry.user_id === userId,
           });
-        });
-        return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+        }
+        return next.sort((a, b) => a.name.localeCompare(b.name));
       });
 
-      // Mesh: open a PC toward every other live peer once we have local media.
+      // Drop mesh peers who are no longer in the room.
+      for (const peerId of Array.from(peersRef.current.keys())) {
+        if (!presentIds.has(peerId)) {
+          closePeer(peerId);
+        }
+      }
+
+      setPinnedId((cur) => (cur && !presentIds.has(cur) ? null : cur));
+
+      // Mesh: open a PC toward every other present peer once we have local media.
       if (streamRef.current && userId) {
         for (const entry of list) {
           if (entry.user_id !== userId) {
@@ -459,7 +635,7 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
         }
       }
     },
-    [userId, ensurePeer],
+    [userId, ensurePeer, closePeer],
   );
 
   // Socket: WebRTC mesh signaling + remote media state
@@ -591,11 +767,16 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
             ? {
                 ...p,
                 isMuted: typeof muted === 'boolean' ? muted : p.isMuted,
-                isLive: camera_on === false ? p.isLive : p.isLive,
+                // Camera off while still present → AWAY; leave removes the tile instead.
+                isLive: typeof camera_on === 'boolean' ? camera_on : p.isLive,
               }
             : p,
         ),
       );
+      // Peer just published media — mesh if we missed the presence-join offer race.
+      if (streamRef.current) {
+        void ensurePeer(user_id);
+      }
     };
 
     const onPeerJoined = (peerId: string) => {
@@ -643,8 +824,7 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     micMuted,
     mediaError,
     upsertParticipant,
-    markOffline,
-    loadMembers,
+    removeParticipant,
     applyPresenceSync,
     getStreamFor,
     toggleCamera,
@@ -652,5 +832,8 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     startCamera,
     stopCamera,
     photoUrl: (url?: string | null) => getPhotoUrl(url ?? undefined),
+    videoDevices,
+    currentCameraId,
+    switchCameraDevice,
   };
 }

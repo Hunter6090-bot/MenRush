@@ -6,7 +6,7 @@ import { useAuthStore, useLocationStore } from './store';
 
 const MIN_PUSH_MS = 20_000;
 const MIN_MOVE_METERS = 40;
-/** Keep last_seen fresh while the app is open so Nearby "Active now" stays honest (20m window). */
+/** Keep last_seen fresh while the app is open so Nearby "Active now" stays honest (1h window). */
 const HEARTBEAT_MS = 8 * 60 * 1000;
 /** Re-try when first fix fails (permission prompt, cold GPS). */
 const RETRY_MS = 12_000;
@@ -42,12 +42,15 @@ export function useLiveLocationPublisher() {
     deniedRef.current = false;
 
     const pushCoords = (latitude: number, longitude: number, force = false) => {
-      setLocation(latitude, longitude);
       const last = lastPushRef.current;
       const now = Date.now();
       const movedEnough =
         !last || distanceMeters(last.lat, last.lng, latitude, longitude) >= MIN_MOVE_METERS;
       const waitedEnough = !last || now - last.at >= MIN_PUSH_MS;
+      // Store itself gates sub-15m jitter; only publish when we intend a pin update.
+      if (force || !last || movedEnough) {
+        setLocation(latitude, longitude);
+      }
       if (!force && last && !movedEnough && !waitedEnough) return;
 
       lastPushRef.current = { lat: latitude, lng: longitude, at: now };

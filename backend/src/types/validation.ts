@@ -18,10 +18,9 @@ export const RELATIONSHIP_STATUSES = [
 ] as const;
 
 export const HOSTING_STATUSES = [
-  'Hosting',
-  'Travelling',
-  'Public only',
-  'Depends',
+  'Not hosting',
+  'Can host',
+  'Hosting now',
 ] as const;
 
 export const SEXUAL_HEALTH_STATUSES = [
@@ -39,6 +38,23 @@ export const RegisterSchema = z.object({
   /** Preferred source of truth for age — persisted and used to recompute age. */
   date_of_birth: isoDateOnly.optional(),
   invite_code: z.string().min(1).max(64).optional(),
+  /** Optional public promo (e.g. Pride QR). Validated at register. */
+  promo_code: z.string().min(1).max(64).optional(),
+  /** Optional friend referral — not an invite gate; fail closed if invalid. */
+  referral_code: z.string().min(1).max(32).optional(),
+  /**
+   * One-time token from Veriff adult-assurance (liveness / age-estimation ≥ 18).
+   * Required when Veriff adult assurance is configured for signup.
+   * Optional ID for Verified tick is recorded on the same session — not a second token.
+   */
+  adult_assurance_token: z.string().min(16).max(128).optional(),
+});
+
+export const AdultAssuranceFixtureSchema = z.object({
+  sessionId: z.string().uuid(),
+  /** underage | adult (liveness-only) | adult_with_id | declined | failed. missing_dob → failed. */
+  outcome: z.enum(['adult', 'adult_with_id', 'underage', 'declined', 'failed', 'missing_dob']),
+  yearsOld: z.number().int().min(0).max(120).optional(),
 });
 
 export const LoginSchema = z.object({
@@ -55,6 +71,14 @@ export const ForgotPasswordSchema = z.object({
 export const ResetPasswordSchema = z.object({
   token: z.string().min(1),
   password: z.string().min(8),
+});
+
+export const ConfirmEmailSchema = z.object({
+  token: z.string().min(1),
+});
+
+export const ResendConfirmEmailSchema = z.object({
+  email: normalizedEmail,
 });
 
 export const ChangePasswordSchema = z
@@ -90,6 +114,7 @@ export const ProfileSchema = z.object({
   looking_for: z.string().max(100).optional(),
   photo_url: z.string().optional(),
   cover_url: z.string().optional(),
+  map_photo_url: z.string().nullable().optional(),
   cover_position_x: z.number().min(0).max(100).optional(),
   cover_position_y: z.number().min(0).max(100).optional(),
   cover_zoom: z.number().min(1).max(3).optional(),
@@ -102,6 +127,10 @@ export const ProfileSchema = z.object({
   on_prep: z.boolean().nullable().optional(),
   last_tested_at: isoDateOnly.nullable().optional(),
   show_age: z.boolean().optional(),
+  show_height: z.boolean().optional(),
+  show_weight: z.boolean().optional(),
+  show_relationship: z.boolean().optional(),
+  show_distance: z.boolean().optional(),
 });
 
 export const DeleteAccountSchema = z.object({
@@ -112,6 +141,45 @@ export const DeleteAccountSchema = z.object({
 export const LocationSchema = z.object({
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
+});
+
+/** Community Space — short local text only (≤280). No media. */
+export const CommunityCreatePostSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Post cannot be empty')
+    .max(280, 'Post must be 280 characters or fewer'),
+});
+
+export const CommunityUpdatePostSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Post cannot be empty')
+    .max(280, 'Post must be 280 characters or fewer'),
+});
+
+/** Comment on a Community post — same text-only 280 cap. Free for all. */
+export const CommunityCreateCommentSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Comment cannot be empty')
+    .max(280, 'Comment must be 280 characters or fewer'),
+});
+
+export const CommunityUpdateCommentSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Comment cannot be empty')
+    .max(280, 'Comment must be 280 characters or fewer'),
+});
+
+export const CommunityMentionSuggestionsQuerySchema = z.object({
+  q: z.string().default('').transform((val) => val.trim()),
+  limit: z.coerce.number().int().min(1).max(20).optional().default(10),
 });
 
 export const MessageSchema = z.object({
@@ -153,6 +221,26 @@ export const MediaMessageFormSchema = z.object({
   duration_ms: z.coerce.number().int().min(0).max(180_000).optional(),
 });
 
+/**
+ * Send an existing My Photos library photo into a 1:1 chat.
+ * Copies bytes into message storage — never deletes, moves, or changes
+ * album visibility / album_photos rows.
+ */
+export const AlbumMediaMessageSchema = z.object({
+  receiver_id: z.string().uuid(),
+  photo_id: z.string().uuid(),
+  caption: z.string().max(500).optional(),
+  disappearing: z
+    .preprocess((val) => {
+      if (val === undefined || val === null || val === '') return undefined;
+      if (typeof val === 'boolean') return val;
+      if (val === 'true' || val === '1') return true;
+      if (val === 'false' || val === '0') return false;
+      return val;
+    }, z.boolean().optional()),
+  max_views: z.coerce.number().int().min(1).max(99).optional(),
+});
+
 export const CreateRoomSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
@@ -172,6 +260,24 @@ export const RoomMessageSchema = z.object({
 
 export const AddRoomMemberSchema = z.object({
   user_id: z.string().uuid(),
+});
+
+/**
+ * Temporary identity for a specific room — never written to main profile.
+ * Gate offers profile OR temp; when temp is chosen, display_name is required
+ * and photo is optional (letter avatar when omitted).
+ */
+export const RoomTempIdentitySchema = z.object({
+  display_name: z.string().trim().min(1).max(40),
+  /** Optional temp photo — never falls back to profile face on the temp path. */
+  photo_url: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  save_name: z.boolean().optional(),
+  save_photo: z.boolean().optional(),
 });
 
 export const ContactFormSchema = z.object({
@@ -203,6 +309,13 @@ export const LiveLocationSharingSchema = z.object({
   enabled: z.boolean(),
 });
 
+/** Max map-pin offset meters (discretion / location randomization). */
+export const MapPinFuzzSchema = z.object({
+  map_pin_fuzz_m: z.number().int().min(80).max(800),
+});
+
+export const PHOTO_VISIBILITIES = ['public', 'view_once', 'private'] as const;
+
 export const CreateAlbumSchema = z.object({
   name: z.string().trim().min(1, 'Album name is required').max(80),
   description: z.string().trim().max(500).optional(),
@@ -217,18 +330,28 @@ export const GrantAlbumSchema = z.object({
   viewer_id: z.string().uuid('Invalid viewer id'),
 });
 
+export const PhotoVisibilitySchema = z.enum(PHOTO_VISIBILITIES);
+
 export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type ForgotPasswordInput = z.infer<typeof ForgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
+export type ConfirmEmailInput = z.infer<typeof ConfirmEmailSchema>;
+export type ResendConfirmEmailInput = z.infer<typeof ResendConfirmEmailSchema>;
 export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
 export type ChangeEmailInput = z.infer<typeof ChangeEmailSchema>;
 export type ProfileInput = z.infer<typeof ProfileSchema>;
 export type DeleteAccountInput = z.infer<typeof DeleteAccountSchema>;
 export type LocationInput = z.infer<typeof LocationSchema>;
+export type CommunityCreatePostInput = z.infer<typeof CommunityCreatePostSchema>;
+export type CommunityUpdatePostInput = z.infer<typeof CommunityUpdatePostSchema>;
+export type CommunityCreateCommentInput = z.infer<typeof CommunityCreateCommentSchema>;
+export type CommunityUpdateCommentInput = z.infer<typeof CommunityUpdateCommentSchema>;
+export type CommunityMentionSuggestionsQueryInput = z.infer<typeof CommunityMentionSuggestionsQuerySchema>;
 export type MessageInput = z.infer<typeof MessageSchema>;
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
 export type RoomMessageInput = z.infer<typeof RoomMessageSchema>;
+export type RoomTempIdentityInput = z.infer<typeof RoomTempIdentitySchema>;
 export type ContactFormInput = z.infer<typeof ContactFormSchema>;
 export type Mood = (typeof MOOD_VALUES)[number];
 export type MoodInput = z.infer<typeof MoodSchema>;
@@ -236,7 +359,64 @@ export type GhostInput = z.infer<typeof GhostSchema>;
 export type CreateAlbumInput = z.infer<typeof CreateAlbumSchema>;
 export type AddAlbumPhotoInput = z.infer<typeof AddAlbumPhotoSchema>;
 export type GrantAlbumInput = z.infer<typeof GrantAlbumSchema>;
+export type PhotoVisibility = z.infer<typeof PhotoVisibilitySchema>;
 export type MediaKind = (typeof MEDIA_KINDS)[number];
 export type MessageMediaKind = (typeof MESSAGE_MEDIA_KINDS)[number];
+
+// ── Venue Calendar & Claim Schemas ──────────────────────────────────────────
+
+export const SubmitVenueClaimSchema = z.object({
+  venue_role: z.string().trim().min(2, 'Venue role is required').max(80),
+  contact_name: z.string().trim().min(2, 'Contact name is required').max(120),
+  contact_email: z.string().trim().email('Valid contact email is required').max(255),
+  contact_phone: z.string().trim().max(40).optional().nullable(),
+  website_or_social_proof: z.string().trim().max(500).optional().nullable(),
+  attestation_agreed: z.literal(true, {
+    errorMap: () => ({ message: 'You must attest that you are an authorized representative of this venue.' }),
+  }),
+  attestation_text: z.string().trim().min(10, 'Attestation statement is required').max(1000),
+  // Dual-proof optional hooks for future verification layers
+  domain_email: z.string().trim().email().optional().nullable(),
+  phone_otp: z.string().trim().max(20).optional().nullable(),
+  companies_house_num: z.string().trim().max(30).optional().nullable(),
+});
+
+export const DisputeVenueClaimSchema = z.object({
+  dispute_reason: z.string().trim().min(10, 'Dispute reason is required').max(1000),
+});
+
+export const FreezeVenueClaimSchema = z.object({
+  frozen_reason: z.string().trim().min(5, 'Reason for freeze is required').max(500),
+  ban_user: z.boolean().optional().default(false),
+});
+
+export const VenueCalendarEventCreateSchema = z.object({
+  name: z.string().trim().min(2, 'Event name is required').max(100),
+  description: z.string().trim().max(1000).optional().nullable(),
+  starts_at: z.string().datetime({ message: 'Valid ISO start time required' }),
+  ends_at: z.string().datetime({ message: 'Valid ISO end time required' }).optional().nullable(),
+  ticket_url: z.string().url('Valid ticket URL').max(500).optional().nullable(),
+});
+
+export const VenueCalendarEventUpdateSchema = z.object({
+  name: z.string().trim().min(2, 'Event name is required').max(100).optional(),
+  description: z.string().trim().max(1000).optional().nullable(),
+  starts_at: z.string().datetime({ message: 'Valid ISO start time required' }).optional(),
+  ends_at: z.string().datetime({ message: 'Valid ISO end time required' }).optional().nullable(),
+  ticket_url: z.string().url('Valid ticket URL').max(500).optional().nullable(),
+});
+
+export const VenueCalendarEventCancelSchema = z.object({
+  cancellation_reason: z.string().trim().max(500).optional().nullable(),
+});
+
+export type SubmitVenueClaimInput = z.infer<typeof SubmitVenueClaimSchema>;
+export type DisputeVenueClaimInput = z.infer<typeof DisputeVenueClaimSchema>;
+export type FreezeVenueClaimInput = z.infer<typeof FreezeVenueClaimSchema>;
+export type VenueCalendarEventCreateInput = z.infer<typeof VenueCalendarEventCreateSchema>;
+export type VenueCalendarEventUpdateInput = z.infer<typeof VenueCalendarEventUpdateSchema>;
+export type VenueCalendarEventCancelInput = z.infer<typeof VenueCalendarEventCancelSchema>;
+
 export type LocationMessageInput = z.infer<typeof LocationMessageSchema>;
 export type MediaMessageFormInput = z.infer<typeof MediaMessageFormSchema>;
+export type AlbumMediaMessageInput = z.infer<typeof AlbumMediaMessageSchema>;

@@ -1,14 +1,21 @@
-export const BETA_INVITE_REQUIRED =
-  String(import.meta.env.VITE_BETA_INVITE_REQUIRED || '').toLowerCase() === 'true';
+/**
+ * Product lock 31 Aug 2026 (Brand / Zoul): open signup.
+ * Sign up free must land on /register with no invite code required.
+ * A stale Vercel `VITE_BETA_INVITE_REQUIRED=true` must not gate registration.
+ * Optional MENRUSH invites still work via /beta or ?invite= query.
+ */
+export const BETA_INVITE_REQUIRED = false;
 
 /**
  * Match backend `premiumService.isBetaPremiumFree()`.
  * Open beta: Premium (Ghost, groups, etc.) is included for everyone unless an
- * operator sets VITE_BETA_PREMIUM_FREE=false (and invite beta is also off).
+ * operator sets VITE_BETA_PREMIUM_FREE=false.
  */
 export function isBetaPremiumFree(): boolean {
   const raw = String(import.meta.env.VITE_BETA_PREMIUM_FREE ?? '').toLowerCase();
-  if (raw === 'false') return BETA_INVITE_REQUIRED;
+  if (raw === 'false') return false;
+  if (raw === 'true') return true;
+  // Default: treat as free during open UK beta until billing is live.
   return true;
 }
 

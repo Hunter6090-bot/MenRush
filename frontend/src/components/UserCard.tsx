@@ -1,8 +1,10 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SilhouetteAvatar } from './SilhouetteAvatar';
+import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
+import { BrandAvatar } from './BrandAvatar';
 import { DistancePill } from './DistancePill';
 import { StatusBadge } from './StatusBadge';
+import { ProfilePhotoLink } from './ProfilePhotoLink';
 
 interface User {
   id: string;
@@ -25,21 +27,32 @@ export const UserCard: React.FC<UserCardProps> = ({ user }) => {
 
   return (
     <div className="bg-nn-card rounded-2xl shadow-card border border-nn-border hover:shadow-card-hover hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col">
-      <div className="relative h-56 bg-gradient-to-br from-nn-elevated to-nn-card">
-        {user.photo_url ? (
-          <img src={user.photo_url} alt={user.name} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <SilhouetteAvatar size={120} variant="card" />
+      <ProfilePhotoLink
+        userId={user.id}
+        name={user.name}
+        className="relative block h-56 bg-gradient-to-br from-nn-elevated to-nn-card"
+        data-testid={`user-card-photo-${user.id}`}
+      >
+        {isNearbyPlaceholderFace(user.photo_url) ? (
+          <div className="h-full w-full" data-testid={`user-card-photo-placeholder-${user.id}`}>
+            <FadedBrandFace variant="tile" label={user.name} />
           </div>
+        ) : (
+          <BrandAvatar
+            photoUrl={user.photo_url}
+            name={user.name}
+            alt={user.name}
+            variant="tile"
+            imgClassName="w-full h-full object-cover"
+          />
         )}
-        <div className="absolute top-3 right-3">
+        <div className="pointer-events-none absolute top-3 right-3">
           <StatusBadge online={user.online} lastSeen={user.last_seen} size="xs" />
         </div>
-        <div className="absolute bottom-3 left-3">
+        <div className="pointer-events-none absolute bottom-3 left-3">
           <DistancePill km={distance} />
         </div>
-      </div>
+      </ProfilePhotoLink>
 
       <div className="p-4 flex-1 flex flex-col">
         <div className="flex items-baseline gap-2 mb-1">
@@ -52,6 +65,8 @@ export const UserCard: React.FC<UserCardProps> = ({ user }) => {
           <p className="text-nn-faint text-sm italic flex-1">No bio yet</p>
         )}
         <button
+          type="button"
+          data-testid={`user-card-message-${user.id}`}
           onClick={() => navigate(`/messages/${user.id}`)}
           className="mt-4 w-full bg-nn-copper hover:bg-nn-copper-bright text-[#1A0E03] py-2.5 rounded-full text-sm font-semibold tracking-wide transition-colors active:scale-95"
         >

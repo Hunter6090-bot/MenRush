@@ -1,5 +1,15 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
+import {
+  AUTH_WINDOW_MS,
+  accountLimiter,
+  authLimit,
+  emailAccountKey,
+  sessionParamKey,
+  twoFactorAccountKey,
+  userAccountKey,
+} from '../lib/authRateLimits';
 import { authService } from '../services/auth.service';
 import { twoFactorService } from '../services/two-factor.service';
 import { trustedDeviceService } from '../services/trusted-device.service';
@@ -8,56 +18,351 @@ import {
   LoginSchema,
   ForgotPasswordSchema,
   ResetPasswordSchema,
+  ConfirmEmailSchema,
+  ResendConfirmEmailSchema,
   ChangePasswordSchema,
   ChangeEmailSchema,
   DeleteAccountSchema,
   TwoFactorCodeSchema,
   TwoFactorVerifyLoginSchema,
+  AdultAssuranceFixtureSchema,
 } from '../types/validation';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { query } from '../db';
 import { z } from 'zod';
+import { authSessionService } from '../services/auth-session.service';
+import {
+  adultAssuranceService,
+  isAdultAssuranceRequiredAtSignup,
+  isAdultAssuranceTestFixtureAllowed,
+} from '../services/adult-assurance.service';
+import { VeriffConfigError } from '../services/veriff.service';
 
 const router = Router();
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  // Higher ceiling in non-production so pre-deploy / local suites don't trip the gate.
-  max: process.env.NODE_ENV === 'production' ? 10 : 200,
-  message: { error: 'Too many attempts, please try again in 15 minutes' },
+async function withBrowserSession<T extends { user?: { id?: string }; token?: string }>(
+  result: T,
+  userAgent?: string,
+): Promise<T & { refresh_token?: string }> {
+  const userId = result.user?.id;
+  if (!result.token || !userId) return result;
+  const refreshToken = await authSessionService.create(userId, userAgent);
+  return { ...result, refresh_token: refreshToken };
+}
+
+// Rate limits. Ceilings live in lib/authRateLimits.ts (AUTH_LIMITS) with the
+// reasoning: per-IP limits are loose because web users share a Vercel egress
+// IP; brute-force protection comes from the account-keyed limiters.
+const TRY_AGAIN_15 = 'Too many attempts, please try again in 15 minutes';
+
+const loginLimiter = rateLimit({
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('login'),
+  message: { error: TRY_AGAIN_15 },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
+});
+/** Failed sign-ins per email, from any IP. */
+const loginAccountLimiter = accountLimiter({
+  max: authLimit('loginAccountFailures'),
+  key: emailAccountKey,
+  message: TRY_AGAIN_15,
+  failedOnly: true,
+});
+
+const registerLimiter = rateLimit({
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('register'),
+  message: { error: TRY_AGAIN_15 },
+  keyGenerator: rateLimitKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const twoFactorLimiter = rateLimit({
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('twoFactorVerify'),
+  message: { error: TRY_AGAIN_15 },
+  keyGenerator: rateLimitKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+/** Wrong 2FA codes per account (verified pending token), from any IP. */
+const twoFactorAccountLimiter = accountLimiter({
+  max: authLimit('twoFactorAccountFailures'),
+  key: twoFactorAccountKey((token) => authService.verifyTwoFactorPendingToken(token)),
+  message: TRY_AGAIN_15,
+  failedOnly: true,
+});
+
+/** Every signed-in app refreshes here; refresh tokens are long random values. */
+const refreshLimiter = rateLimit({
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('refresh'),
+  message: { error: TRY_AGAIN_15 },
+  keyGenerator: rateLimitKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/** Reset tokens are long random values, so the IP limit is only a flood guard. */
+const resetPasswordLimiter = rateLimit({
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('resetPassword'),
+  message: { error: TRY_AGAIN_15 },
+  keyGenerator: rateLimitKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/** change-password, change-email, delete-account: signed in, so keyed per account. */
+const accountChangeLimiter = accountLimiter({
+  max: authLimit('accountChange'),
+  key: userAccountKey,
+  message: TRY_AGAIN_15,
+});
+
+/**
+ * Adult-assurance *mutations* (start / start-id / submitted / fixture). Each
+ * start opens a Veriff session, so this stays the lowest signup ceiling. Do
+ * not put the status poll on this bucket: Register polls every 2s for up to
+ * 120s (~60 GETs).
+ */
+const adultAssuranceLimiter = rateLimit({
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('adultAssurance'),
+  message: { error: 'Too many adult-assurance attempts, please try again later' },
+  keyGenerator: rateLimitKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * Status poll for GET /adult-assurance/:sessionId. The frontend polls every
+ * ADULT_POLL_MS=2s for at most ADULT_POLL_MAX_MS=120s, so at most 60 GETs per
+ * gate attempt. Per session the ceiling is 120 (one full timeout plus a
+ * retry); per IP it is high because many people sign up behind one egress IP.
+ */
+const adultAssuranceStatusPollLimiter = rateLimit({
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('adultAssurancePoll'),
+  message: { error: 'Too many age-check status polls, please try again later' },
+  keyGenerator: rateLimitKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+const adultAssurancePollSessionLimiter = accountLimiter({
+  max: authLimit('adultAssurancePollSession'),
+  key: sessionParamKey,
+  message: 'Too many age-check status polls, please try again later',
 });
 
 const forgotPasswordLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('forgotPassword'),
   message: { error: 'Too many reset requests, please try again in 15 minutes' },
+  keyGenerator: rateLimitKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+/** Reset emails per address, from any IP (protects the inbox). */
+const forgotPasswordAccountLimiter = accountLimiter({
+  max: authLimit('forgotPasswordAccount'),
+  key: emailAccountKey,
+  message: 'Too many reset requests, please try again in 15 minutes',
+});
+
+const confirmEmailLimiter = rateLimit({
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('confirmEmail'),
+  message: { error: 'Too many confirmation attempts, please try again in 15 minutes' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-router.post('/register', authLimiter, async (req: AuthRequest, res: Response) => {
+const resendConfirmLimiter = rateLimit({
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('resendConfirm'),
+  message: { error: 'Too many resend requests, please try again in 15 minutes' },
+  keyGenerator: rateLimitKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+/** Confirmation emails per address, from any IP. */
+const resendConfirmAccountLimiter = accountLimiter({
+  max: authLimit('resendConfirmAccount'),
+  key: emailAccountKey,
+  message: 'Too many resend requests, please try again in 15 minutes',
+});
+
+/**
+ * GET /api/auth/adult-assurance/required
+ * Front-end uses this to know whether Veriff age gate is mandatory on /register.
+ */
+router.get('/adult-assurance/required', (_req, res: Response) => {
+  res.json({
+    required: isAdultAssuranceRequiredAtSignup(),
+    fixtureAllowed: isAdultAssuranceTestFixtureAllowed(),
+  });
+});
+
+/**
+ * POST /api/auth/adult-assurance/start
+ * Creates a pre-account Veriff liveness / age-estimation session. No user row.
+ */
+router.post('/adult-assurance/start', adultAssuranceLimiter, async (_req, res: Response) => {
+  try {
+    const session = await adultAssuranceService.startSession();
+    res.status(201).json(session);
+  } catch (err: any) {
+    if (err instanceof VeriffConfigError || err?.code === 'veriff_not_configured') {
+      return res.status(503).json({ error: 'veriff_not_configured' });
+    }
+    if (err?.message === 'veriff_session_failed' || err?.message === 'veriff_session_malformed') {
+      return res.status(502).json({ error: err.message });
+    }
+    console.error('[adult-assurance] start error:', err);
+    res.status(500).json({ error: 'adult_assurance_start_failed' });
+  }
+});
+
+/**
+ * POST /api/auth/adult-assurance/:sessionId/start-id
+ * Optional ID document after liveness passed — Verified tick on register.
+ */
+router.post('/adult-assurance/:sessionId/start-id', adultAssuranceLimiter, async (req, res: Response) => {
+  try {
+    const sessionId = String(req.params.sessionId || '').trim();
+    if (!/^[0-9a-f-]{36}$/i.test(sessionId)) {
+      return res.status(400).json({ error: 'invalid_session' });
+    }
+    const session = await adultAssuranceService.startIdSession(sessionId);
+    res.status(201).json(session);
+  } catch (err: any) {
+    if (err instanceof VeriffConfigError || err?.code === 'veriff_not_configured') {
+      return res.status(503).json({ error: 'veriff_not_configured' });
+    }
+    if (err?.message === 'session_not_found') {
+      return res.status(404).json({ error: 'session_not_found' });
+    }
+    if (err?.message === 'liveness_not_passed' || err?.message === 'already_id_verified') {
+      return res.status(409).json({ error: err.message });
+    }
+    if (err?.message === 'veriff_session_failed' || err?.message === 'veriff_session_malformed') {
+      return res.status(502).json({ error: err.message });
+    }
+    console.error('[adult-assurance] start-id error:', err);
+    res.status(500).json({ error: 'adult_assurance_start_id_failed' });
+  }
+});
+
+/**
+ * GET /api/auth/adult-assurance/:sessionId
+ * Poll decision. When passed, returns a one-time assurance_token for register.
+ * Uses adultAssuranceStatusPollLimiter (not the tight mutation limiter).
+ */
+router.get('/adult-assurance/:sessionId', adultAssuranceStatusPollLimiter, adultAssurancePollSessionLimiter, async (req, res: Response) => {
+  try {
+    const sessionId = String(req.params.sessionId || '').trim();
+    if (!/^[0-9a-f-]{36}$/i.test(sessionId)) {
+      return res.status(400).json({ error: 'invalid_session' });
+    }
+    const status = await adultAssuranceService.issueTokenIfPassed(sessionId);
+    if (!status) return res.status(404).json({ error: 'session_not_found' });
+    res.json(status);
+  } catch (err) {
+    console.error('[adult-assurance] status error:', err);
+    res.status(500).json({ error: 'adult_assurance_status_failed' });
+  }
+});
+
+router.post('/adult-assurance/:sessionId/submitted', adultAssuranceLimiter, async (req, res: Response) => {
+  try {
+    const sessionId = String(req.params.sessionId || '').trim();
+    if (!/^[0-9a-f-]{36}$/i.test(sessionId)) {
+      return res.status(400).json({ error: 'invalid_session' });
+    }
+    await adultAssuranceService.markSubmitted(sessionId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[adult-assurance] submitted error:', err);
+    res.status(500).json({ error: 'adult_assurance_submitted_failed' });
+  }
+});
+
+/**
+ * POST /api/auth/adult-assurance/fixture
+ * BOA90 / CI controlled path. Never available in production.
+ */
+router.post('/adult-assurance/fixture', adultAssuranceLimiter, async (req, res: Response) => {
+  try {
+    if (!isAdultAssuranceTestFixtureAllowed()) {
+      return res.status(404).json({ error: 'not_found' });
+    }
+    const data = AdultAssuranceFixtureSchema.parse(req.body);
+    const result = await adultAssuranceService.applyTestFixture(data);
+    res.json(result);
+  } catch (err: any) {
+    if (err?.name === 'ZodError') {
+      return res.status(400).json({ error: 'invalid_fixture' });
+    }
+    if (err?.message === 'adult_assurance_fixture_disabled') {
+      return res.status(404).json({ error: 'not_found' });
+    }
+    console.error('[adult-assurance] fixture error:', err);
+    res.status(500).json({ error: 'adult_assurance_fixture_failed' });
+  }
+});
+
+router.post('/register', registerLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = RegisterSchema.parse(req.body);
     const result = await authService.register(data);
-    res.status(201).json(result);
+    res.status(201).json(await withBrowserSession(result, req.get('user-agent') || undefined));
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
 });
 
-router.post('/login', authLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/login', loginLimiter, loginAccountLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = LoginSchema.parse(req.body);
     const result = await authService.login(data);
-    res.json(result);
+    res.json(await withBrowserSession(result, req.get('user-agent') || undefined));
   } catch (error: any) {
     res.status(401).json({ error: error.message });
   }
 });
 
-router.post('/forgot-password', forgotPasswordLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/confirm-email', confirmEmailLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const data = ConfirmEmailSchema.parse(req.body);
+    const result = await authService.confirmEmail(data);
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/resend-confirm', resendConfirmLimiter, resendConfirmAccountLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const data = ResendConfirmEmailSchema.parse(req.body);
+    const result = await authService.resendConfirmEmail(data);
+    res.json({
+      ok: true,
+      sent: true,
+      message:
+        'If that email needs confirmation, we sent a new link. Check your inbox and spam — valid for 24 hours.',
+      ...(result.devConfirmToken ? { devConfirmToken: result.devConfirmToken } : {}),
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/forgot-password', forgotPasswordLimiter, forgotPasswordAccountLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const { email } = ForgotPasswordSchema.parse(req.body);
     try {
@@ -79,7 +384,7 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req: AuthRequest, 
   }
 });
 
-router.post('/reset-password', authLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/reset-password', resetPasswordLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = ResetPasswordSchema.parse(req.body);
     await authService.resetPassword(data);
@@ -89,7 +394,7 @@ router.post('/reset-password', authLimiter, async (req: AuthRequest, res: Respon
   }
 });
 
-router.post('/change-password', authMiddleware, authLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/change-password', authMiddleware, accountChangeLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = ChangePasswordSchema.parse(req.body);
     await authService.changePassword(req.userId!, data);
@@ -112,7 +417,7 @@ router.get('/account', authMiddleware, async (req: AuthRequest, res: Response) =
   }
 });
 
-router.post('/change-email', authMiddleware, authLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/change-email', authMiddleware, accountChangeLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = ChangeEmailSchema.parse(req.body);
     const result = await authService.changeEmail(req.userId!, data);
@@ -125,7 +430,7 @@ router.post('/change-email', authMiddleware, authLimiter, async (req: AuthReques
   }
 });
 
-router.post('/delete-account', authMiddleware, authLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/delete-account', authMiddleware, accountChangeLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = DeleteAccountSchema.parse(req.body);
     await authService.deleteAccount(req.userId!, data);
@@ -137,17 +442,42 @@ router.post('/delete-account', authMiddleware, authLimiter, async (req: AuthRequ
   }
 });
 
-router.post('/2fa/verify', authLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/2fa/verify', twoFactorLimiter, twoFactorAccountLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = TwoFactorVerifyLoginSchema.parse(req.body);
     const result = await authService.completeTwoFactorLogin(data.pendingToken, data.code, {
       trustThisDevice: !!data.trustThisDevice,
       userAgent: req.get('user-agent') || undefined,
     });
-    res.json(result);
+    res.json(await withBrowserSession(result, req.get('user-agent') || undefined));
   } catch (error: any) {
     res.status(401).json({ error: error.message });
   }
+});
+
+router.post('/refresh', refreshLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const { refresh_token: refreshToken } = z
+      .object({ refresh_token: z.string().min(32).max(512) })
+      .parse(req.body);
+    const rotated = await authSessionService.rotate(refreshToken);
+    if (!rotated) {
+      return res.status(401).json({ error: 'Session expired' });
+    }
+    res.json({
+      token: authService.issueAccessToken(rotated.userId),
+      refresh_token: rotated.refreshToken,
+    });
+  } catch {
+    res.status(401).json({ error: 'Session expired' });
+  }
+});
+
+router.post('/logout', async (req: AuthRequest, res: Response) => {
+  const refreshToken =
+    typeof req.body?.refresh_token === 'string' ? req.body.refresh_token : undefined;
+  await authSessionService.revoke(refreshToken);
+  res.json({ ok: true });
 });
 
 router.get('/2fa/trusted-devices', authMiddleware, async (req: AuthRequest, res: Response) => {

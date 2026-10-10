@@ -1,28 +1,40 @@
+import { useId, useState } from 'react';
+import { createPortal } from 'react-dom';
+
 interface VerifiedBadgeProps {
   size?: 'sm' | 'lg';
   className?: string;
-  level?: 'authentic_person' | 'identity_checked';
+  /**
+   * @deprecated Always tick — one Veriff system app-wide (Discovery/Nearby/Matches).
+   * Kept so call sites stay compatible; word chip removed.
+   */
+  compact?: boolean;
 }
 
-/** Precise trust claim — free for all users and separate from Premium. */
-export function VerifiedBadge({ size = 'sm', className = '', level = 'identity_checked' }: VerifiedBadgeProps) {
-  const pad = size === 'lg' ? 'px-3 py-1.5 text-xs' : 'px-2 py-0.5 text-[10.5px]';
-  const iconSize = size === 'lg' ? 13 : 11;
-
+/**
+ * Display only for an approved Veriff identity check.
+ * Tick only — no circular badge/ring around the mark (Pete lock).
+ */
+export function VerifiedBadge({ size = 'sm', className = '' }: VerifiedBadgeProps) {
+  const [open, setOpen] = useState(false);
+  const descriptionId = useId();
+  const icon = size === 'lg' ? 22 : 18;
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full bg-nn-copper/13 text-nn-copper border border-nn-copper/50 font-semibold tracking-wide ${pad} ${className}`}
-    >
-      <CheckIcon size={iconSize} />
-      {level === 'identity_checked' ? 'Identity checked' : 'Authentic person'}
+    <span className={`inline-flex shrink-0 ${className}`}>
+      <button
+        type="button"
+        aria-label="Verified. Optional ID checked through Veriff. Not the signup age gate."
+        aria-expanded={open}
+        aria-controls={descriptionId}
+        data-testid="verified-tick"
+        onClick={(event) => { event.stopPropagation(); setOpen(!open); }}
+        onKeyDown={(event) => { event.stopPropagation(); if (event.key === 'Escape') setOpen(false); }}
+        onBlur={() => setOpen(false)}
+        className="inline-flex items-center justify-center bg-transparent p-0 text-[#E0A14A] drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)]"
+      >
+        <svg width={icon} height={icon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
+      </button>
+      {open ? createPortal(<span id={descriptionId} role="status" className="fixed bottom-24 left-1/2 z-[200] w-64 max-w-[90vw] -translate-x-1/2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] p-3 text-xs font-medium leading-5 text-[var(--cream)] shadow-lg">Optional ID checked through Veriff. Separate from the signup 18+ selfie age gate.</span>, document.body) : null}
     </span>
-  );
-}
-
-function CheckIcon({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
   );
 }

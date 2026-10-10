@@ -212,32 +212,37 @@ async function upsertUser(user: SeedUser, passwordHash: string): Promise<string>
 
 /**
  * Deterministic e2e fixture Hot Spot at TEST_LAT/TEST_LNG, idempotent on TEST_HOT_SPOT_ID.
- * Clearly test-only (name/city/description), reuses the 'open-spaces' category already
- * seeded by migration 024 — never inserts a real venue.
+ * Clearly test-only (name/city/description). Uses commercial `saunas` category so it
+ * remains visible after the commercial-venue Cruise lock (048). Never a real venue.
  */
 async function seedTestHotSpot() {
   const category = await query(
-    `SELECT id FROM hot_spot_categories WHERE slug = 'open-spaces' LIMIT 1`,
+    `SELECT id FROM hot_spot_categories WHERE slug = 'saunas' LIMIT 1`,
   );
   if (category.rows.length === 0) {
-    console.warn('hot_spot_categories not seeded yet — skipping test Hot Spot fixture.');
+    console.warn('commercial hot_spot_categories not seeded yet — skipping test Hot Spot fixture.');
     return;
   }
   const categoryId = category.rows[0].id as number;
   await query(
-    `INSERT INTO hot_spots (id, category_id, name, city, description, latitude, longitude, is_user_generated, is_active)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, TRUE)
+    `INSERT INTO hot_spots (
+       id, category_id, name, city, description, latitude, longitude,
+       is_user_generated, is_active, venue_type, source, nation
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, TRUE, 'sauna', 'e2e-fixture', 'England')
      ON CONFLICT (id) DO UPDATE SET
        category_id = EXCLUDED.category_id,
        latitude = EXCLUDED.latitude,
        longitude = EXCLUDED.longitude,
-       is_active = TRUE`,
+       is_active = TRUE,
+       venue_type = EXCLUDED.venue_type,
+       source = EXCLUDED.source`,
     [
       TEST_HOT_SPOT_ID,
       categoryId,
       'E2E Test Hot Spot',
       'Test Fixture',
-      'Deterministic Hot Spot for e2e/Playwright coverage — not a real venue. Safe to check in/out freely.',
+      'Deterministic Hot Spot for e2e/Playwright coverage. Not a real venue. Safe to check in/out freely.',
       TEST_LAT,
       TEST_LNG,
     ],

@@ -1,54 +1,117 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, type ComponentType, type ReactElement, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { ComingSoon } from './pages/ComingSoon';
-import { BetaAccess } from './pages/BetaAccess';
-import { Login } from './pages/Login';
-import { Register } from './pages/Register';
-import { ForgotPassword } from './pages/ForgotPassword';
-import { ResetPassword } from './pages/ResetPassword';
-import { Discover } from './pages/Discover';
-import { Stream } from './pages/Stream';
-import { Profile } from './pages/Profile';
-import { ProfileSetup } from './pages/ProfileSetup';
-import { ProfileView } from './pages/ProfileView';
+import { LegacyInviteRedirect } from './components/LegacyInviteRedirect';
+import { useEffect } from 'react';
 import { RequireProfileSetup } from './components/RequireProfileSetup';
-import { Albums } from './pages/Albums';
-import { Matches } from './pages/Matches';
-import { Terms } from './pages/Terms';
-import { Privacy } from './pages/Privacy';
-import { Cookies } from './pages/Cookies';
-import { Contact } from './pages/Contact';
-import { Safety } from './pages/Safety';
-import { CommunityGuidelines } from './pages/CommunityGuidelines';
-import { Help } from './pages/Help';
-import { BrightonPride } from './pages/BrightonPride';
-import { MessagingRoute } from './components/MessagingRoute';
-import { RoomsRoute } from './components/RoomsRoute';
-import { Verify } from './pages/Verify';
-import { VerifyScan } from './pages/VerifyScan';
-import { VerifyPending } from './pages/VerifyPending';
-import { VerifyRejected } from './pages/VerifyRejected';
-import { VerificationCentre } from './pages/VerificationCentre';
-import { AuthenticityVerify } from './pages/AuthenticityVerify';
-import { Premium } from './pages/Premium';
-import { Events } from './pages/Events';
-import { HotSpots } from './pages/HotSpots';
-import { Settings } from './pages/Settings';
-import { Notifications } from './pages/Notifications';
 import { useAuthStore } from './hooks/store';
 import { usePushNotifications } from './hooks/usePushNotifications';
+import { usePushDeepLink } from './hooks/usePushDeepLink';
 import { useGlobalMessageNotifications } from './hooks/useGlobalMessageNotifications';
 import { useUnreadSync } from './hooks/useUnreadSync';
 import { useNotificationSync } from './hooks/useNotificationSync';
 import { useAuthProfileSync } from './hooks/useAuthProfileSync';
+import { usePremiumSync } from './hooks/usePremiumSync';
 import { useLiveLocationPublisher } from './hooks/useLiveLocationPublisher';
 import { readThemePreference, applyTheme } from './lib/theme';
 import { FEATURES } from './lib/featureFlags';
-import { VideoCallModal } from './components/VideoCallModal';
 import { ToastNotifications } from './components/ToastNotifications';
+import { InstallPrompt } from './components/InstallPrompt';
 import { savePostAuthRedirect } from './lib/profileLinks';
+import { prefetchAppRouteChunks } from './lib/routeChunks';
+import { warmTabListCaches } from './lib/tabListCache';
+import { readStoredToken } from './lib/authSession';
 
-function ProtectedRoute({ children }: { children: JSX.Element }) {
+/**
+ * Named-export pages → lazy defaults. Keeps Mapbox / heavy screens out of the
+ * first paint on phones (chat, profile, matches must not parse mapbox-gl).
+ */
+function lazyNamed<T extends Record<string, unknown>, K extends keyof T>(
+  loader: () => Promise<T>,
+  exportName: K,
+) {
+  return lazy(async () => {
+    const mod = await loader();
+    return { default: mod[exportName] as ComponentType<Record<string, never>> };
+  });
+}
+
+const ComingSoon = lazyNamed(() => import('./pages/ComingSoon'), 'ComingSoon');
+const GetTheApp = lazyNamed(() => import('./pages/GetTheApp'), 'GetTheApp');
+const BetaAccess = lazyNamed(() => import('./pages/BetaAccess'), 'BetaAccess');
+const Login = lazyNamed(() => import('./pages/Login'), 'Login');
+const Register = lazyNamed(() => import('./pages/Register'), 'Register');
+const RegisterUnderage = lazyNamed(
+  () => import('./pages/RegisterUnderage'),
+  'RegisterUnderage',
+);
+const ForgotPassword = lazyNamed(() => import('./pages/ForgotPassword'), 'ForgotPassword');
+const ResetPassword = lazyNamed(() => import('./pages/ResetPassword'), 'ResetPassword');
+const CheckEmail = lazyNamed(() => import('./pages/CheckEmail'), 'CheckEmail');
+const ConfirmEmail = lazyNamed(() => import('./pages/ConfirmEmail'), 'ConfirmEmail');
+const Discover = lazyNamed(() => import('./pages/Discover'), 'Discover');
+const Stream = lazyNamed(() => import('./pages/Stream'), 'Stream');
+const Profile = lazyNamed(() => import('./pages/Profile'), 'Profile');
+const ProfileSetup = lazyNamed(() => import('./pages/ProfileSetup'), 'ProfileSetup');
+const ProfileView = lazyNamed(() => import('./pages/ProfileView'), 'ProfileView');
+const Albums = lazyNamed(() => import('./pages/Albums'), 'Albums');
+const Matches = lazyNamed(() => import('./pages/Matches'), 'Matches');
+const Terms = lazyNamed(() => import('./pages/Terms'), 'Terms');
+const Privacy = lazyNamed(() => import('./pages/Privacy'), 'Privacy');
+const Cookies = lazyNamed(() => import('./pages/Cookies'), 'Cookies');
+const Contact = lazyNamed(() => import('./pages/Contact'), 'Contact');
+const Safety = lazyNamed(() => import('./pages/Safety'), 'Safety');
+const CommunityGuidelines = lazyNamed(
+  () => import('./pages/CommunityGuidelines'),
+  'CommunityGuidelines',
+);
+const Help = lazyNamed(() => import('./pages/Help'), 'Help');
+const Pride = lazyNamed(() => import('./pages/Pride'), 'Pride');
+const MessagingRoute = lazyNamed(() => import('./components/MessagingRoute'), 'MessagingRoute');
+const RoomsRoute = lazyNamed(() => import('./components/RoomsRoute'), 'RoomsRoute');
+
+const Premium = lazyNamed(() => import('./pages/Premium'), 'Premium');
+const Events = lazyNamed(() => import('./pages/Events'), 'Events');
+const HotSpots = lazyNamed(() => import('./pages/HotSpots'), 'HotSpots');
+const AdminVenueClaims = lazyNamed(() => import('./pages/AdminVenueClaims'), 'AdminVenueClaims');
+const Settings = lazyNamed(() => import('./pages/Settings'), 'Settings');
+const Notifications = lazyNamed(() => import('./pages/Notifications'), 'Notifications');
+const VideoCallModal = lazyNamed(() => import('./components/VideoCallModal'), 'VideoCallModal');
+const RoomTempIdentityGatePreview = lazyNamed(
+  () => import('./pages/RoomTempIdentityGatePreview'),
+  'RoomTempIdentityGatePreview',
+);
+const RoomInRoomDmPreview = lazyNamed(
+  () => import('./pages/RoomInRoomDmPreview'),
+  'RoomInRoomDmPreview',
+);
+const ProfileDrawerPreview = lazyNamed(
+  () => import('./pages/ProfileDrawerPreview'),
+  'ProfileDrawerPreview',
+);
+const EmptyFacesPreview = lazyNamed(
+  () => import('./pages/EmptyFacesPreview'),
+  'EmptyFacesPreview',
+);
+
+function RouteFallback() {
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        background: 'var(--bg-primary, #0D0A06)',
+        color: 'var(--text-primary, #F0E0C0)',
+      }}
+      aria-busy="true"
+      data-testid="route-chunk-fallback"
+    />
+  );
+}
+
+function LazyRoute({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<RouteFallback />}>{children}</Suspense>;
+}
+
+function ProtectedRoute({ children }: { children: ReactElement }) {
   const token = useAuthStore((s) => s.token);
   const location = useLocation();
   if (!token) {
@@ -64,7 +127,7 @@ function RequireVerified({
   children,
   allowIncompleteProfile = false,
 }: {
-  children: JSX.Element;
+  children: ReactElement;
   allowIncompleteProfile?: boolean;
 }) {
   const token = useAuthStore((s) => s.token);
@@ -122,29 +185,38 @@ function AppEntry() {
     if (user?.verification_status === 'rejected') return <Navigate to="/verify/rejected" replace />;
     return <Navigate to="/verify/id" replace />;
   }
-  // Signed-in home: Nearby (Discover). Profile setup is gated by RequireProfileSetup.
   return <Navigate to="/discover" replace />;
 }
 
 function AppShell() {
   const token = useAuthStore((s) => s.token);
+  const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const rehydrateAuth = useAuthStore((s) => s.rehydrateAuth);
 
-  // Zombie sessions: store.token set but localStorage cleared (or vice versa) → 401 spam.
-  // Heal on boot and whenever token flips.
+  // PWA / WebView cold starts sometimes leave Zustand empty while storage still
+  // has a session (or the first localStorage read raced). Rehydrate — never wipe.
   useEffect(() => {
-    const lsToken = localStorage.getItem('token');
-    if (token && !lsToken) {
-      logout();
-      return;
-    }
-    if (!token && lsToken) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-    }
-  }, [token, logout]);
+    const sync = () => {
+      const restored = rehydrateAuth();
+      if (restored) return;
+      const storeToken = useAuthStore.getState().token;
+      if (storeToken && !readStoredToken()) {
+        // Intentional logout elsewhere cleared storage; drop the in-memory session.
+        logout();
+      }
+    };
+    sync();
+    window.addEventListener('pageshow', sync);
+    window.addEventListener('focus', sync);
+    document.addEventListener('visibilitychange', sync);
+    return () => {
+      window.removeEventListener('pageshow', sync);
+      window.removeEventListener('focus', sync);
+      document.removeEventListener('visibilitychange', sync);
+    };
+  }, [token, logout, rehydrateAuth]);
 
-  // Follow OS theme when preference is "system".
   useEffect(() => {
     applyTheme(readThemePreference());
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -155,65 +227,219 @@ function AppShell() {
     return () => mq.removeEventListener?.('change', onChange);
   }, []);
 
+  useEffect(() => {
+    if (!token) return;
+    prefetchAppRouteChunks();
+    // Warm Matches + Chat inbox so bottom-nav tabs paint from cache (SWR).
+    warmTabListCaches(user?.id);
+  }, [token, user?.id]);
+
   usePushNotifications(!!token);
+  usePushDeepLink(!!token);
   useGlobalMessageNotifications();
   useUnreadSync();
   useNotificationSync();
   useAuthProfileSync();
+  usePremiumSync(!!token);
   useLiveLocationPublisher();
+
+  const showDevRoomGate =
+    import.meta.env.DEV ||
+    (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app'));
 
   return (
     <>
       {token ? <ToastNotifications /> : null}
-      <Routes>
-        <Route path="/" element={<ComingSoon />} />
-        <Route path="/app" element={<AppEntry />} />
-        <Route path="/coming-soon" element={<ComingSoon />} />
-        <Route path="/brightonpride" element={<BrightonPride />} />
-        <Route path="/beta" element={<BetaAccess />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/terms" element={<Terms />} />
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="/cookies" element={<Cookies />} />
-        <Route path="/contact" element={<Contact />} />
-        <Route path="/safety" element={<Safety />} />
-        <Route path="/guidelines" element={<CommunityGuidelines />} />
-        <Route path="/help" element={<Help />} />
-        <Route path="/verify" element={<ProtectedRoute><VerificationCentre /></ProtectedRoute>} />
-        <Route path="/verify/id" element={<ProtectedRoute><Verify /></ProtectedRoute>} />
-        <Route path="/verify/authentic" element={<ProtectedRoute><AuthenticityVerify /></ProtectedRoute>} />
-        <Route path="/verify/scan/:sessionId" element={<VerifyScan />} />
-        <Route path="/verify/pending" element={<ProtectedRoute><VerifyPending /></ProtectedRoute>} />
-        <Route path="/verify/rejected" element={<ProtectedRoute><VerifyRejected /></ProtectedRoute>} />
-        <Route path="/premium" element={<RequireVerified><Premium /></RequireVerified>} />
-        <Route path="/profile/setup" element={<RequireVerified allowIncompleteProfile><ProfileSetup /></RequireVerified>} />
-        <Route path="/discover" element={<RequireVerified><Discover /></RequireVerified>} />
-        <Route path="/discovery" element={<Navigate to="/discover" replace />} />
-        <Route path="/stream" element={<RequireVerified><Stream /></RequireVerified>} />
-        <Route path="/events" element={<RequireVerified><Events /></RequireVerified>} />
-        <Route path="/hot-spots" element={<RequireVerified><HotSpots /></RequireVerified>} />
-        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-        <Route path="/notifications" element={<RequireVerified><Notifications /></RequireVerified>} />
-        <Route path="/profile" element={<RequireVerified allowIncompleteProfile><Profile /></RequireVerified>} />
-        <Route path="/profile/:id" element={<RequireVerified><ProfileView /></RequireVerified>} />
-        <Route path="/albums" element={<RequireVerified><Albums /></RequireVerified>} />
-        <Route path="/matches" element={<RequireVerified><Matches /></RequireVerified>} />
-        <Route path="/conversations" element={<RequireVerified><MessagingRoute /></RequireVerified>} />
-        <Route path="/messages/:otherId" element={<RequireVerified><MessagingRoute /></RequireVerified>} />
-        <Route path="/rooms" element={<RequireVerified><RoomsRoute /></RequireVerified>} />
-        <Route path="/rooms/:roomId" element={<RequireVerified><RoomsRoute /></RequireVerified>} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-      {token && FEATURES.videoCalls && <VideoCallModal />}
+      <LazyRoute>
+        <Routes>
+          <Route path="/" element={<ComingSoon />} />
+          <Route path="/get-the-app" element={<GetTheApp />} />
+          <Route path="/install" element={<Navigate to="/get-the-app" replace />} />
+          <Route path="/app" element={<AppEntry />} />
+          <Route path="/coming-soon" element={<ComingSoon />} />
+          <Route path="/brightonpride" element={<Navigate to="/pride" replace />} />
+          <Route path="/brightonpride26" element={<Navigate to="/pride" replace />} />
+          <Route path="/pride" element={<Pride />} />
+          <Route path="/invite" element={<BetaAccess />} />
+          {/* Old preview address: goes home (an ?invite= code still goes to /invite). */}
+          <Route path="/beta" element={<LegacyInviteRedirect />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/register/underage" element={<RegisterUnderage />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/check-email" element={<CheckEmail />} />
+          <Route path="/confirm-email" element={<ConfirmEmail />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/cookies" element={<Cookies />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/safety" element={<Safety />} />
+          <Route path="/guidelines" element={<CommunityGuidelines />} />
+          <Route path="/help" element={<Help />} />
+          {/* Absolute Navigate only — no relative links under this splat, so keep path+/splat. */}
+          <Route path="/verify/*" element={<ProtectedRoute><Navigate to="/profile" replace /></ProtectedRoute>} />
+          <Route
+            path="/premium"
+            element={
+              <RequireVerified>
+                <Premium />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/profile/setup"
+            element={
+              <RequireVerified allowIncompleteProfile>
+                <ProfileSetup />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/discover"
+            element={
+              <RequireVerified>
+                <Discover />
+              </RequireVerified>
+            }
+          />
+          <Route path="/discovery" element={<Navigate to="/discover" replace />} />
+          <Route
+            path="/stream"
+            element={
+              <RequireVerified>
+                <Stream />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/events"
+            element={
+              <RequireVerified>
+                <Events />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/hot-spots"
+            element={
+              <RequireVerified>
+                <HotSpots />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/admin/venue-claims"
+            element={
+              <ProtectedRoute>
+                <AdminVenueClaims />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <RequireVerified>
+                <Notifications />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <RequireVerified allowIncompleteProfile>
+                <Profile />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/profile/:id"
+            element={
+              <RequireVerified>
+                <ProfileView />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/albums"
+            element={
+              <RequireVerified>
+                <Albums />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/matches"
+            element={
+              <RequireVerified>
+                <Matches />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/conversations"
+            element={
+              <RequireVerified>
+                <MessagingRoute />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/messages/:otherId"
+            element={
+              <RequireVerified>
+                <MessagingRoute />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/rooms"
+            element={
+              <RequireVerified>
+                <RoomsRoute />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/rooms/:roomId"
+            element={
+              <RequireVerified>
+                <RoomsRoute />
+              </RequireVerified>
+            }
+          />
+          {showDevRoomGate ? (
+            <>
+              <Route path="/dev/room-temp-gate" element={<RoomTempIdentityGatePreview />} />
+              <Route path="/dev/room-inroom-dm" element={<RoomInRoomDmPreview />} />
+              <Route path="/dev/profile-sheet" element={<ProfileDrawerPreview />} />
+              <Route path="/dev/empty-faces" element={<EmptyFacesPreview />} />
+            </>
+          ) : null}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </LazyRoute>
+      {token ? <InstallPrompt variant="sheet" /> : null}
+      {token && FEATURES.videoCalls ? (
+        <LazyRoute>
+          <VideoCallModal />
+        </LazyRoute>
+      ) : null}
     </>
   );
 }
 
 export default function App() {
   return (
+    // v7: startTransition + relativeSplatPath are defaults (enabled on v6 via ROUTER_V7_FUTURE first).
     <BrowserRouter>
       <AppShell />
     </BrowserRouter>

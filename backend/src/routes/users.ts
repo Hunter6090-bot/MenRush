@@ -3,7 +3,7 @@ import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
 import { z } from 'zod';
-import { userService } from '../services/user.service';
+import { ShowDistancePremiumError, userService } from '../services/user.service';
 import { profileViewsService } from '../services/profile-views.service';
 import { notificationService } from '../services/notification.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
@@ -12,6 +12,8 @@ import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../
 import { LocationSchema, ProfileSchema } from '../types/validation';
 import { getUploadSubdir } from '../lib/uploads-root';
 import { finalizeLocalUpload } from '../services/media-storage.service';
+import { optimizeImageFile } from '../services/image-optimize.service';
+import { normalizeDiscoveryAgeRange, parseDiscoveryAgeBound } from '../lib/age';
 
 const router = Router();
 const uploadsDir = getUploadSubdir('profiles');
@@ -34,7 +36,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { fileSize: 12 * 1024 * 1024 }, // camera originals before server resize
   fileFilter: uploadFileFilter('profile'),
 });
 
@@ -53,8 +55,27 @@ const coverStorage = multer.diskStorage({
 
 const uploadCover = multer({
   storage: coverStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 12 * 1024 * 1024 },
   fileFilter: uploadFileFilter('cover'),
+});
+
+const mapStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req: any, file, cb) => {
+    try {
+      cb(null, safeUploadFilename('map', req.userId, file.mimetype));
+    } catch (error) {
+      cb(error as Error, '');
+    }
+  },
+});
+
+const uploadMap = multer({
+  storage: mapStorage,
+  limits: { fileSize: 12 * 1024 * 1024 },
+  fileFilter: uploadFileFilter('map'),
 });
 
 router.use(authMiddleware);
@@ -69,7 +90,8 @@ router.post('/photo', verifiedMiddleware, upload.single('photo'), async (req: Au
       return res.status(400).json({ error: 'File content does not match its type' });
     }
 
-    const stored = await finalizeLocalUpload('profiles', req.file.filename, req.file.path);
+    const optimized = await optimizeImageFile(req.file.path, 'profile');
+    const stored = await finalizeLocalUpload('profiles', optimized.filename, optimized.path);
     const user = await userService.updateProfile(req.userId!, { photo_url: stored.publicUrl });
     
     res.json(user);
@@ -88,9 +110,39 @@ router.post('/cover', verifiedMiddleware, uploadCover.single('cover'), async (re
       return res.status(400).json({ error: 'File content does not match its type' });
     }
 
-    const stored = await finalizeLocalUpload('profiles', req.file.filename, req.file.path);
+    const optimized = await optimizeImageFile(req.file.path, 'cover');
+    const stored = await finalizeLocalUpload('profiles', optimized.filename, optimized.path);
     const user = await userService.updateProfile(req.userId!, { cover_url: stored.publicUrl });
 
+    res.json(user);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/map-photo', verifiedMiddleware, uploadMap.single('photo'), async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    if (!(await validateFileSignature(req.file.path, req.file.mimetype))) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'File content does not match its type' });
+    }
+
+    const optimized = await optimizeImageFile(req.file.path, 'profile');
+    const stored = await finalizeLocalUpload('profiles', optimized.filename, optimized.path);
+    const user = await userService.updateProfile(req.userId!, { map_photo_url: stored.publicUrl });
+
+    res.json(user);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.delete('/map-photo', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await userService.updateProfile(req.userId!, { map_photo_url: null });
     res.json(user);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -110,31 +162,74 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.get('/search', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/me/referrals', async (req: AuthRequest, res: Response) => {
   try {
-    const q = typeof req.query.q === 'string' ? req.query.q : '';
-    const users = await userService.searchProfiles(req.userId!, q);
-    res.json(users);
+    const { referralService } = await import('../services/referral.service');
+    const summary = await referralService.getSummary(req.userId!);
+    res.json(summary);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
 });
 
+router.get('/search', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q : '';
+    const by = req.query.by === 'place' ? 'place' : 'name';
+    const users = await userService.searchProfiles(req.userId!, q, by);
+    res.json(users);
+  } catch (error: any) {
+    const { PlaceLookupError, PLACE_LOOKUP_FAILED_MESSAGE } = await import('../lib/ukIePlace');
+    if (error instanceof PlaceLookupError || error?.name === 'PlaceLookupError') {
+      res.status(400).json({ error: PLACE_LOOKUP_FAILED_MESSAGE });
+      return;
+    }
+    // Never surface raw codes / stack internals to the client.
+    res.status(400).json({ error: 'Search failed. Please try again.' });
+  }
+});
+
 router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { radius, minAge, maxAge, interests, onlyPulse, lookingFor, mood } = req.query;
+    const {
+      radius,
+      minAge,
+      maxAge,
+      interests,
+      onlyPulse,
+      lookingFor,
+      mood,
+      online,
+      verified,
+      new: isNew,
+      page,
+      limit,
+      offset,
+      format,
+      scope,
+    } = req.query;
+
+    const discoveryScope: 'radius' | 'uk_ie' = scope === 'uk_ie' ? 'uk_ie' : 'radius';
     const requestedRadius = radius ? Number.parseFloat(radius as string) : 5;
-    if (!Number.isFinite(requestedRadius)) {
+    if (discoveryScope === 'radius' && !Number.isFinite(requestedRadius)) {
       return res.status(400).json({ error: 'Invalid radius' });
     }
 
+    const ageBounds = normalizeDiscoveryAgeRange(
+      parseDiscoveryAgeBound(minAge),
+      parseDiscoveryAgeBound(maxAge),
+    );
     const filters = {
-      minAge: minAge ? parseInt(minAge as string) : undefined,
-      maxAge: maxAge ? parseInt(maxAge as string) : undefined,
+      minAge: ageBounds.minAge,
+      maxAge: ageBounds.maxAge,
       interests: (interests as string)?.split(',').filter(Boolean),
       onlyPulse: onlyPulse === 'true' || onlyPulse === '1',
+      online: online === 'true' || online === '1',
+      verified: verified === 'true' || verified === '1',
+      new: isNew === 'true' || isNew === '1',
       lookingFor: typeof lookingFor === 'string' ? lookingFor : undefined,
       mood: typeof mood === 'string' ? mood : undefined,
+      discoveryScope,
     };
 
     const queryLat = typeof req.query.lat === 'string' ? Number.parseFloat(req.query.lat) : NaN;
@@ -144,14 +239,27 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
         ? { lat: queryLat, lng: queryLng }
         : undefined;
 
-    const users = await userService.getNearbyUsers(
+    const pageNum = page ? Math.max(1, Number.parseInt(String(page), 10) || 1) : 1;
+    const limitNum = limit
+      ? Math.min(Math.max(1, Number.parseInt(String(limit), 10) || 60), 200)
+      : 60;
+    const offsetNum = offset
+      ? Math.max(0, Number.parseInt(String(offset), 10) || 0)
+      : (pageNum - 1) * limitNum;
+
+    const result = await userService.getNearbyUsers(
       req.userId!,
-      Math.min(Math.max(requestedRadius, 0.8), 161),
+      discoveryScope === 'uk_ie' ? 0 : Math.min(Math.max(requestedRadius, 0.8), 161),
       filters,
       clientLocation,
+      { page: pageNum, limit: limitNum, offset: offsetNum },
     );
 
-    res.json(users);
+    res.setHeader('X-Total-Count', String(result.total));
+    if (format === 'array') {
+      return res.json(result.users);
+    }
+    res.json(result);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
@@ -170,7 +278,14 @@ router.get('/profile/:id', verifiedMiddleware, async (req: AuthRequest, res: Res
   try {
     const viewerId = req.userId!;
     const targetId = req.params.id;
-    const user = await userService.getPublicProfile(viewerId, targetId);
+    const queryLat = typeof req.query.lat === 'string' ? Number.parseFloat(req.query.lat) : NaN;
+    const queryLng = typeof req.query.lng === 'string' ? Number.parseFloat(req.query.lng) : NaN;
+    const clientLocation =
+      Number.isFinite(queryLat) && Number.isFinite(queryLng)
+        ? { lat: queryLat, lng: queryLng }
+        : undefined;
+
+    const user = await userService.getPublicProfile(viewerId, targetId, clientLocation);
     if (!user) {
       return res.status(404).json({ error: 'User not found', code: 'user_not_found' });
     }
@@ -189,7 +304,7 @@ router.get('/profile/:id', verifiedMiddleware, async (req: AuthRequest, res: Res
             type: 'profile_view',
             title: `${viewerName} viewed your profile`,
             body: 'See who checked you out.',
-            linkPath: '/profile',
+            linkPath: `/profile/${viewerId}`,
           });
         } catch (sideEffectError) {
           console.error('[profile-view-side-effect]', sideEffectError);
@@ -250,6 +365,19 @@ router.post('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Respo
   }
 });
 
+/** Unmatch — delete both like directions. Does not touch rooms or messages. */
+router.delete('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await userService.unmatchUser(req.userId!, req.params.id);
+    res.json({ unmatched: true, removed: result.removed });
+  } catch (error: any) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
+    res.status(400).json({ error: error.message || 'Could not unmatch' });
+  }
+});
+
 router.get('/matches', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const matches = await userService.getMatches(req.userId!);
@@ -263,6 +391,16 @@ router.get('/likes/received/summary', verifiedMiddleware, async (req: AuthReques
   try {
     const summary = await userService.getReceivedLikesSummary(req.userId!);
     res.json(summary);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/** Incoming likes (not yet mutual) — visible to all members, not MenRush+. */
+router.get('/likes/received', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const likes = await userService.getReceivedLikes(req.userId!);
+    res.json(likes);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -296,6 +434,9 @@ router.post('/profile', verifiedMiddleware, async (req: AuthRequest, res: Respon
     const user = await userService.updateProfile(req.userId!, data);
     res.json(user);
   } catch (error: any) {
+    if (error instanceof ShowDistancePremiumError) {
+      return res.status(402).json({ error: error.code, feature: error.feature });
+    }
     res.status(400).json({ error: error.message });
   }
 });
@@ -378,6 +519,8 @@ router.get('/blocks', async (req: AuthRequest, res: Response) => {
 const ReportSchema = z.object({
   reason: z.enum(['spam', 'harassment', 'fake_profile', 'inappropriate_content', 'underage', 'other']),
   details: z.string().max(1000).optional(),
+  /** Conversation or room id for SENTINEL review — optional, free for all users. */
+  thread_id: z.string().min(1).max(128).optional(),
 });
 
 router.post('/report/:id', async (req: AuthRequest, res: Response) => {
@@ -394,6 +537,7 @@ router.post('/report/:id', async (req: AuthRequest, res: Response) => {
       req.params.id,
       parsed.data.reason,
       parsed.data.details,
+      parsed.data.thread_id,
     );
     res.json({ reported: true, id: report.id });
   } catch (error: any) {

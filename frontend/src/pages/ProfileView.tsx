@@ -1,16 +1,31 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { usersAPI } from '../api/client';
-import { useAuthStore } from '../hooks/store';
+import { useAuthStore, useLocationStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
-import { UserAvatar } from '../components/UserAvatar';
+import { UserAvatar, getPhotoUrl } from '../components/UserAvatar';
+import { FadedBrandFace, isNearbyPlaceholderFace } from '../components/FadedBrandFace';
 import { CoverBanner, normalizeCoverFrame } from '../components/CoverBanner';
+import { ProfilePhotoViewer } from '../components/ProfilePhotoViewer';
+import { realAvatarUrl } from '../lib/avatarFallback';
+import { VerifiedBadge } from '../components/VerifiedBadge';
 import { StatusBadge } from '../components/StatusBadge';
+import { DistancePill } from '../components/DistancePill';
 import { ProfileAlbumsSection } from '../components/ProfileAlbumsSection';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
+import { IconMatches, IconChat, IconUnmatch } from '../components/icons';
 import { formatHeight, formatWeight } from '../lib/age';
+import { getDistanceLabel } from '../lib/discovery';
+import {
+  matchCtaAriaLabel,
+  matchCtaDisabled,
+  matchCtaLabel,
+  matchCtaToneClasses,
+  matchInterestState,
+} from '../lib/matchCta';
 
 interface ViewableUser {
+  is_verified?: boolean;
   id: string;
   name: string;
   age?: number;
@@ -22,6 +37,10 @@ interface ViewableUser {
   cover_position_x?: number;
   cover_position_y?: number;
   cover_zoom?: number;
+  /** Bucketed distance in km for locale formatting on the client. */
+  distance_km?: string | number | null;
+  /** Approximate distance label (privacy-bucketed). */
+  distance_label?: string | null;
   interests?: string[];
   height_cm?: number | null;
   weight_kg?: number | null;
@@ -55,22 +74,51 @@ function profileErrorMessage(err: unknown): string {
   return data?.error || 'Could not load profile.';
 }
 
+/** Coerce API interests to string[] — null/object payloads previously crashed .map. */
+export function normalizeInterests(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((tag): tag is string => typeof tag === 'string' && tag.length > 0);
+}
+
+export function normalizeProfilePayload(raw: unknown): ViewableUser | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const data = raw as Record<string, unknown>;
+  if (typeof data.id !== 'string' || typeof data.name !== 'string' || !data.name.trim()) {
+    return null;
+  }
+  return {
+    ...(data as unknown as ViewableUser),
+    id: data.id,
+    name: data.name,
+    interests: normalizeInterests(data.interests),
+  };
+}
+
 export const ProfileView = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const authUserId = useAuthStore((s) => s.user?.id);
+  const locationLat = useLocationStore((s) => s.lat);
+  const locationLng = useLocationStore((s) => s.lng);
   const [user, setUser] = useState<ViewableUser | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [liked, setLiked] = useState(false);
   const [mutual, setMutual] = useState(false);
   const [matching, setMatching] = useState(false);
+  const [unmatching, setUnmatching] = useState(false);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(
     null,
   );
+  const [viewer, setViewer] = useState<{ src: string; alt: string } | null>(null);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) {
+      setUser(null);
+      setError('Profile not found.');
+      setLoading(false);
+      return;
+    }
     if (authUserId && id === authUserId) {
       navigate('/profile', { replace: true });
       return;
@@ -78,19 +126,25 @@ export const ProfileView = () => {
 
     setLoading(true);
     usersAPI
-      .getProfile(id)
+      .getProfile(id, { lat: locationLat, lng: locationLng })
       .then((r) => {
-        const data = r.data as ViewableUser;
+        const data = normalizeProfilePayload(r.data);
+        if (!data) {
+          setUser(null);
+          setError('Could not load profile.');
+          return;
+        }
         setUser(data);
         setLiked(Boolean(data.is_liked || data.is_match));
         setMutual(Boolean(data.is_match));
         setError(null);
       })
       .catch((err) => {
+        setUser(null);
         setError(profileErrorMessage(err));
       })
       .finally(() => setLoading(false));
-  }, [id, authUserId, navigate]);
+  }, [id, authUserId, navigate, locationLat, locationLng]);
 
   const flash = useCallback((msg: string, tone: 'success' | 'error' = 'success') => {
     setSafetyNotice({ msg, tone });
@@ -98,15 +152,7 @@ export const ProfileView = () => {
   }, []);
 
   const handleMatch = useCallback(async () => {
-    if (!user || matching) return;
-    if (mutual) {
-      navigate(`/messages/${user.id}`);
-      return;
-    }
-    if (liked) {
-      flash(`Match already sent to ${user.name}. Chat unlocks when he matches back · consent first.`);
-      return;
-    }
+    if (!user || matching || mutual || liked) return;
     setMatching(true);
     try {
       const res = await usersAPI.likeUser(user.id);
@@ -128,7 +174,7 @@ export const ProfileView = () => {
     } finally {
       setMatching(false);
     }
-  }, [user, matching, mutual, liked, navigate, flash]);
+  }, [user, matching, mutual, liked, flash]);
 
   const handleMessage = useCallback(() => {
     if (!user) return;
@@ -139,9 +185,33 @@ export const ProfileView = () => {
     flash('Chat unlocks after a mutual match. Tap Match first · consent first.');
   }, [user, mutual, navigate, flash]);
 
-  const handlePass = useCallback(() => {
-    navigate(-1);
-  }, [navigate]);
+  const handleUnmatch = useCallback(async () => {
+    if (!user || unmatching || !mutual) return;
+    if (
+      !window.confirm(
+        `Unmatch with ${user.name}? Chat locks again until you both match.`,
+      )
+    ) {
+      return;
+    }
+    setUnmatching(true);
+    try {
+      await usersAPI.unmatchUser(user.id);
+      setMutual(false);
+      setLiked(false);
+      flash(`Unmatched with ${user.name}.`);
+    } catch (err: unknown) {
+      const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      flash(
+        typeof apiError === 'string' && apiError.length > 0
+          ? apiError
+          : 'Could not unmatch. Try again.',
+        'error',
+      );
+    } finally {
+      setUnmatching(false);
+    }
+  }, [user, unmatching, mutual, flash]);
 
   if (loading) {
     return (
@@ -172,9 +242,18 @@ export const ProfileView = () => {
     );
   }
 
+  const matchState = matchInterestState({ liked, mutual });
+  // Legacy defaults are never "photos" — no enlarge, Brand placeholder instead.
+  const realCover = realAvatarUrl(user.cover_url);
+  const realPhoto = realAvatarUrl(user.photo_url);
+  const coverSrc = realCover ? getPhotoUrl(realCover) : undefined;
+  const photoSrc = realPhoto ? getPhotoUrl(realPhoto) : undefined;
+  // Coarse, Discretion-fuzzed label from the server. None reads "Nearby".
+  const distLabel = getDistanceLabel(user);
+
   return (
     <Layout>
-      <div className="max-w-xl mx-auto px-4 py-6 pb-10 space-y-4">
+      <div className="mx-auto min-w-0 max-w-xl space-y-4 overflow-x-clip px-4 py-6 pb-10" data-testid="profile-view-shell">
         {safetyNotice ? (
           <div
             role="status"
@@ -191,35 +270,77 @@ export const ProfileView = () => {
           </div>
         ) : null}
 
-        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl overflow-hidden shadow-card">
-          {user.cover_url ? (
-            <CoverBanner
-              coverUrl={user.cover_url}
-              frame={normalizeCoverFrame(
-                user.cover_position_x,
-                user.cover_position_y,
-                user.cover_zoom,
-              )}
-            />
+        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl overflow-hidden shadow-card" data-testid="profile-view-body">
+          {coverSrc ? (
+            <button
+              type="button"
+              data-testid="profile-view-cover-enlarge"
+              aria-label={`Enlarge ${user.name}'s cover`}
+              className="block w-full cursor-zoom-in p-0 border-0 bg-transparent"
+              onClick={() => setViewer({ src: coverSrc, alt: `${user.name}'s cover` })}
+            >
+              <CoverBanner
+                coverUrl={realCover!}
+                frame={normalizeCoverFrame(
+                  user.cover_position_x,
+                  user.cover_position_y,
+                  user.cover_zoom,
+                )}
+              />
+            </button>
           ) : (
             <div className="h-40 sm:h-32 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#A45E18]/10" />
           )}
           <div className="px-5 pb-5">
             <div className="-mt-10 mb-3 flex items-end justify-between gap-2">
-              <UserAvatar
-                name={user.name}
-                photoUrl={user.photo_url}
-                age={user.age}
-                online={user.online}
-                size="xl"
-                className="ring-4 ring-[var(--bg-card)]"
-              />
+              {photoSrc && !isNearbyPlaceholderFace(user.photo_url) ? (
+                <button
+                  type="button"
+                  data-testid="profile-view-avatar-enlarge"
+                  aria-label={`Enlarge ${user.name}'s photo`}
+                  className="rounded-full cursor-zoom-in p-0 border-0 bg-transparent"
+                  onClick={() => setViewer({ src: photoSrc, alt: user.name })}
+                >
+                  <UserAvatar
+                    name={user.name}
+                    photoUrl={user.photo_url}
+                    age={user.age}
+                    online={user.online}
+                    size="xl"
+                    linkToProfile={false}
+                    className="ring-4 ring-[var(--bg-card)]"
+                  />
+                </button>
+              ) : isNearbyPlaceholderFace(user.photo_url) ? (
+                <span
+                  className="relative inline-flex shrink-0 overflow-hidden rounded-full ring-4 ring-[var(--bg-card)]"
+                  style={{ width: 96, height: 96 }}
+                  data-testid="profile-view-empty-brand-face"
+                >
+                  <FadedBrandFace
+                    variant="profile"
+                    size={96}
+                    label={user.name}
+                  />
+                </span>
+              ) : (
+                <UserAvatar
+                  name={user.name}
+                  photoUrl={user.photo_url}
+                  age={user.age}
+                  online={user.online}
+                  size="xl"
+                  linkToProfile={false}
+                  className="ring-4 ring-[var(--bg-card)]"
+                />
+              )}
               <div className="flex items-center gap-1.5 pb-1">
                 <StatusBadge online={!!user.online} lastSeen={user.last_seen} />
                 <div className="rounded-full border border-[var(--border-default)] bg-[var(--bg-primary)]/60">
                   <ChatSafetyMenu
                     peerId={user.id}
                     peerName={user.name}
+                    showHideLocation
                     onNotice={(msg, tone) => {
                       setSafetyNotice({ msg, tone: tone ?? 'success' });
                       window.setTimeout(() => setSafetyNotice(null), 4000);
@@ -229,10 +350,20 @@ export const ProfileView = () => {
                 </div>
               </div>
             </div>
-            <h2 className="text-xl font-bold text-[var(--cream)]">{user.name}</h2>
-            {typeof user.age === 'number' && (
-              <p className="text-[var(--cream-muted)] text-sm mt-0.5">Age {user.age}</p>
-            )}
+            <div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold text-[var(--cream)]">{user.name}</h2>{user.is_verified ? <VerifiedBadge /> : null}</div>
+            <div className="flex flex-wrap items-center gap-2 text-sm mt-0.5">
+              {typeof user.age === 'number' && (
+                <span className="text-[var(--cream-muted)]">Age {user.age}</span>
+              )}
+              {distLabel && (
+                <DistancePill
+                  km={0}
+                  label={distLabel}
+                  testId="profile-distance"
+                  className="bg-black/40 text-[var(--cream)]/90"
+                />
+              )}
+            </div>
             {(user.height_cm != null ||
               user.weight_kg != null ||
               user.relationship_status ||
@@ -273,8 +404,8 @@ export const ProfileView = () => {
               </p>
             )}
             {user.interests && user.interests.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-3">
-                {user.interests.map((tag) => (
+              <div className="flex flex-wrap gap-1.5 mt-3" data-testid="profile-view-interests">
+                {normalizeInterests(user.interests).map((tag) => (
                   <span
                     key={tag}
                     className="px-2.5 py-1 rounded-full bg-[rgba(196,131,42,0.10)] text-[var(--copper)] text-xs font-medium border border-[rgba(196,131,42,0.25)]"
@@ -289,46 +420,86 @@ export const ProfileView = () => {
 
         <ProfileAlbumsSection ownerId={user.id} ownerName={user.name} />
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={handlePass}
-            className="flex-1 min-w-[5.5rem] py-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] font-bold text-sm hover:border-[var(--copper)] hover:text-[var(--copper)] transition-all"
+        {mutual ? (
+          <div
+            data-testid="profile-view-matched-status"
+            className="flex items-center justify-center gap-1.5 rounded-full border border-[var(--copper)]/35 bg-[rgba(196,131,42,0.12)] px-3.5 py-1.5 text-xs font-bold text-[#E0A14A]"
           >
-            Pass
-          </button>
-          <button
-            type="button"
-            disabled={matching}
-            onClick={() => void handleMatch()}
-            data-testid="profile-view-match"
-            className={`flex-[1.4] min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide active:scale-[0.98] transition-all disabled:opacity-60 ${
-              mutual
-                ? 'border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)]'
-                : liked
-                  ? 'border border-[var(--copper)]/50 bg-transparent text-[var(--copper)]'
-                  : 'bg-[var(--copper)] text-[var(--nn-on-copper)] hover:bg-[var(--copper-light,#E0A14A)]'
-            }`}
-          >
-            {matching ? 'Sending…' : mutual ? 'Open chat' : liked ? 'Matched' : 'Match'}
-          </button>
-          <button
-            type="button"
-            onClick={handleMessage}
-            data-testid="profile-view-message"
-            className={`flex-1 min-w-[5.5rem] py-3 rounded-xl font-bold text-sm transition-all ${
-              mutual
-                ? 'border border-[var(--copper)]/40 text-[var(--copper)] hover:bg-[rgba(196,131,42,0.12)]'
-                : 'border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[var(--copper)]/40 hover:text-[var(--copper)]'
-            }`}
-          >
-            Message
-          </button>
+            <IconMatches size={16} />
+            <span>Matched with {user.name}</span>
+          </div>
+        ) : null}
+
+        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 overflow-x-clip">
+          {mutual ? (
+            <>
+              <button
+                type="button"
+                onClick={handleMessage}
+                data-testid="profile-view-message"
+                title="Chat"
+                aria-label={`Chat with ${user.name}`}
+                className="flex-1 min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide active:scale-[0.98] transition-all border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)] flex items-center justify-center gap-2 hover:bg-[rgba(196,131,42,0.28)]"
+              >
+                <IconChat size={20} />
+                <span>Chat</span>
+              </button>
+              <button
+                type="button"
+                disabled={unmatching}
+                onClick={() => void handleUnmatch()}
+                data-testid="profile-view-unmatch"
+                title="Unmatch"
+                aria-label={`Unmatch with ${user.name}`}
+                className="flex-1 min-w-[7rem] py-3 rounded-xl font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[#c45a4a]/55 hover:text-[#e08a7a] disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                <IconUnmatch size={20} />
+                <span>{unmatching ? 'Unmatching…' : 'Unmatch'}</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                disabled={matchCtaDisabled(matchState, matching)}
+                aria-disabled={matchCtaDisabled(matchState, matching)}
+                aria-label={matchCtaAriaLabel(matchState, user.name)}
+                title={matching ? 'Sending…' : matchState === 'outgoing' ? 'Sent' : 'Match'}
+                onClick={() => void handleMatch()}
+                data-testid="profile-view-match"
+                className={`flex-1 min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 ${
+                  matchState === 'none' ? 'uppercase active:scale-[0.98]' : ''
+                } ${matchCtaToneClasses(matchState)}`}
+              >
+                <IconMatches size={20} />
+                <span>{matching ? 'Sending…' : matchState === 'outgoing' ? 'Sent' : 'Match'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleMessage}
+                data-testid="profile-view-message"
+                title="Chat"
+                aria-label={`Chat with ${user.name}`}
+                className="flex-1 min-w-[7rem] py-3 rounded-xl font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[var(--copper)]/40 hover:text-[var(--copper)] flex items-center justify-center gap-2"
+              >
+                <IconChat size={20} />
+                <span>Chat</span>
+              </button>
+            </>
+          )}
         </div>
+
         <p className="text-center text-[11px] text-[var(--cream-muted)]">
           Match is mutual interest · Chat unlocks when he matches back · Report anytime
         </p>
       </div>
+      {viewer ? (
+        <ProfilePhotoViewer
+          src={viewer.src}
+          alt={viewer.alt}
+          onClose={() => setViewer(null)}
+        />
+      ) : null}
     </Layout>
   );
 };

@@ -2,14 +2,29 @@ import { Router, Response } from 'express';
 import fs from 'fs';
 import multer from 'multer';
 import { messageService } from '../services/message.service';
+import { albumService } from '../services/album.service';
 import { sendPushToUser } from '../services/push.service';
 import { notificationService } from '../services/notification.service';
+import { isDiscreetMediaBlurEnabled } from '../services/discreet-media';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { SecurityError } from '../security/access';
-import { resolveMediaPath, verifyMediaAccess } from '../security/media';
-import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
-import { MessageSchema, MediaMessageFormSchema, LocationMessageSchema } from '../types/validation';
+import { resolveMediaPath, signedMediaUrl, verifyMediaAccess } from '../security/media';
+import {
+  safeUploadFilename,
+  uploadFileFilter,
+  validateFileSignature,
+  sniffMediaMimeFromPath,
+  normalizeUploadMime,
+  allowedUpload,
+} from '../security/uploads';
+import {
+  MessageSchema,
+  MediaMessageFormSchema,
+  AlbumMediaMessageSchema,
+  LocationMessageSchema,
+} from '../types/validation';
 import { getUploadSubdir } from '../lib/uploads-root';
+import { optimizeImageFile } from '../services/image-optimize.service';
 
 const router = Router();
 
@@ -25,11 +40,13 @@ function pushNewMessage(receiverId: string, senderName: string, senderId: string
     body,
     url: `/messages/${senderId}`,
     tag: `msg-${senderId}`,
+    kind: 'message',
   }).catch(() => undefined);
 }
 
 // ── Multer storage for message media (images + voice notes) ──────────────
 const mediaDir = getUploadSubdir('messages');
+const albumMediaDir = getUploadSubdir('albums');
 fs.mkdirSync(mediaDir, { recursive: true });
 
 const mediaUpload = multer({
@@ -52,9 +69,31 @@ router.get('/:messageId/media', async (req, res) => {
     const resource = `/api/messages/${req.params.messageId}/media`;
     const grant = verifyMediaAccess(String(req.query.access || ''), resource);
     const media = await messageService.getMedia(grant.viewerId, req.params.messageId);
+    // Blur decision already ships on the conversation payload for SoftBlurMedia.
+    // When Discreet blur is off, skip the Premium lookup on every Range request
+    // so short video notes can paint the first frame faster.
+    const mediaClear = isDiscreetMediaBlurEnabled()
+      ? await messageService.viewerMediaClear(
+          grant.viewerId,
+          media.senderId,
+          media.mediaType,
+        )
+      : true;
+    const absolute = resolveMediaPath(mediaDir, media.storageKey);
+    // Safari needs Accept-Ranges to start playback before the full download
+    // (Pete iPhone ~12s open on chat video that had already arrived).
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader(
+      'Cache-Control',
+      media.isDisappearing ? 'private, no-store' : 'private, max-age=600',
+    );
+    res.setHeader('X-MenRush-Media-Clear', mediaClear ? '1' : '0');
     res.type(media.mimeType);
-    res.setHeader('Cache-Control', 'private, no-store');
-    return res.sendFile(resolveMediaPath(mediaDir, media.storageKey));
+    return res.sendFile(absolute, { acceptRanges: true }, (err) => {
+      if (!err || res.headersSent) return;
+      console.error('[media:sendFile]', err.message);
+      res.status(404).json({ error: 'media_unavailable' });
+    });
   } catch (error) {
     if (error instanceof SecurityError) {
       return res.status(error.status).json({ error: error.code });
@@ -72,26 +111,29 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
     const io = req.app.get('io');
     io.to(`user:${data.receiver_id}`).emit('message', message);
+    // Respond before fan-out so mobile clients aren't blocked on notify/push latency.
+    res.status(201).json(message);
+
     pushNewMessage(data.receiver_id, message.sender_name ?? '', req.userId!, message.message);
 
     const preview =
       message.message.length > 80 ? `${message.message.slice(0, 77)}…` : message.message;
-    try {
-      await notificationService.notify(io, {
+    void notificationService
+      .notify(io, {
         userId: data.receiver_id,
         actorId: req.userId!,
         type: 'message',
         title: `New message from ${message.sender_name ?? 'someone'}`,
         body: preview,
         linkPath: `/messages/${req.userId}`,
-      });
-    } catch (notifyErr) {
-      console.error('[notification:message]', notifyErr);
+      })
+      .catch((notifyErr) => console.error('[notification:message]', notifyErr));
+  } catch (error: unknown) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
     }
-
-    res.status(201).json(message);
-  } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const message = error instanceof Error ? error.message : 'Could not send message';
+    res.status(400).json({ error: message });
   }
 });
 
@@ -138,6 +180,13 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
   }
 
   const { receiver_id, kind, caption, disappearing, max_views, duration_ms } = parsed.data;
+  const sniffed = await sniffMediaMimeFromPath(req.file.path, kind);
+  if (sniffed) req.file.mimetype = sniffed;
+  else req.file.mimetype = normalizeUploadMime(req.file.mimetype) || req.file.mimetype;
+  if (!allowedUpload(req.file.mimetype, 'message')) {
+    try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+    return res.status(400).json({ error: 'Unsupported upload type' });
+  }
   if (!(await validateFileSignature(req.file.path, req.file.mimetype))) {
     try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
     return res.status(400).json({ error: 'File content does not match its type' });
@@ -157,21 +206,38 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
   }
 
   try {
+    // Downscale chat photos before DB insert — phones were sending multi‑MB originals
+    // (~15–50s upload). Keep video/audio bytes as-is.
+    let storageKey = req.file.filename;
+    let mimeType = req.file.mimetype;
+    if (kind === 'image') {
+      const optimized = await optimizeImageFile(req.file.path, 'chat');
+      storageKey = optimized.filename;
+      mimeType = optimized.mimeType;
+    }
+
     const message = await messageService.sendMediaMessage(req.userId!, receiver_id, {
       mediaType: kind,
-      storageKey: req.file.filename,
-      mimeType: req.file.mimetype,
+      storageKey,
+      mimeType,
       caption,
       disappearing,
       maxViews: max_views,
       audioDurationMs: duration_ms,
     });
 
+    // Return 201 before push/in-app notify so send timing is not blocked on
+    // notification delivery (open-thread live image delivery stays on #158).
+    res.status(201).json(message);
+
     const io = req.app.get('io');
-    io.to(`user:${receiver_id}`).emit(
-      'message',
-      messageService.forViewer(message, receiver_id),
-    );
+    void messageService
+      .forViewer(message, receiver_id)
+      .then((forReceiver) => {
+        io.to(`user:${receiver_id}`).emit('message', forReceiver);
+      })
+      .catch(() => undefined);
+
     const pushBody =
       kind === 'image' ? '\u{1F4F7} Photo' : kind === 'video' ? '\u{1F3AC} Video' : '\u{1F3A4} Voice note';
     pushNewMessage(
@@ -181,8 +247,8 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
       pushBody,
     );
 
-    try {
-      await notificationService.notify(io, {
+    void notificationService
+      .notify(io, {
         userId: receiver_id,
         actorId: req.userId!,
         type: kind === 'image' ? 'photo' : 'voice',
@@ -194,16 +260,129 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
               : `${message.sender_name ?? 'Someone'} sent a voice note`,
         body: caption || undefined,
         linkPath: `/messages/${req.userId}`,
+      })
+      .catch((notifyErr) => {
+        console.error('[notification:media]', notifyErr);
       });
-    } catch (notifyErr) {
-      console.error('[notification:media]', notifyErr);
-    }
-
-    res.status(201).json(message);
   } catch (error: any) {
     // Roll back the upload if the DB insert / match check fails.
     try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
-    res.status(400).json({ error: error.message });
+    if (!res.headersSent) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+});
+
+/**
+ * Attach a My Photos library photo into a 1:1 thread.
+ * Copies bytes into message storage — never deletes, moves, re-uploads over,
+ * or changes album visibility / album_photos / album_grants.
+ */
+router.post('/media/from-album', async (req: AuthRequest, res: Response) => {
+  const parsed = AlbumMediaMessageSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.errors[0].message });
+  }
+
+  const { receiver_id, photo_id, caption, disappearing, max_views } = parsed.data;
+  let copiedKey: string | null = null;
+
+  try {
+    const owned = await albumService.getOwnedPhotoForAttach(req.userId!, photo_id);
+    const src = resolveMediaPath(albumMediaDir, owned.storageKey);
+    if (!fs.existsSync(src)) {
+      return res.status(404).json({ error: 'photo_file_missing' });
+    }
+
+    // Snapshot into message storage so chat withdraw never touches the album original.
+    copiedKey = safeUploadFilename('message', req.userId!, owned.mimeType);
+    const dest = resolveMediaPath(mediaDir, copiedKey);
+    fs.copyFileSync(src, dest);
+
+    let storageKey = copiedKey;
+    let mimeType = owned.mimeType.startsWith('image/') ? owned.mimeType : 'image/jpeg';
+    if (mimeType.startsWith('image/')) {
+      const optimized = await optimizeImageFile(dest, 'chat');
+      storageKey = optimized.filename;
+      mimeType = optimized.mimeType;
+      if (optimized.filename !== copiedKey) {
+        try {
+          fs.unlinkSync(dest);
+        } catch {
+          /* ignore */
+        }
+        copiedKey = optimized.filename;
+      }
+    }
+
+    const message = await messageService.sendMediaMessage(req.userId!, receiver_id, {
+      mediaType: 'image',
+      storageKey,
+      mimeType,
+      caption,
+      disappearing,
+      maxViews: max_views,
+    });
+
+    res.status(201).json(message);
+
+    const io = req.app.get('io');
+    void messageService
+      .forViewer(message, receiver_id)
+      .then((forReceiver) => {
+        io.to(`user:${receiver_id}`).emit('message', forReceiver);
+      })
+      .catch(() => undefined);
+
+    pushNewMessage(receiver_id, message.sender_name ?? '', req.userId!, '\u{1F4F7} Photo');
+
+    void notificationService
+      .notify(io, {
+        userId: receiver_id,
+        actorId: req.userId!,
+        type: 'photo',
+        title: `${message.sender_name ?? 'Someone'} sent a photo`,
+        body: caption || undefined,
+        linkPath: `/messages/${req.userId}`,
+      })
+      .catch((notifyErr) => {
+        console.error('[notification:media:from-album]', notifyErr);
+      });
+  } catch (error: any) {
+    if (copiedKey) {
+      try {
+        fs.unlinkSync(resolveMediaPath(mediaDir, copiedKey));
+      } catch {
+        /* ignore */
+      }
+    }
+    if (!res.headersSent) {
+      const code = error?.message || 'Failed to attach photo';
+      const status = code === 'photo_not_owned' ? 404 : 400;
+      res.status(status).json({ error: code });
+    }
+  }
+});
+
+/**
+ * Fresh signed media URL for an existing message (JWT auth).
+ * Used by VideoBubble so playback does not depend on a grant that may have
+ * expired in a cached thread row, and so open/retry never remounts on poll churn.
+ */
+router.get('/:messageId/media-url', async (req: AuthRequest, res: Response) => {
+  try {
+    const media = await messageService.getMedia(req.userId!, req.params.messageId);
+    const resource = `/api/messages/${req.params.messageId}/media`;
+    return res.json({
+      url: signedMediaUrl(resource, req.userId!),
+      mime_type: media.mimeType,
+      media_type: media.mediaType,
+    });
+  } catch (error) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.code });
+    }
+    return res.status(404).json({ error: 'media_unavailable' });
   }
 });
 
@@ -230,7 +409,7 @@ router.post('/:messageId/view', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.post('/:messageId/withdraw', async (req: AuthRequest, res: Response) => {
+const handleWithdrawMessage = async (req: AuthRequest, res: Response) => {
   try {
     const { forSender, forReceiver, receiverId } = await messageService.withdrawMedia(
       req.userId!,
@@ -250,14 +429,34 @@ router.post('/:messageId/withdraw', async (req: AuthRequest, res: Response) => {
     }
     res.status(500).json({ error: error.message });
   }
-});
+};
+
+router.post('/:messageId/withdraw', handleWithdrawMessage);
+router.post('/location/:messageId/withdraw', handleWithdrawMessage);
 
 router.get('/conversation/:otherId', async (req: AuthRequest, res: Response) => {
   try {
-    const messages = await messageService.getConversation(req.userId!, req.params.otherId);
+    const before =
+      typeof req.query.before === 'string' && req.query.before.trim()
+        ? req.query.before.trim()
+        : undefined;
+    const rawLimit = typeof req.query.limit === 'string' ? Number(req.query.limit) : 50;
+    const limit = Number.isFinite(rawLimit)
+      ? Math.min(100, Math.max(1, Math.round(rawLimit)))
+      : 50;
+    const messages = await messageService.getConversation(
+      req.userId!,
+      req.params.otherId,
+      limit,
+      before,
+    );
     res.json(messages);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
+    const message = error instanceof Error ? error.message : 'Could not load conversation';
+    res.status(500).json({ error: message });
   }
 });
 
