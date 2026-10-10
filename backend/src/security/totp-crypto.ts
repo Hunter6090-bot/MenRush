@@ -1,29 +1,167 @@
 import crypto from 'crypto';
 
+/**
+ * TOTP (2FA) secrets at rest: AES-256-GCM, 12-byte random IV, 16-byte tag.
+ *
+ * Formats
+ * - v1 (legacy, no prefix):  base64(iv).base64(tag).base64(ciphertext)
+ *   Key = SHA-256 of the raw variable, exactly as before, so every existing row still reads.
+ * - v2 (all new writes):     v2:base64(iv).base64(tag).base64(ciphertext)
+ *   Key = the variable itself when it is a 32-byte base64 value (openssl rand -base64 32),
+ *   otherwise SHA-256 of it (compatibility with today's passphrase-style value).
+ *
+ * Keys
+ * - Current: TOTP_ENCRYPTION_KEY, or JWT_SECRET when that is unset (unchanged fallback).
+ * - Previous (rotation only): TOTP_ENCRYPTION_KEY_PREVIOUS. Decrypt tries current, then previous.
+ *
+ * Never log or return a secret, a key, or the OpenSSL error text.
+ */
+
 const ALGO = 'aes-256-gcm';
 const IV_BYTES = 12;
+export const TOTP_V2_PREFIX = 'v2:';
 
-function encryptionKey(): Buffer {
-  const raw = process.env.TOTP_ENCRYPTION_KEY || process.env.JWT_SECRET;
-  if (!raw) throw new Error('TOTP_ENCRYPTION_KEY or JWT_SECRET is required');
+/** The only text a client ever sees when a stored secret cannot be read. */
+export const TOTP_DECRYPT_FAILED_MESSAGE =
+  'Could not verify your authenticator code. Try again, or use a trusted device.';
+/** Shown if no wrap key is configured at all (setup cannot start). */
+export const TOTP_UNAVAILABLE_MESSAGE = 'Two-factor authentication is unavailable right now. Try again later.';
+
+export type TotpFailure = 'format' | 'key' | 'config';
+
+/** Carries a failure type for logs. Its message is always the fixed friendly text. */
+export class TotpCryptoError extends Error {
+  readonly failure: TotpFailure;
+  constructor(failure: TotpFailure) {
+    super(failure === 'config' ? TOTP_UNAVAILABLE_MESSAGE : TOTP_DECRYPT_FAILED_MESSAGE);
+    this.name = 'TotpCryptoError';
+    this.failure = failure;
+  }
+}
+
+export type TotpVersion = 'v1' | 'v2';
+export type TotpKeySlot = 'current' | 'previous';
+
+function sha256(raw: string): Buffer {
   return crypto.createHash('sha256').update(raw).digest();
 }
 
-export function encryptTotpSecret(secret: string): string {
+/** True for a 44-character base64 value that decodes to exactly 32 bytes. */
+export function isRawBase64Key(raw: string): boolean {
+  const v = raw.trim();
+  return /^[A-Za-z0-9+/]{43}=$/.test(v) && Buffer.from(v, 'base64').length === 32;
+}
+
+/** v2 key: raw 32 bytes from base64 when given one, else SHA-256 (compatibility). */
+export function deriveV2Key(raw: string): Buffer {
+  return isRawBase64Key(raw) ? Buffer.from(raw.trim(), 'base64') : sha256(raw);
+}
+
+/** v1 key: always SHA-256 of the raw value, exactly as before v2 existed. */
+export function deriveV1Key(raw: string): Buffer {
+  return sha256(raw);
+}
+
+function currentRaw(): string | null {
+  return process.env.TOTP_ENCRYPTION_KEY || process.env.JWT_SECRET || null;
+}
+
+function previousRaw(): string | null {
+  return process.env.TOTP_ENCRYPTION_KEY_PREVIOUS || null;
+}
+
+export function hasPreviousTotpKey(): boolean {
+  return previousRaw() != null;
+}
+
+export function totpVersionOf(payload: string): TotpVersion {
+  return payload.startsWith(TOTP_V2_PREFIX) ? 'v2' : 'v1';
+}
+
+function seal(secret: string, key: Buffer): string {
   const iv = crypto.randomBytes(IV_BYTES);
-  const cipher = crypto.createCipheriv(ALGO, encryptionKey(), iv);
+  const cipher = crypto.createCipheriv(ALGO, key, iv);
   const encrypted = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
   return `${iv.toString('base64')}.${tag.toString('base64')}.${encrypted.toString('base64')}`;
 }
 
+function open(body: string, key: Buffer): string {
+  const parts = body.split('.');
+  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) throw new TotpCryptoError('format');
+  const decipher = crypto.createDecipheriv(ALGO, key, Buffer.from(parts[0], 'base64'));
+  decipher.setAuthTag(Buffer.from(parts[1], 'base64'));
+  return Buffer.concat([decipher.update(Buffer.from(parts[2], 'base64')), decipher.final()]).toString('utf8');
+}
+
+/** Encrypt with an explicit raw key value (used by the rotation script). */
+export function encryptTotpSecretWith(secret: string, raw: string, version: TotpVersion = 'v2'): string {
+  if (version === 'v1') return seal(secret, deriveV1Key(raw));
+  return `${TOTP_V2_PREFIX}${seal(secret, deriveV2Key(raw))}`;
+}
+
+/** Decrypt with one explicit raw key value, no fallbacks. Throws TotpCryptoError. */
+export function decryptTotpSecretWith(payload: string, raw: string): string {
+  const version = totpVersionOf(payload);
+  const body = version === 'v2' ? payload.slice(TOTP_V2_PREFIX.length) : payload;
+  const key = version === 'v2' ? deriveV2Key(raw) : deriveV1Key(raw);
+  try {
+    return open(body, key);
+  } catch (err) {
+    if (err instanceof TotpCryptoError) throw err;
+    throw new TotpCryptoError('key');
+  }
+}
+
+/** All new ciphertext: v2 under the current key. */
+export function encryptTotpSecret(secret: string): string {
+  const raw = currentRaw();
+  if (!raw) throw new TotpCryptoError('config');
+  return encryptTotpSecretWith(secret, raw, 'v2');
+}
+
+export interface TotpDecryptResult {
+  secret: string;
+  version: TotpVersion;
+  keySlot: TotpKeySlot;
+  /**
+   * Re-encrypt to v2 under the current key after a successful verify. Only during a
+   * rotation (previous key configured): read via the previous key, or still v1.
+   * With today's variables (no previous key) this is always false.
+   */
+  needsReencrypt: boolean;
+}
+
+export function decryptTotpSecretDetailed(payload: string): TotpDecryptResult {
+  const version = totpVersionOf(payload);
+  const body = version === 'v2' ? payload.slice(TOTP_V2_PREFIX.length) : payload;
+  const parts = body.split('.');
+  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) throw new TotpCryptoError('format');
+
+  const current = currentRaw();
+  const previous = previousRaw();
+  if (!current && !previous) throw new TotpCryptoError('config');
+
+  if (current) {
+    try {
+      const secret = decryptTotpSecretWith(payload, current);
+      return { secret, version, keySlot: 'current', needsReencrypt: previous != null && version === 'v1' };
+    } catch {
+      /* try the previous key */
+    }
+  }
+  if (previous) {
+    try {
+      const secret = decryptTotpSecretWith(payload, previous);
+      return { secret, version, keySlot: 'previous', needsReencrypt: true };
+    } catch {
+      /* fall through */
+    }
+  }
+  // GCM auth-tag failure on every key: never surface the OpenSSL text.
+  throw new TotpCryptoError('key');
+}
+
 export function decryptTotpSecret(payload: string): string {
-  const [ivB64, tagB64, dataB64] = payload.split('.');
-  if (!ivB64 || !tagB64 || !dataB64) throw new Error('Invalid encrypted secret');
-  const iv = Buffer.from(ivB64, 'base64');
-  const tag = Buffer.from(tagB64, 'base64');
-  const data = Buffer.from(dataB64, 'base64');
-  const decipher = crypto.createDecipheriv(ALGO, encryptionKey(), iv);
-  decipher.setAuthTag(tag);
-  return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
+  return decryptTotpSecretDetailed(payload).secret;
 }
