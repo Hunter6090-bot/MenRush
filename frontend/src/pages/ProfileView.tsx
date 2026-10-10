@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { usersAPI } from '../api/client';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
@@ -97,6 +97,7 @@ export function normalizeProfilePayload(raw: unknown): ViewableUser | null {
 export const ProfileView = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const authUserId = useAuthStore((s) => s.user?.id);
   const locationLat = useLocationStore((s) => s.lat);
   const locationLng = useLocationStore((s) => s.lng);
@@ -111,6 +112,14 @@ export const ProfileView = () => {
     null,
   );
   const [viewer, setViewer] = useState<{ src: string; alt: string } | null>(null);
+
+  useEffect(() => {
+    if (location.hash !== '#albums') return;
+    const t = window.setTimeout(() => {
+      document.getElementById('albums')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [location.hash, user?.id]);
 
   useEffect(() => {
     if (!id) {
