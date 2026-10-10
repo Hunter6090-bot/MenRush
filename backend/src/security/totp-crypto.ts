@@ -94,48 +94,70 @@ function currentRaw(): string | null {
   return currentTotpKeyRaw();
 }
 
+export type TotpKeyProblem = 'unset' | 'not-encoded' | 'too-short' | 'low-variety';
+
+/** Minimum key material, in decoded bytes. */
+export const TOTP_KEY_MIN_BYTES = 32;
+
 /**
- * SHA-256 fingerprints of known placeholder values (the old dev default and the .env.example
- * placeholders). Fingerprints only, so the values themselves are not in the code.
+ * Decode a key written as hex (`openssl rand -hex 32`) or standard base64
+ * (`openssl rand -base64 32`). Anything else (a passphrase, a placeholder) is null.
  */
-const PLACEHOLDER_KEY_FINGERPRINTS = new Set([
-  '10e6d89d6d7eebfd625259c422fce843606b2949c67786f21312ea5eaadb90ff',
-  '103ab5dd9769664c34bb4dcecdbe1aa52a55f75a4a62243238c9abb3bc3d9e02',
-  'b3cf5152a10b7a596ff461bfb6e04203341d08239fc80a56ce135f187ef29e6e',
-]);
-
-export type TotpKeyProblem = 'unset' | 'too-short' | 'dev-default';
-
-/** Key strength in bytes: decoded length for a base64 value, else UTF-8 length. */
-export function totpKeyByteLength(raw: string): number {
+export function decodeTotpKey(raw: string): { encoding: 'hex' | 'base64'; bytes: Buffer } | null {
   const v = raw.trim();
-  if (v.length > 0 && v.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(v)) {
-    return Buffer.from(v, 'base64').length;
+  if (/^(?:[0-9a-f]{2})+$/i.test(v)) return { encoding: 'hex', bytes: Buffer.from(v, 'hex') };
+  if (/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(v) && v.length >= 4) {
+    // Real random base64 has upper case, lower case and digits; words and phrases rarely do.
+    if (!/[A-Z]/.test(v) || !/[a-z]/.test(v) || !/[0-9]/.test(v)) return null;
+    return { encoding: 'base64', bytes: Buffer.from(v, 'base64') };
   }
-  return Buffer.byteLength(v, 'utf8');
+  return null;
 }
 
-/** Why a key value is not fit for production, or null when it is. Never echoes the value. */
+/** Decoded key length in bytes, or 0 when the value is not hex or base64. */
+export function totpKeyByteLength(raw: string): number {
+  return decodeTotpKey(raw)?.bytes.length ?? 0;
+}
+
+/**
+ * Low variety: too few distinct characters, too few distinct bytes, or one byte value
+ * dominating. Random 32 bytes almost never trip this; repeats and patterns always do.
+ */
+function lowVariety(encoded: string, encoding: 'hex' | 'base64', bytes: Buffer): boolean {
+  const distinctChars = new Set(encoding === 'hex' ? encoded.toLowerCase() : encoded).size;
+  if (distinctChars < (encoding === 'hex' ? 10 : 16)) return true;
+  const counts = new Map<number, number>();
+  for (const byte of bytes) counts.set(byte, (counts.get(byte) ?? 0) + 1);
+  if (counts.size < 16) return true;
+  return Math.max(...counts.values()) > bytes.length / 4;
+}
+
+/**
+ * Why a key value is not fit for production, or null when it is. The rule is about the key
+ * itself (at least 32 random bytes, hex or base64), never a list of known values, so nothing
+ * here helps anyone guess a key. Never echoes the value.
+ */
 export function totpKeyProblem(raw: string | undefined | null): TotpKeyProblem | null {
   if (!raw || !raw.trim()) return 'unset';
-  if (PLACEHOLDER_KEY_FINGERPRINTS.has(crypto.createHash('sha256').update(raw.trim()).digest('hex'))) {
-    return 'dev-default';
-  }
-  if (totpKeyByteLength(raw) < 32) return 'too-short';
+  const decoded = decodeTotpKey(raw);
+  if (!decoded) return 'not-encoded';
+  if (decoded.bytes.length < TOTP_KEY_MIN_BYTES) return 'too-short';
+  if (lowVariety(raw.trim(), decoded.encoding, decoded.bytes)) return 'low-variety';
   return null;
 }
 
 /**
- * Production startup guard: refuse to start when TOTP_ENCRYPTION_KEY is unset, under 32 bytes,
- * or a dev default. No-op outside production. The message names the problem, never the value.
+ * Production startup guard: refuse to start unless TOTP_ENCRYPTION_KEY is at least 32 random
+ * bytes written as hex or base64. No-op outside production. The message names the problem,
+ * never the value.
  */
 export function assertTotpKeyForProduction(env: NodeJS.ProcessEnv = process.env): void {
   if (env.NODE_ENV !== 'production') return;
   const problem = totpKeyProblem(env.TOTP_ENCRYPTION_KEY);
   if (problem) {
     throw new Error(
-      `Refusing to start: TOTP_ENCRYPTION_KEY is ${problem}. Set a 32-byte key (openssl rand -base64 32) ` +
-        'after running the TOTP rotation (npm run totp:rotate -- --verify).',
+      `Refusing to start: TOTP_ENCRYPTION_KEY is ${problem}. It must be at least ${TOTP_KEY_MIN_BYTES} random bytes ` +
+        'written as base64 or hex (openssl rand -base64 32), set through the TOTP rotation (npm run totp:rotate -- --verify).',
     );
   }
 }

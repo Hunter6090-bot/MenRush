@@ -1,7 +1,7 @@
 /**
  * Production refuses to start without a real 2FA wrap key, and drops the JWT_SECRET fallback.
- * No real key is in this file: test keys are random per run, and the dev default is matched by
- * fingerprint (set TOTP_DEV_DEFAULT_FOR_TEST locally to check it by value).
+ * No real key is in this file: test keys are random per run. The rule is about the key itself
+ * (at least 32 random bytes as hex or base64); there is no list of known values to match.
  *   npm run test:totp-startup
  */
 import assert from 'assert';
@@ -10,8 +10,10 @@ import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
 import {
+  TOTP_KEY_MIN_BYTES,
   TotpCryptoError,
   assertTotpKeyForProduction,
+  decodeTotpKey,
   currentTotpKeyRaw,
   decryptTotpSecret,
   encryptTotpSecret,
@@ -55,12 +57,18 @@ const tests: [string, () => void][] = [
     refuses(prod('   '), 'unset');
   }],
   ['production refuses a key under 32 bytes', () => {
-    refuses(prod('short-passphrase'), 'too-short');
     refuses(prod(crypto.randomBytes(16).toString('base64')), 'too-short');
     refuses(prod(crypto.randomBytes(24).toString('base64')), 'too-short'); // 32 chars, 24 bytes
-    refuses(prod('x'.repeat(31)), 'too-short');
+    refuses(prod(crypto.randomBytes(31).toString('base64')), 'too-short');
+    refuses(prod(crypto.randomBytes(31).toString('hex')), 'too-short'); // 62 hex chars
+    assert.equal(TOTP_KEY_MIN_BYTES, 32);
   }],
-  ['production refuses the dev default and the .env.example placeholders', () => {
+  ['production refuses anything that is not hex or base64: passphrases, placeholders, words', () => {
+    refuses(prod('short-passphrase'), 'not-encoded');
+    refuses(prod(`a long passphrase ${crypto.randomBytes(16).toString('hex')}`), 'not-encoded');
+    refuses(prod('x'.repeat(31)), 'not-encoded');
+    refuses(prod('thisisaverylongpassphrasewithonlylettersxyzabc'), 'not-encoded'); // base64 alphabet, no digits or caps
+    refuses(prod(`Ab1-${crypto.randomBytes(40).toString('hex')}`), 'not-encoded'); // a dash is neither hex nor base64
     const examples = [path.join(__dirname, '../.env.example'), path.join(__dirname, '../../.env.example')];
     const placeholders = examples
       .filter((f) => fs.existsSync(f))
@@ -68,19 +76,37 @@ const tests: [string, () => void][] = [
       .map((l) => l.match(/^JWT_SECRET=(.+)$/)?.[1]?.trim())
       .filter((v): v is string => !!v);
     assert.ok(placeholders.length >= 2, 'found the JWT_SECRET placeholders');
-    for (const p of placeholders) refuses(prod(p), 'dev-default');
-    const devDefault = process.env.TOTP_DEV_DEFAULT_FOR_TEST;
-    if (devDefault) refuses(prod(devDefault), 'dev-default');
-    const src = fs.readFileSync(path.join(__dirname, '../src/security/totp-crypto.ts'), 'utf8');
-    assert.ok(src.includes('10e6d89d6d7eebfd625259c422fce843606b2949c67786f21312ea5eaadb90ff'), 'dev default fingerprint listed');
-    assert.ok(!/menrush-dev-secret/i.test(src), 'the dev default value itself is not in the code');
+    for (const p of placeholders) assert.notEqual(totpKeyProblem(p), null, 'placeholders are refused');
   }],
-  ['production accepts a 32-byte base64 key, a 64-char hex key, or a long passphrase', () => {
-    assert.doesNotThrow(() => assertTotpKeyForProduction(prod(crypto.randomBytes(32).toString('base64'))));
-    assert.doesNotThrow(() => assertTotpKeyForProduction(prod(crypto.randomBytes(32).toString('hex'))));
-    assert.doesNotThrow(() => assertTotpKeyForProduction(prod(`a long passphrase ${crypto.randomBytes(16).toString('hex')}`)));
-    assert.equal(totpKeyByteLength(crypto.randomBytes(32).toString('base64')), 32);
-    assert.equal(totpKeyProblem(crypto.randomBytes(32).toString('base64')), null);
+  ['production refuses low-variety keys even when long enough', () => {
+    refuses(prod('a'.repeat(64)), 'low-variety'); // hex, one byte value
+    refuses(prod('ab'.repeat(32)), 'low-variety'); // hex, repeating pair
+    refuses(prod('0123456789abcdef'.repeat(4)), 'low-variety'); // hex, 8 distinct bytes
+    refuses(prod(Buffer.alloc(32, 7).toString('base64')), 'not-encoded'); // one repeated byte: no digits, not key-like
+    refuses(prod('Ab1+'.repeat(11)), 'low-variety'); // base64-shaped repeat, 33 bytes
+    refuses(prod(Buffer.concat([crypto.randomBytes(8), Buffer.alloc(32, 0)]).toString('hex')), 'low-variety'); // mostly zeros
+  }],
+  ['production accepts a random 32-byte base64 key or a random 64-char hex key', () => {
+    let accepted = 0;
+    for (let i = 0; i < 200; i += 1) {
+      const b64 = crypto.randomBytes(32).toString('base64');
+      const hex = crypto.randomBytes(32).toString('hex');
+      assert.equal(totpKeyProblem(hex), null, 'random hex always passes');
+      if (totpKeyProblem(b64) === null) accepted += 1;
+      else assert.equal(totpKeyProblem(b64), 'not-encoded', 'only a key with no digit (very rare) is refused');
+    }
+    assert.ok(accepted >= 195, `random base64 nearly always passes (${accepted}/200)`);
+    let b64 = crypto.randomBytes(32).toString('base64');
+    while (totpKeyProblem(b64) !== null) b64 = crypto.randomBytes(32).toString('base64');
+    assert.doesNotThrow(() => assertTotpKeyForProduction(prod(b64)));
+    assert.doesNotThrow(() => assertTotpKeyForProduction(prod(crypto.randomBytes(48).toString('base64'))));
+    assert.equal(totpKeyByteLength(b64), 32);
+    assert.equal(decodeTotpKey(crypto.randomBytes(32).toString('hex'))?.encoding, 'hex');
+  }],
+  ['no known-value list or fingerprint in the code (nothing to help offline guessing)', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/security/totp-crypto.ts'), 'utf8');
+    assert.ok(!/[0-9a-f]{64}/.test(src), 'no 64-hex fingerprints');
+    assert.ok(!/FINGERPRINT|PLACEHOLDER_KEY|dev-default|menrush-dev/i.test(src));
   }],
   ['outside production the guard is a no-op', () => {
     assert.doesNotThrow(() => assertTotpKeyForProduction({ NODE_ENV: 'development' }));
