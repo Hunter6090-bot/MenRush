@@ -63,3 +63,16 @@ describe('board #390 round 2', () => {
     expect(chat.shortLabel).toBe('Chat');
   });
 });
+
+describe('desktop sidebar Map icon', () => {
+  it('is the outline map pin, like the tabs (not the solid silhouettes)', async () => {
+    const { getNavItems } = await import('../lib/navConfig');
+    const { IconMapPin } = await import('../components/icons');
+    const map = getNavItems().find((i) => i.to === '/discover')!;
+    expect(map.Icon).toBe(IconMapPin);
+    const { container } = render(<map.Icon size={22} filled />);
+    const svg = container.querySelector('svg')!;
+    expect(svg.getAttribute('fill')).toBe('none');
+    expect(svg.getAttribute('stroke')).toBe('currentColor');
+  });
+});
