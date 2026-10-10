@@ -1,14 +1,6 @@
 name: Browser smoke
 
 on:
-  push:
-    branches:
-      - cursor/email-notifications-draft-ee59
-    paths:
-      - "frontend/**"
-      - "backend/**"
-      - "database/**"
-      - ".github/workflows/browser-smoke.yml"
   pull_request:
     branches:
       - main
