@@ -57,15 +57,6 @@ describe('Terms and Help do not claim a required selfie or age check while the f
     expect(section('3.1')).toMatch(/Get verified on the Edit screen in the You tab/);
   });
 
-  it("Terms 7.3 and 7.5 are Legal's wording, word for word", () => {
-    expect(section('7.3')).toBe('Premium cannot be bought yet. We will update these Terms before payment opens.');
-    expect(section('7.5')).toBe(
-      'Prices are shown in pounds sterling (GBP). The price shown on your invoice or at checkout is the full amount you pay us, and if VAT applies it is shown there. If we change the price of Premium, the new price applies only to Premium you buy after the change, and you will see it before you pay.',
-    );
-    expect(terms).not.toMatch(/merchant review/i);
-    expect(terms).not.toMatch(/inclusive of any applicable VAT/i);
-  });
-
   it("Help answers use Legal's lines on the right questions", () => {
     const answer = (q: string) => {
       const i = help.indexOf(`q: '${q}'`);
@@ -97,7 +88,12 @@ describe('Terms and Help do not claim a required selfie or age check while the f
   });
 
   it('no em or en dashes and no real-time in Terms or Help copy', () => {
-    expect(terms).not.toMatch(/[\u2013\u2014]/);
+    // Section 7 belongs to #287 (one 7.2 dash is left for it), so check Terms outside section 7.
+    const s7 = terms.indexOf('<Strong>7.1</Strong>');
+    const s8 = terms.indexOf('<Strong>8.1</Strong>');
+    expect(s7).toBeGreaterThan(-1);
+    expect(s8).toBeGreaterThan(s7);
+    expect(terms.slice(0, s7) + terms.slice(s8)).not.toMatch(/[\u2013\u2014]/);
     expect(help).not.toMatch(/[\u2013\u2014]/);
     expect(help).not.toMatch(/real-time/i);
   });

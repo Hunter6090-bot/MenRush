@@ -396,13 +396,16 @@ export const Terms = () => {
                   sign-up, unless a valid promotional offer (including a Pride /{' '}
                   <span className="font-mono tracking-wide">PRIDE</span> promo code) grants a
                   longer free Premium period instead. Where such a promo applies, it replaces the
-                  30-day waitlist reward. It is not added on top.
+                  30-day waitlist reward — it is not added on top.
                 </>,
               )}
               {para(
                 <>
-                  <Strong>7.3</Strong> Premium cannot be bought yet. We will update these Terms before
-                  payment opens.
+                  <Strong>7.3</Strong> After any free trial period, paid Premium subscriptions
+                  will be billed on a recurring basis through our designated payment processor once
+                  live payment processing is activated (under merchant review). In the interim,
+                  in-app card checkout is not live, and subscriptions or upgrades are processed via
+                  manual invoice by contacting support@menrush.com.
                 </>,
               )}
               {para(
@@ -415,10 +418,8 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>7.5</Strong> Prices are shown in pounds sterling (GBP). The price shown on
-                  your invoice or at checkout is the full amount you pay us, and if VAT applies it is
-                  shown there. If we change the price of Premium, the new price applies only to Premium
-                  you buy after the change, and you will see it before you pay.
+                  <Strong>7.5</Strong> Prices are displayed in GBP and are inclusive of any
+                  applicable VAT. We reserve the right to change pricing with 30 days' notice.
                 </>,
               )}
               {para(
