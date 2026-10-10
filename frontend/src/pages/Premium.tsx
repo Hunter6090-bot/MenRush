@@ -9,6 +9,9 @@ import { PulseRing } from '../components/PulseRing';
 import { MobileBackButton } from '../components/MobileBackButton';
 import { ThemeToggle } from '../components/ThemeToggle';
 
+const IMMEDIATE_START_CONSENT_TEXT =
+  'Start my Premium as soon as my payment is confirmed. I understand that if I cancel within 14 days, my refund will be reduced for the days of Premium I have had.';
+
 const FEATURES = [
   'See who already matched you',
   'See everyone who viewed your profile',
@@ -30,6 +33,8 @@ export const Premium: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [generatingInvoice, setGeneratingInvoice] = useState(false);
   const [cancellingInvoice, setCancellingInvoice] = useState(false);
+  // Terms 7.6A: unticked by default and required before an invoice is issued.
+  const [immediateStartConsent, setImmediateStartConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPremium, setIsPremium] = useState(Boolean(user?.is_premium));
   const [premiumUntil, setPremiumUntil] = useState<string | null>(null);
@@ -73,12 +78,17 @@ export const Premium: React.FC = () => {
 
   const handleCreateInvoice = async () => {
     setError(null);
+    if (!immediateStartConsent) {
+      setError('Please tick the box to confirm when your Premium starts.');
+      return;
+    }
     setGeneratingInvoice(true);
     try {
       const res = await premiumAPI.createInvoice({
         plan_tier: 'premium',
         plan_days: 30,
         amount_pence: 699,
+        immediate_start_consent: true,
       });
       setUnpaidInvoice(res.data.invoice);
       setPaymentInstructions(res.data.payment_instructions);
@@ -336,11 +346,31 @@ export const Premium: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                /* Invoice Generation Button */
+                /* Invoice Generation Button, behind the required immediate start tick */
                 plan && (
+                  <>
+                  <label
+                    className="flex min-h-[44px] cursor-pointer items-start gap-3 py-2 mb-3 text-[15px] leading-snug text-[var(--cream)]"
+                    data-testid="immediate-start-consent-label"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={immediateStartConsent}
+                      onChange={(e) => {
+                        setImmediateStartConsent(e.target.checked);
+                        if (e.target.checked) setError(null);
+                      }}
+                      required
+                      aria-required="true"
+                      className="mt-0.5 h-6 w-6 shrink-0 rounded accent-[#C4832A]"
+                      data-testid="immediate-start-consent"
+                    />
+                    <span>{IMMEDIATE_START_CONSENT_TEXT}</span>
+                  </label>
                   <button
                     type="button"
-                    disabled={generatingInvoice}
+                    disabled={generatingInvoice || !immediateStartConsent}
+                    aria-disabled={generatingInvoice || !immediateStartConsent}
                     onClick={handleCreateInvoice}
                     className="w-full rounded-xl border border-[#C4832A]/50 bg-[#C4832A]/15 hover:bg-[#C4832A]/25 transition-colors p-4 disabled:opacity-60 mb-5"
                     data-testid="generate-invoice-button"
@@ -361,6 +391,7 @@ export const Premium: React.FC = () => {
                       </p>
                     ) : null}
                   </button>
+                  </>
                 )
               )}
 

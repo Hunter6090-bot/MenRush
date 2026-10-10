@@ -72,6 +72,8 @@ export const premiumAPI = {
     plan_days?: number;
     amount_pence?: number;
     notes?: string;
+    /** Required: the member ticked "Start my Premium as soon as my payment is confirmed". */
+    immediate_start_consent: true;
   }) =>
     apiClient.post<{
       invoice: PremiumInvoice;

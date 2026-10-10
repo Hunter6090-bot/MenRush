@@ -11,6 +11,9 @@
  *    - Always-premium account preserves lifetime open-ended (null until).
  *    - Subscriptions table records active processor = 'manual_invoice'.
  * 5. Invoice cancellation: cancel unpaid invoice, cannot confirm cancelled invoice.
+ * 5a. Immediate start tick (Terms 7.6A): POST /api/premium/invoices refuses a missing or
+ *     false tick with 400 and no invoice row; a ticked request records the time on the row.
+ * 5b. "Your MenRush Premium is now on" email carries the 14-day cancellation details.
  * 6. Set / Change Password flow during invoice journey:
  *    - Account with password requires correct current password to change.
  *    - Account without password can set password without current password.
@@ -20,7 +23,12 @@ import assert from 'assert';
 import { randomUUID } from 'crypto';
 import pool, { query } from '../src/db';
 import { authService } from '../src/services/auth.service';
-import { invoiceService, getManualPaymentInstructions } from '../src/services/invoice.service';
+import {
+  invoiceService,
+  getManualPaymentInstructions,
+  buildPremiumOnEmail,
+} from '../src/services/invoice.service';
+import { IMMEDIATE_START_CONSENT_TEXT } from '../src/types/validation';
 import { premiumService } from '../src/services/premium.service';
 import { ALWAYS_PREMIUM_NAMES } from '../src/lib/always-premium';
 
@@ -310,7 +318,12 @@ test('HTTP API routes: invoice create -> unpaid view -> admin confirm -> status 
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ plan_tier: 'premium', plan_days: 30, amount_pence: 699 }),
+      body: JSON.stringify({
+        plan_tier: 'premium',
+        plan_days: 30,
+        amount_pence: 699,
+        immediate_start_consent: true,
+      }),
     });
     assert.strictEqual(res2.status, 201);
     const body2 = (await res2.json()) as any;
@@ -468,6 +481,89 @@ test('HTTP API routes: invoice create -> unpaid view -> admin confirm -> status 
     const subBody = (await resSubscribe.json()) as any;
     assert.strictEqual(subBody.error, 'billing_not_configured');
     assert.strictEqual(subBody.checkout_url, undefined);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
+test('Email: "Your MenRush Premium is now on" carries the 14-day cancellation details', () => {
+  const email = buildPremiumOnEmail({
+    name: 'Sam',
+    amountPence: 699,
+    premiumUntil: new Date('2026-11-10T12:00:00Z'),
+    invoiceNumber: 'MR-INV-20261010-ABC123',
+    paymentReference: 'MR-1234ABCD',
+    startedStraightAway: true,
+  });
+  assert.strictEqual(email.subject, 'Your MenRush Premium is now on');
+  for (const body of [email.text, email.html]) {
+    assert.match(body, /cancel within 14 days of buying/);
+    assert.match(body, /support@menrush\.com with your invoice reference, MR-INV-20261010-ABC123/);
+    assert.match(body, /refund you within 14 days of hearing from you, to the account you paid from/);
+    assert.match(body, /less an amount for the days of Premium you have had/);
+    assert.match(body, /All the best,/);
+  }
+  // Janet's voice: no dashes, no 'love', no 'beta'.
+  assert.doesNotMatch(email.text, /[\u2013\u2014]| - /);
+  assert.doesNotMatch(email.text, /\blove\b|beta/i);
+
+  const noTick = buildPremiumOnEmail({
+    name: null,
+    amountPence: 699,
+    premiumUntil: null,
+    invoiceNumber: 'MR-INV-20261010-DEF456',
+    paymentReference: 'MR-5678EFAB',
+    startedStraightAway: false,
+  });
+  assert.match(noTick.text, /cancel within 14 days of buying/);
+  assert.doesNotMatch(noTick.text, /less an amount/);
+});
+
+test('HTTP: invoice is refused (400) unless the immediate start box is ticked, and the tick is recorded', async () => {
+  const user = await createTestUser('consent');
+  const token = authService.issueAccessToken(user.id);
+  const express = (await import('express')).default;
+  const http = (await import('http')).default;
+  const app = express();
+  app.use(express.json());
+  const premiumRoutes = (await import('../src/routes/premium')).default;
+  app.use('/api/premium', premiumRoutes);
+  const server = http.createServer(app);
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const post = (body: unknown) =>
+    fetch(`${baseUrl}/api/premium/invoices`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  try {
+    for (const body of [
+      { plan_tier: 'premium', plan_days: 30, amount_pence: 699 },
+      { plan_tier: 'premium', plan_days: 30, amount_pence: 699, immediate_start_consent: false },
+      { plan_tier: 'premium', plan_days: 30, amount_pence: 699, immediate_start_consent: 'true' },
+    ]) {
+      const res = await post(body);
+      assert.strictEqual(res.status, 400, `refused: ${JSON.stringify(body)}`);
+      const json = (await res.json()) as any;
+      assert.strictEqual(json.error, 'validation_error');
+    }
+    const none = await query(`SELECT COUNT(*)::int AS n FROM premium_invoices WHERE user_id = $1`, [user.id]);
+    assert.strictEqual(none.rows[0].n, 0, 'no invoice row is created without the tick');
+
+    const before = Date.now();
+    const ok = await post({ plan_tier: 'premium', plan_days: 30, amount_pence: 699, immediate_start_consent: true });
+    assert.strictEqual(ok.status, 201);
+    const okJson = (await ok.json()) as any;
+    const row = await query(
+      `SELECT immediate_start_consent_at, metadata FROM premium_invoices WHERE id = $1`,
+      [okJson.invoice.id],
+    );
+    const at = row.rows[0].immediate_start_consent_at;
+    assert.ok(at instanceof Date, 'tick time recorded on the invoice row');
+    assert.ok(Math.abs(at.getTime() - before) < 60_000, 'tick time is now');
+    assert.strictEqual(row.rows[0].metadata.immediate_start_consent_text, IMMEDIATE_START_CONSENT_TEXT);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }

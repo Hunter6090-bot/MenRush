@@ -8,6 +8,7 @@ import {
   transactionalParagraph,
 } from './transactional-email.template';
 import { sendTransactionalEmail } from './mailer.service';
+import { IMMEDIATE_START_CONSENT_TEXT } from '../types/validation';
 
 export interface PremiumInvoiceRow {
   id: string;
@@ -24,6 +25,7 @@ export interface PremiumInvoiceRow {
   paid_at: string | null;
   confirmed_by_admin_id: string | null;
   cancelled_at: string | null;
+  immediate_start_consent_at: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -88,6 +90,87 @@ export function getManualPaymentInstructions(reference: string): ManualPaymentIn
   };
 }
 
+/**
+ * 14-day cancellation lines for the "Your MenRush Premium is now on" email (Terms 7.6A).
+ * Janet's voice: kind, relaxed, professional British. No dashes.
+ */
+export function premiumOnCancellationLines(invoiceNumber: string, startedStraightAway: boolean): string[] {
+  const lines = [
+    `If you change your mind, you can cancel within 14 days of buying. Just email support@menrush.com with your invoice reference, ${invoiceNumber}, and we will refund you within 14 days of hearing from you, to the account you paid from.`,
+  ];
+  if (startedStraightAway) {
+    lines.push(
+      'As you asked for your Premium to start as soon as your payment was confirmed, your refund would be what you paid less an amount for the days of Premium you have had.',
+    );
+  }
+  return lines;
+}
+
+export function buildPremiumOnEmail(params: {
+  name: string | null;
+  amountPence: number;
+  premiumUntil: Date | null;
+  invoiceNumber: string;
+  paymentReference: string;
+  startedStraightAway: boolean;
+}): { subject: string; html: string; text: string } {
+  const formattedAmount = (params.amountPence / 100).toFixed(2);
+  const untilStr = params.premiumUntil
+    ? params.premiumUntil.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'Europe/London',
+      })
+    : 'Active';
+  const greetingName = escapeEmailHtml(params.name || 'there');
+  const untilHtml = params.premiumUntil
+    ? ` until <strong style="color:#F0E0C0;">${untilStr}</strong>`
+    : '';
+  const cancellation = premiumOnCancellationLines(params.invoiceNumber, params.startedStraightAway);
+  const subject = 'Your MenRush Premium is now on';
+
+  const html = buildTransactionalEmail({
+    title: subject,
+    preheader: "Thank you, we've received your payment.",
+    headlineHtml: 'Your <span style="color:#C4832A;">Premium</span> is now on',
+    subheadline: `We've received your payment of £${formattedAmount}.`,
+    bodyHtml:
+      transactionalParagraph(`Hello ${greetingName},`) +
+      transactionalParagraph(
+        `Thank you for your bank transfer. It has arrived safely, and your Premium is now switched on${untilHtml}.`,
+      ) +
+      transactionalParagraph(
+        "There's nothing more you need to do. If anything doesn't look quite right, please get in touch at support@menrush.com and we'll sort it out.",
+      ) +
+      transactionalParagraph(escapeEmailHtml(cancellation.join(' '))) +
+      transactionalParagraph(
+        `<span style="color:#A89070; font-size:14px;">Invoice number: ${escapeEmailHtml(params.invoiceNumber)}<br>Payment reference: ${escapeEmailHtml(params.paymentReference)}</span>`,
+      ) +
+      transactionalParagraph('All the best,<br>MenRush'),
+    ctaUrl: `${process.env.FRONTEND_URL || 'https://menrush.com'}/premium`,
+    ctaLabel: 'Open MenRush',
+  });
+
+  const text = [
+    `Hello ${params.name || 'there'},`,
+    '',
+    `Thank you for your bank transfer. It has arrived safely, and your Premium is now switched on${params.premiumUntil ? ` until ${untilStr}` : ''}.`,
+    '',
+    "There's nothing more you need to do. If anything doesn't look quite right, please get in touch at support@menrush.com and we'll sort it out.",
+    '',
+    cancellation.join(' '),
+    '',
+    `Invoice number: ${params.invoiceNumber}`,
+    `Payment reference: ${params.paymentReference}`,
+    '',
+    'All the best,',
+    'MenRush',
+  ].join('\n');
+
+  return { subject, html, text };
+}
+
 export const invoiceService = {
   /**
    * Create a manual invoice for a user.
@@ -100,6 +183,8 @@ export const invoiceService = {
     amountPence?: number;
     notes?: string;
     createdByAdminId?: string;
+    /** True only when the member ticked the immediate start box on /premium. */
+    immediateStartConsent?: boolean;
   }): Promise<PremiumInvoiceRow> {
     const planTier = params.planTier || 'premium';
     const planDays = params.planDays || 30;
@@ -130,8 +215,9 @@ export const invoiceService = {
       `INSERT INTO premium_invoices (
          user_id, plan_tier, plan_days, amount_pence, currency,
          status, payment_method, payment_reference, invoice_number,
-         notes, metadata
-       ) VALUES ($1, $2, $3, $4, 'GBP', 'unpaid', 'bank_transfer', $5, $6, $7, $8::jsonb)
+         notes, metadata, immediate_start_consent_at
+       ) VALUES ($1, $2, $3, $4, 'GBP', 'unpaid', 'bank_transfer', $5, $6, $7, $8::jsonb,
+                 CASE WHEN $9::boolean THEN NOW() ELSE NULL END)
        RETURNING *`,
       [
         params.userId,
@@ -141,7 +227,13 @@ export const invoiceService = {
         paymentReference,
         invoiceNumber,
         params.notes ?? null,
-        JSON.stringify({ created_by_admin: Boolean(params.createdByAdminId) }),
+        JSON.stringify({
+          created_by_admin: Boolean(params.createdByAdminId),
+          ...(params.immediateStartConsent === true
+            ? { immediate_start_consent_text: IMMEDIATE_START_CONSENT_TEXT }
+            : {}),
+        }),
+        params.immediateStartConsent === true,
       ],
     );
 
@@ -296,54 +388,15 @@ export const invoiceService = {
         const userRow = await query(`SELECT email, name FROM users WHERE id = $1`, [invoice.user_id]);
         const user = userRow.rows[0];
         if (user?.email && process.env.NODE_ENV !== 'test' && !user.email.endsWith('@test.menrush.local')) {
-          const formattedAmount = (invoice.amount_pence / 100).toFixed(2);
-          const untilStr = grantResult.premiumUntil
-            ? grantResult.premiumUntil.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-            : 'Active';
-
-          const greetingName = escapeEmailHtml(user.name || 'there');
-          const untilHtml = grantResult.premiumUntil
-            ? ` until <strong style="color:#F0E0C0;">${untilStr}</strong>`
-            : '';
-          const html = buildTransactionalEmail({
-            title: 'Your MenRush Premium is now on',
-            preheader: "Thank you, we've received your payment.",
-            headlineHtml: 'Your <span style="color:#C4832A;">Premium</span> is now on',
-            subheadline: `We've received your payment of £${formattedAmount}.`,
-            bodyHtml:
-              transactionalParagraph(`Hello ${greetingName},`) +
-              transactionalParagraph(
-                `Thank you for your bank transfer. It has arrived safely, and your Premium is now switched on${untilHtml}.`,
-              ) +
-              transactionalParagraph(
-                "There's nothing more you need to do. If anything doesn't look quite right, please get in touch at support@menrush.com and we'll sort it out.",
-              ) +
-              transactionalParagraph(
-                `<span style="color:#A89070; font-size:14px;">Invoice number: ${escapeEmailHtml(invoice.invoice_number)}<br>Payment reference: ${escapeEmailHtml(invoice.payment_reference)}</span>`,
-              ) +
-              transactionalParagraph('All the best,<br>MenRush'),
-            ctaUrl: `${process.env.FRONTEND_URL || 'https://menrush.com'}/premium`,
-            ctaLabel: 'Open MenRush',
+          const email = buildPremiumOnEmail({
+            name: user.name ?? null,
+            amountPence: invoice.amount_pence,
+            premiumUntil: grantResult.premiumUntil,
+            invoiceNumber: invoice.invoice_number,
+            paymentReference: invoice.payment_reference,
+            startedStraightAway: Boolean(invoice.immediate_start_consent_at),
           });
-
-          await sendTransactionalEmail({
-            to: user.email,
-            subject: 'Your MenRush Premium is now on',
-            html,
-            text: [
-              `Hello ${user.name || 'there'},`,
-              '',
-              `Thank you for your bank transfer. It has arrived safely, and your Premium is now switched on${grantResult.premiumUntil ? ` until ${untilStr}` : ''}.`,
-              '',
-              "There's nothing more you need to do. If anything doesn't look quite right, please get in touch at support@menrush.com and we'll sort it out.",
-              '',
-              `Invoice number: ${invoice.invoice_number}`,
-              `Payment reference: ${invoice.payment_reference}`,
-              '',
-              'All the best,',
-              'MenRush',
-            ].join('\n'),
-          });
+          await sendTransactionalEmail({ to: user.email, ...email });
         }
       } catch (err) {
         console.error('[invoice] confirmation email failed:', err);

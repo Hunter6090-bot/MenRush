@@ -430,11 +430,19 @@ export type AlbumMediaMessageInput = z.infer<typeof AlbumMediaMessageSchema>;
 
 // ── Manual Premium Invoice Schemas ──────────────────────────────────────────
 
+/** Exact wording of the required tick on /premium (Legal soft advice, Terms 7.6A). */
+export const IMMEDIATE_START_CONSENT_TEXT =
+  'Start my Premium as soon as my payment is confirmed. I understand that if I cancel within 14 days, my refund will be reduced for the days of Premium I have had.';
+
 export const CreateInvoiceSchema = z.object({
   plan_tier: z.enum(['premium', 'premium_plus']).default('premium'),
   plan_days: z.number().int().min(1).max(3650).default(30),
   amount_pence: z.number().int().min(0).default(699),
   notes: z.string().max(500).optional(),
+  // Required and must be exactly true: no invoice is issued unless the member ticked it.
+  immediate_start_consent: z.literal(true, {
+    errorMap: () => ({ message: 'Please tick the box to confirm when your Premium starts.' }),
+  }),
 });
 
 export const AdminCreateInvoiceSchema = z.object({
