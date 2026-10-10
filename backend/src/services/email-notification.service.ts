@@ -223,16 +223,21 @@ export function verifyUnsubscribeToken(token: string): UnsubscribePayload {
   return signed.payload;
 }
 
-export type UnsubscribeTokenClass = 'invalid' | 'stale' | 'live';
-
-/** invalid = forged/malformed. stale = expired or version-revoked. live = can confirm/apply. */
-export async function classifyUnsubscribeToken(token: string): Promise<UnsubscribeTokenClass> {
-  const signed = readSignedUnsubscribeToken(token);
-  if (!signed.ok) return 'invalid';
-  if (signed.payload.exp < Math.floor(Date.now() / 1000)) return 'stale';
-  const version = await currentUnsubVersion(signed.payload.userId, signed.payload.type);
-  if (version === null || version !== signed.payload.v) return 'stale';
-  return 'live';
+/**
+ * Live pref for that type. `null` if the member is gone. Expiry and token
+ * version are ignored: opting out is always safe to honour.
+ */
+export async function emailNotifyTypeEnabled(
+  userId: string,
+  type: EmailNotifyType,
+): Promise<boolean | null> {
+  const col = PREF_COLUMN[type];
+  const result = await query(
+    `SELECT COALESCE(${col}, TRUE) AS on FROM users WHERE id = $1`,
+    [userId],
+  );
+  if (!result.rows[0]) return null;
+  return Boolean(result.rows[0].on);
 }
 
 export async function currentUnsubVersion(

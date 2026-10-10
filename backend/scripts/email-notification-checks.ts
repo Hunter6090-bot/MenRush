@@ -160,6 +160,10 @@ async function main() {
   assert.match(unsubSrc, /Stop these emails\? MenRush/);
   assert.match(unsubSrc, /You're already unsubscribed/);
   assert.ok(!unsubSrc.includes("You're already unsubscribed —"), 'already-unsubscribed title has no dash');
+  assert.match(unsubSrc, /Sorry, something went wrong\. Please try again\./);
+  assert.match(unsubSrc, /emailNotifyTypeEnabled/);
+  assert.ok(!unsubSrc.includes('classifyUnsubscribeToken'), 'expiry or old version must not classify as already');
+  assert.ok(!unsubSrc.includes('readValidUnsubscribeToken'), 'apply must not require a live version or expiry');
   for (const verb of ['head', 'get', 'post'] as const) {
     assert.match(
       unsubSrc,
@@ -169,7 +173,7 @@ async function main() {
   }
   assert.match(
     unsubSrc,
-    /skip:\s*\(req[^)]*\)\s*=>\s*readSignedUnsubscribeToken\(tokenFrom\(req\)\)\.ok/,
+    /skip:\s*\(req[^)]*\)\s*=>\s*(?:emailNotify\.)?readSignedUnsubscribeToken\(tokenFrom\(req\)\)\.ok/,
     'failIpLimiter skips when the token verifies',
   );
 
@@ -312,6 +316,13 @@ async function main() {
   assert.match(script, /unsubscribeUrl/);
   assert.ok(!/List-Unsubscribe.*settings#email-notifications/.test(script), 'List-Unsubscribe must not point at Settings');
   assert.ok(!/sendTransactionalEmail|sendViaZoho|zoho/i.test(script), 'test send is Resend only');
+
+  const settingsPage = fs.readFileSync(
+    path.join(__dirname, '../../frontend/src/pages/Settings.tsx'),
+    'utf8',
+  );
+  assert.match(settingsPage, /MutationObserver/);
+  assert.match(settingsPage, /10_000|10000/);
 
   const settingsSrc = fs.readFileSync(
     path.join(__dirname, '../../frontend/src/components/EmailNotificationSettings.tsx'),

@@ -235,7 +235,7 @@ export function assertPublicRateLimitedRouterGuard(route: string, source: string
   }
   assert.match(
     code,
-    /skip:\s*\(req[^)]*\)\s*=>\s*readSignedUnsubscribeToken\(tokenFrom\(req\)\)\.ok/,
+    /skip:\s*\(req[^)]*\)\s*=>\s*(?:emailNotify\.)?readSignedUnsubscribeToken\(tokenFrom\(req\)\)\.ok/,
     `${route}: failIpLimiter must skip when the token verifies`,
   );
 }

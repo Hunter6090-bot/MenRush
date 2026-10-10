@@ -243,15 +243,71 @@ async function main() {
     assert.match(await replay.text(), /You're already unsubscribed/);
 
     const usedGet = await fetch(`http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(token)}`);
-    assert.strictEqual(usedGet.status, 200);
+    assert.strictEqual(usedGet.status, 200, 'already off shows already unsubscribed');
     assert.match(await usedGet.text(), /You're already unsubscribed/);
 
-    const staleTok = svc.signUnsubscribeToken(unsubUser.id, 'jerk', { ttlSeconds: -30, version: 1 });
-    const staleGet = await fetch(
-      `http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(staleTok)}`,
+    const expiredStillOn = await makeUser('ExpiredOn');
+    const expiredTok = svc.signUnsubscribeToken(expiredStillOn.id, 'message', { ttlSeconds: -30, version: 1 });
+    const expiredGet = await fetch(
+      `http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(expiredTok)}`,
     );
-    assert.strictEqual(staleGet.status, 200, 'stale signed link is already unsubscribed');
-    assert.match(await staleGet.text(), /You're already unsubscribed/);
+    assert.strictEqual(expiredGet.status, 200, 'expired signed link while subscribed shows confirm');
+    assert.match(await expiredGet.text(), /Stop these emails/);
+    const expiredPost = await fetch(
+      `http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(expiredTok)}`,
+      { method: 'POST' },
+    );
+    assert.strictEqual(expiredPost.status, 200, 'expired token while subscribed opts out');
+    assert.deepStrictEqual(await expiredPost.json(), { ok: true });
+    prefs = await svc.getEmailNotifyPrefs(expiredStillOn.id);
+    assert.strictEqual(prefs.messages, false, 'expired POST must opt out');
+
+    const resub = await makeUser('Resub');
+    const oldTok = await svc.issueUnsubscribeToken(resub.id, 'match');
+    await svc.optOutType(resub.id, 'match');
+    await svc.setEmailNotifyPrefs(resub.id, { matches: true });
+    prefs = await svc.getEmailNotifyPrefs(resub.id);
+    assert.strictEqual(prefs.matches, true, 're-subscribe does not need a new version');
+    const oldVersion = await svc.currentUnsubVersion(resub.id, 'match');
+    const oldPayload = svc.verifyUnsubscribeToken(oldTok);
+    assert.ok(oldVersion !== null && oldVersion !== oldPayload.v, 're-subscribe leaves the old version behind');
+    const oldGet = await fetch(
+      `http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(oldTok)}`,
+    );
+    assert.strictEqual(oldGet.status, 200, 'old version while subscribed shows confirm');
+    assert.match(await oldGet.text(), /Stop these emails/);
+    const oldPost = await fetch(
+      `http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(oldTok)}`,
+      { method: 'POST' },
+    );
+    assert.strictEqual(oldPost.status, 200, 'old version after re-subscribe opts out');
+    prefs = await svc.getEmailNotifyPrefs(resub.id);
+    assert.strictEqual(prefs.matches, false);
+
+    const origEnabled = svc.emailNotifyTypeEnabled;
+    svc.emailNotifyTypeEnabled = async () => {
+      throw new Error('db_down');
+    };
+    try {
+      const failGet = await fetch(
+        `http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(oldTok)}`,
+      );
+      assert.strictEqual(failGet.status, 500, 'DB failure on GET is 5xx');
+      const failGetBody = await failGet.text();
+      assert.match(failGetBody, /Sorry, something went wrong\. Please try again\./);
+      assert.ok(!/already unsubscribed/i.test(failGetBody), 'DB failure is not already-unsubscribed');
+      assert.ok(!/will not get that kind of email/i.test(failGetBody), 'DB failure is not success');
+      const failPost = await fetch(
+        `http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(oldTok)}`,
+        { method: 'POST', headers: { Accept: 'text/html' } },
+      );
+      assert.strictEqual(failPost.status, 500, 'DB failure on POST is 5xx');
+      const failPostBody = await failPost.text();
+      assert.match(failPostBody, /Sorry, something went wrong\. Please try again\./);
+      assert.ok(!/already unsubscribed/i.test(failPostBody));
+    } finally {
+      svc.emailNotifyTypeEnabled = origEnabled;
+    }
 
     const forgedGet = await fetch(`http://127.0.0.1:${port}/api/email-unsubscribe?token=forged.token`);
     assert.strictEqual(forgedGet.status, 400, 'forged token stays 400');

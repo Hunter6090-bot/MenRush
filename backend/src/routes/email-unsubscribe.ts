@@ -2,12 +2,7 @@ import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { rateLimitKey } from '../lib/clientIp';
 import { privateNoStore } from '../middleware/noStore';
-import {
-  classifyUnsubscribeToken,
-  optOutType,
-  readSignedUnsubscribeToken,
-  readValidUnsubscribeToken,
-} from '../services/email-notification.service';
+import * as emailNotify from '../services/email-notification.service';
 
 /**
  * Public one-click unsubscribe for activity mail.
@@ -16,8 +11,13 @@ import {
  * GET / HEAD  never change prefs. GET shows a branded confirm page whose
  * button POSTs. POST is RFC 8058 List-Unsubscribe-Post / one-click (no login).
  *
+ * Any validly signed token (expired or old version included) reads the live
+ * pref. Off → already unsubscribed. On → confirm / opt out. Forged or
+ * malformed tokens are 400. A DB error is 5xx with an honest sorry page.
+ *
  * Rate limit: failed / invalid tokens count per IP. Successful applies are
  * keyed by user + type so a shared Vercel egress IP cannot lock everyone out.
+ * failIpLimiter skips when the signature verifies.
  */
 
 const router = Router();
@@ -32,7 +32,7 @@ const failIpLimiter = rateLimit({
   max: 120,
   keyGenerator: rateLimitKey,
   skipSuccessfulRequests: true,
-  skip: (req: Request) => readSignedUnsubscribeToken(tokenFrom(req)).ok,
+  skip: (req: Request) => emailNotify.readSignedUnsubscribeToken(tokenFrom(req)).ok,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -42,7 +42,7 @@ const successUserTypeLimiter = rateLimit({
   max: 30,
   skipFailedRequests: true,
   keyGenerator: (req: Request) => {
-    const signed = readSignedUnsubscribeToken(tokenFrom(req));
+    const signed = emailNotify.readSignedUnsubscribeToken(tokenFrom(req));
     if (signed.ok) return `email-unsub:${signed.payload.userId}:${signed.payload.type}`;
     return `email-unsub-invalid:${rateLimitKey(req)}`;
   },
@@ -108,6 +108,15 @@ function alreadyHtml(): string {
   );
 }
 
+function sorryHtml(): string {
+  return pageHtml(
+    `<h1>Sorry, something went wrong</h1>
+    <p class="err">Sorry, something went wrong. Please try again.</p>
+    <p><a href="https://menrush.com/settings#email-notifications">Email notifications in Settings</a></p>`,
+    'Sorry, something went wrong MenRush',
+  );
+}
+
 function errorHtml(message: string): string {
   return pageHtml(
     `<h1>MenRush</h1>
@@ -124,17 +133,37 @@ function unsubAction(req: Request, token: string): string {
   return `${proto}://${host}${path}`;
 }
 
-async function applyToken(token: string): Promise<boolean> {
-  const payload = await readValidUnsubscribeToken(token);
-  return optOutType(payload.userId, payload.type);
+function wantsHtml(req: Request): boolean {
+  return String(req.headers.accept || '').includes('text/html');
+}
+
+function sendSorry(req: Request, res: Response) {
+  if (req.method === 'HEAD') return res.status(500).end();
+  if (wantsHtml(req) || req.method === 'GET') {
+    return res.status(500).type('html').send(sorryHtml());
+  }
+  return res.status(500).json({ error: 'unavailable' });
+}
+
+function sendAlready(req: Request, res: Response) {
+  if (req.method === 'HEAD') return res.status(200).end();
+  if (wantsHtml(req) || req.method === 'GET') {
+    return res.type('html').send(alreadyHtml());
+  }
+  return res.status(200).json({ ok: true });
 }
 
 router.head('/', failIpLimiter, async (req: Request, res: Response) => {
   const token = tokenFrom(req);
   if (!token) return res.status(400).end();
-  const kind = await classifyUnsubscribeToken(token);
-  if (kind === 'invalid') return res.status(400).end();
-  return res.status(200).end();
+  const signed = emailNotify.readSignedUnsubscribeToken(token);
+  if (!signed.ok) return res.status(400).end();
+  try {
+    await emailNotify.emailNotifyTypeEnabled(signed.payload.userId, signed.payload.type);
+    return res.status(200).end();
+  } catch {
+    return sendSorry(req, res);
+  }
 });
 
 router.get('/', failIpLimiter, async (req: Request, res: Response) => {
@@ -142,35 +171,32 @@ router.get('/', failIpLimiter, async (req: Request, res: Response) => {
   if (!token) {
     return res.status(400).type('html').send(errorHtml('That unsubscribe link is missing.'));
   }
-  const kind = await classifyUnsubscribeToken(token);
-  if (kind === 'invalid') {
+  const signed = emailNotify.readSignedUnsubscribeToken(token);
+  if (!signed.ok) {
     return res.status(400).type('html').send(errorHtml('That unsubscribe link is not valid.'));
   }
-  if (kind === 'stale') {
-    return res.type('html').send(alreadyHtml());
+  try {
+    const on = await emailNotify.emailNotifyTypeEnabled(signed.payload.userId, signed.payload.type);
+    if (!on) return res.type('html').send(alreadyHtml());
+    return res.type('html').send(confirmHtml(unsubAction(req, token)));
+  } catch {
+    return sendSorry(req, res);
   }
-  return res.type('html').send(confirmHtml(unsubAction(req, token)));
 });
 
 router.post('/', failIpLimiter, successUserTypeLimiter, async (req: Request, res: Response) => {
   const token = tokenFrom(req);
   if (!token) return res.status(400).json({ error: 'missing_token' });
-  const kind = await classifyUnsubscribeToken(token);
-  const wantsHtml = String(req.headers.accept || '').includes('text/html');
-  if (kind === 'invalid') {
-    return res.status(400).json({ error: 'invalid_token' });
-  }
-  if (kind === 'stale') {
-    if (wantsHtml) return res.type('html').send(alreadyHtml());
-    return res.status(200).json({ ok: true });
-  }
+  const signed = emailNotify.readSignedUnsubscribeToken(token);
+  if (!signed.ok) return res.status(400).json({ error: 'invalid_token' });
   try {
-    await applyToken(token);
-    if (wantsHtml) return res.type('html').send(doneHtml());
+    const on = await emailNotify.emailNotifyTypeEnabled(signed.payload.userId, signed.payload.type);
+    if (!on) return sendAlready(req, res);
+    await emailNotify.optOutType(signed.payload.userId, signed.payload.type);
+    if (wantsHtml(req)) return res.type('html').send(doneHtml());
     return res.status(200).json({ ok: true });
   } catch {
-    if (wantsHtml) return res.type('html').send(alreadyHtml());
-    return res.status(200).json({ ok: true });
+    return sendSorry(req, res);
   }
 });
 
