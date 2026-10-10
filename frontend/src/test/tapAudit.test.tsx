@@ -127,3 +127,22 @@ describe('tap audit: board additions open real screens', () => {
     expect(screen.getByTestId('cruise-map-route')).toBeInTheDocument();
   });
 });
+
+describe('Out event rows: missing times (Brand)', () => {
+  it.each([
+    ['missing start time', { starts_at: null, ends_at: '2026-10-17T02:00:00.000Z' }, /^Hide · Until /],
+    ['missing end time', { starts_at: '2026-10-16T21:00:00.000Z', ends_at: null }, /^Hide · From /],
+  ])('%s: venue and the date we have, nothing promised', async (_l, times, re) => {
+    vi.mocked(eventsAPI.getNearby).mockResolvedValueOnce({ data: [{ ...EVENT, ...times }] } as never);
+    render(
+      <MemoryRouter initialEntries={['/out?section=event']}>
+        <Out />
+      </MemoryRouter>,
+    );
+    const meta = await screen.findByTestId('out-event-meta-ev-1');
+    expect(meta.textContent).toMatch(re);
+    fireEvent.click(screen.getByTestId('out-event-open-ev-1'));
+    const row = screen.getByTestId('out-event-ev-1');
+    expect(row.textContent).not.toMatch(/tonight|starts in|ends in|saved|after hours|\d+\s*(min|h) left/i);
+  });
+});

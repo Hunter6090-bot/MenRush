@@ -6,6 +6,7 @@ import { useAuthStore, useLocationStore } from '../hooks/store';
 import { isBetaPremiumFree } from '../lib/betaInvite';
 import { mondayFirstLeadingBlanks, MONDAY_FIRST_WEEKDAY_LABELS } from '../lib/calendarGrid';
 import { eventTicketUrl } from '../lib/eventTickets';
+import { eventWhenLabel } from '../lib/eventWhen';
 import { resolveLocaleTag } from '../lib/localeUnits';
 
 const CATEGORIES = ['All', 'Nightclub', 'Drag', 'Live', 'Bar', 'Pride', 'Fetish'] as const;
@@ -210,6 +211,11 @@ export const Events = () => {
                       <p className="text-[13px] text-[var(--cream-muted)]">
                         {ev.venue_name || 'Venue TBC'} · {ev.member_count} in
                       </p>
+                      {eventWhenLabel(ev) ? (
+                        <p className="text-[15px] text-[var(--cream-muted)]" data-testid={`event-when-${ev.id}`}>
+                          {eventWhenLabel(ev)}
+                        </p>
+                      ) : null}
                       {ev.description ? (
                         <p className="text-[13px] leading-relaxed text-[var(--cream-muted)]">{ev.description}</p>
                       ) : null}

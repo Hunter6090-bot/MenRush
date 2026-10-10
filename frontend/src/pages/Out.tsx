@@ -13,7 +13,8 @@ import { CruisingSearchBar } from '../components/CruisingSearchBar';
 import { CruisingSearchSheet } from '../components/CruisingSearchSheet';
 import { HotSpotReviewsModal } from '../components/HotSpotReviewsModal';
 import { useLocationStore } from '../hooks/store';
-import { formatDistanceFromKm, resolveLocaleTag } from '../lib/localeUnits';
+import { formatDistanceFromKm } from '../lib/localeUnits';
+import { eventMetaLine } from '../lib/eventWhen';
 import { eventTicketUrl } from '../lib/eventTickets';
 import { SpotTypeIcon } from '../components/icons/SpotTypeIcon';
 import { getDirectionsUrl } from '../lib/cruising';
@@ -349,18 +350,6 @@ function OutSpotRow({ spot }: { spot: HotSpotDTO }) {
 /** Matches backend ACTIVE_CHECKIN_TTL_HOURS (same copy as the Events page). */
 const EVENT_CHECKIN_TTL_HOURS = 4;
 
-function formatEventStart(iso?: string | null): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString(resolveLocaleTag(), {
-    weekday: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Europe/London',
-  });
-}
-
 /**
  * Out event row. Tapping it opens the same actions the Events card had before the
  * redesign (#316): Tickets when the event has a URL, Who's going (the event room)
@@ -372,7 +361,7 @@ function OutEventRow({ event }: { event: EventDTO }) {
   const [checkingIn, setCheckingIn] = useState(false);
   const [notice, setNotice] = useState('');
   const ticketUrl = eventTicketUrl(event);
-  const when = formatEventStart(event.starts_at);
+  const meta = eventMetaLine(event);
   const panelId = `out-event-actions-${event.id}`;
 
   return (
@@ -397,9 +386,11 @@ function OutEventRow({ event }: { event: EventDTO }) {
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[15px] font-extrabold text-[var(--cream)]">{event.name}</span>
-          <span className="mt-0.5 block truncate text-[15px] font-medium text-[var(--cream-muted)]">
-            {[event.venue_name, when].filter(Boolean).join(' · ')}
-          </span>
+          {meta ? (
+            <span className="mt-0.5 block truncate text-[15px] font-medium text-[var(--cream-muted)]" data-testid={`out-event-meta-${event.id}`}>
+              {meta}
+            </span>
+          ) : null}
         </span>
         <span className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--copper)]/40 px-3 text-[15px] font-extrabold uppercase tracking-wide text-[var(--nn-accent-text)]">
           Event
