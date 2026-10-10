@@ -131,7 +131,7 @@ test.describe('Profile Map photo + Hosting Brand', () => {
     fs.mkdirSync(ARTIFACTS, { recursive: true });
     await authenticate(context);
     await mockApis(page);
-    await page.goto('/profile');
+    await page.goto('/profile/edit');
     await expect(page.getByTestId('profile-edit-form')).toBeVisible({ timeout: 15_000 });
 
     const mapSection = page.getByTestId('map-photo-section');
