@@ -95,14 +95,14 @@ test('shouldExposeConfirmToken respects EMAIL_CONFIRM_EXPOSE_TOKEN', () => {
   else process.env.NODE_ENV = prevNode;
 });
 
-test('BOA90 lock: Al allowlist only until EMAIL_CONFIRM_MAIL_OPEN', () => {
+test('owner lock: owner inbox only until EMAIL_CONFIRM_MAIL_OPEN', () => {
   const prevOpen = process.env.EMAIL_CONFIRM_MAIL_OPEN;
   delete process.env.EMAIL_CONFIRM_MAIL_OPEN;
   assert.strictEqual(isEmailConfirmMailOpen(), false);
   assert.strictEqual(maySendEmailConfirmTransactional('al@menrush.com'), true);
   assert.strictEqual(maySendEmailConfirmTransactional('AL@MenRush.com'), true);
-  assert.strictEqual(maySendEmailConfirmTransactional('other@example.com', 'BOA90'), true);
-  assert.strictEqual(maySendEmailConfirmTransactional('other@example.com', 'Random'), false);
+  // A display name is chosen at signup, so it never unlocks mail (email only).
+  assert.strictEqual(maySendEmailConfirmTransactional('other@example.com'), false);
   assert.strictEqual(maySendEmailConfirmTransactional('stranger@example.com'), false);
 
   process.env.EMAIL_CONFIRM_MAIL_OPEN = 'true';
@@ -118,7 +118,7 @@ async function runDbTests() {
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'email-confirm-check-secret';
   // Expose confirm token for the register→confirm path under test.
   process.env.EMAIL_CONFIRM_EXPOSE_TOKEN = 'true';
-  // Open mail gate for the full confirm path; BOA90 lock is covered by surface tests.
+  // Open mail gate for the full confirm path; owner lock is covered by surface tests.
   process.env.EMAIL_CONFIRM_MAIL_OPEN = 'true';
 
   const { query } = await import('../src/db');
@@ -199,7 +199,7 @@ async function runDbTests() {
 
     console.log('ok — DB: register gate, confirm unlock, idempotent welcome');
 
-    // BOA90 lock: non-allowlisted signup gets legacy session, zero confirm/welcome mails.
+    // Owner lock: non-allowlisted signup gets legacy session, zero confirm/welcome mails.
     process.env.EMAIL_CONFIRM_MAIL_OPEN = 'false';
     const lockedBefore = sent.length;
     const lockedEmail = `locked-${suffix}@test.menrush.local`;
@@ -219,10 +219,10 @@ async function runDbTests() {
     assert.strictEqual(
       sent.length,
       lockedBefore,
-      'BOA90 lock must not send confirm/welcome to non-Al',
+      'owner lock must not send confirm/welcome to non-owner',
     );
     assert.ok(EMAIL_CONFIRM_OWNER_EMAILS.includes('al@menrush.com'));
-    console.log('ok — DB: BOA90 lock holds mail for non-Al (legacy session)');
+    console.log('ok — DB: owner lock holds mail for non-owner (legacy session)');
 
     // --- No-orphan: confirm-token write failure ROLLBACKs the whole register ---
     process.env.EMAIL_CONFIRM_MAIL_OPEN = 'true';

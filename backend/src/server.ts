@@ -225,7 +225,7 @@ app.get('/api/healthz', healthHandler);
 
 // Socket.IO — track ALL live sockets per user (phone + tab + reconnect).
 // A single socketId map wrongly marked people offline when one tab closed
-// while another stayed open — common BOA↔Bigbear "we were both on" failures.
+// while another stayed open — common two members "we were both on" failures.
 const userSockets: Map<string, Set<string>> = new Map(); // userId → socket ids
 const socketToUser: Map<string, string> = new Map(); // socketId → userId
 

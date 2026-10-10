@@ -39,7 +39,7 @@ export const HOT_SPOTS_CONSENT = '';
 export const HOT_SPOTS_PAGE_BLURB =
   `${HOT_SPOTS_LEGAL_FACE} Check in on the map. Pins stay visible. Dim when empty. Solid when someone is checked in.`;
 
-/** Required face substrings for BOA90 / unit checks. */
+/** Required face substrings for owner account / unit checks. */
 export const HOT_SPOTS_FACE_REQUIRED_LINES = [
   'independent venues and outdoor locations',
   '18+ only',

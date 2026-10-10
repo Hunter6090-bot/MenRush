@@ -13,7 +13,7 @@
 import pool, { query } from '../db';
 import { accessControl } from '../security/access';
 import { premiumService } from './premium.service';
-import { isAlwaysPremiumName } from '../lib/always-premium';
+import { isTravelOwnerUserId } from '../lib/always-premium';
 import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
 import { AGE_FILTER_MIN } from '../lib/age';
 import { MAP_PIN_FUZZ_DEFAULT_M, MAP_PIN_FUZZ_MAX_M, privateMapPointAround } from '../lib/mapPinFuzz';
@@ -138,11 +138,10 @@ const MEMBER_SELECT = `
         ${PRESENCE_LIVE_SQL} AS online`;
 
 export const travelService = {
-  /** Premium, or one of the always-Premium owner accounts (BOA90, Bigbear25, HantsBear). */
+  /** Premium, or a Travel owner account (ids from env, see lib/always-premium). */
   async hasTravel(userId: string): Promise<boolean> {
-    if (await premiumService.hasFeature(userId, TRAVEL_PREMIUM_FEATURE)) return true;
-    const res = await query(`SELECT name FROM users WHERE id = $1`, [userId]);
-    return isAlwaysPremiumName(res.rows[0]?.name);
+    if (isTravelOwnerUserId(userId)) return true;
+    return premiumService.hasFeature(userId, TRAVEL_PREMIUM_FEATURE);
   },
 
   async assertPremium(userId: string): Promise<void> {

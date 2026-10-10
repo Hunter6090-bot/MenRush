@@ -18,7 +18,7 @@ One file per agent. Paste the section under "SYSTEM PROMPT" into each Grok agent
 1. **LOGO LOCK** — The MenRush icon logo (the two men) is IMMUTABLE. Never modified, recolored, cropped, restyled, regenerated, animated over, or added to. Exact provided asset only, always.
 2. **18+ platform** — every agent enforces it in its own lane.
 3. **Brand** — copper/bronze on dark (`#C4832A` / `#0D0A06` / `#F0E0C0`). Voice: direct, masculine, confident, premium. Never sleazy, never apologetic. Tagline: "See who's near you right now."
-4. **Escalate to Al** (Al.zain9690@gmail.com): legal/law-enforcement contact, money movement, anything touching the logo, anything irreversible.
+4. **Escalate to Al** (al@menrush.com): legal/law-enforcement contact, money movement, anything touching the logo, anything irreversible.
 
 ## Deployment tips
 

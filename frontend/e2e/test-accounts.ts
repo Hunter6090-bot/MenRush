@@ -1,21 +1,21 @@
 /**
  * Fixed test accounts from `backend/scripts/seed-test-users.ts`.
- * IDs are stable (uuid v5 from email) — use these in URLs instead of looking up IDs.
+ * IDs are fixed made-up UUIDs — use these in URLs instead of looking up IDs.
  */
 export const TEST_PASSWORD = 'MenRushTest2026!';
 
 export const FOUNDER = {
-  id: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
-  email: 'al.zain9690@gmail.com',
-  name: 'Al',
-  label: 'Founder (Boss)',
+  id: 'f0000001-0001-4f01-8f01-000000000001',
+  email: 'founder@example.com',
+  name: 'Founder',
+  label: 'Founder fixture',
 } as const;
 
 export const MARKETING = {
-  id: '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
-  email: 'petegreen69@hotmail.com',
-  name: 'Pete',
-  label: 'Marketing manager',
+  id: 'f0000002-0002-4f02-8f02-000000000002',
+  email: 'team-login@example.com',
+  name: 'Team Login',
+  label: 'Auth-only team login fixture',
 } as const;
 
 /** Playwright legacy fixtures — kept for existing specs. */

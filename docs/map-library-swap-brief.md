@@ -34,7 +34,7 @@ Shared root cause on both platforms (not iOS-only): HTML markers above the GL ca
 3. Keep `mapMarkerHitTest` + canvas pass-through contract — do not revive #224 panBy forwarding.
 4. Port radius GeoJSON layer ids; Cruise + people marker factories unchanged in structure.
 5. E2E: touch pan across pin moves center; pinch changes zoom; expand/shell; Live honesty.
-6. BOA90: Android Chrome + iPhone — drag empty, drag across pins, pinch, expand.
+6. owner account: Android Chrome + iPhone — drag empty, drag across pins, pinch, expand.
 
 ## Starter scaffold (when Product routes the swap)
 

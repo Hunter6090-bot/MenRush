@@ -1,5 +1,5 @@
 /**
- * React Router v7 upgrade smoke — BOA90 soft-refresh checklist:
+ * React Router v7 upgrade smoke — owner account soft-refresh checklist:
  * login, Nearby↔Matches↔Chat routing, match → open chat.
  * React stays on 19; Router is react-router-dom v7 (declarative BrowserRouter / library mode).
  *
@@ -62,7 +62,7 @@ function LocationProbe() {
   return <div data-testid="loc">{loc.pathname}</div>;
 }
 
-describe('React Router v7 BOA90 — login', () => {
+describe('React Router v7 owner account — login', () => {
   beforeEach(() => {
     clearAuthSession();
     useAuthStore.setState({ user: null, token: null });
@@ -121,7 +121,7 @@ describe('React Router v7 BOA90 — login', () => {
   });
 });
 
-describe('React Router v7 BOA90 — routing / bottom nav + deep links', () => {
+describe('React Router v7 owner account — routing / bottom nav + deep links', () => {
   it('exposes Discover home + Chat · Rooms · Out · You as primary mobile tabs', () => {
     const mobile = getNavItems().filter((i) => i.mobileTab).map((i) => i.to);
     expect(mobile).toEqual([
@@ -143,7 +143,7 @@ describe('React Router v7 BOA90 — routing / bottom nav + deep links', () => {
   });
 });
 
-describe('React Router v7 BOA90 — match flow → open chat', () => {
+describe('React Router v7 owner account — match flow → open chat', () => {
   beforeEach(() => {
     __resetTabListCacheForTests();
     vi.mocked(usersAPI.getMatches).mockReset();

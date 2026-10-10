@@ -60,7 +60,7 @@ function frontendBase(): string {
 }
 
 /**
- * BOA90 / staging fixture gate.
+ * owner account / staging fixture gate.
  * Requires ADULT_ASSURANCE_ALLOW_TEST_FIXTURE=true.
  * Hard-bans real production. Railway staging often still sets NODE_ENV=production —
  * allow when RAILWAY_ENVIRONMENT* looks like staging, NODE_ENV=staging, or
@@ -635,7 +635,7 @@ export const adultAssuranceService = {
   },
 
   /**
-   * Controlled fixtures for BOA90 / CI.
+   * Controlled fixtures for owner account / CI.
    * underage | adult (liveness-only) | adult_with_id | declined | failed
    * Never stores DOB / ID images.
    */

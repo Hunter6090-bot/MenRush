@@ -14,9 +14,9 @@ import path from 'path';
 const OWNER = {
   token: 'e2escrollpayload.e2escrollsignature000',
   user: {
-    id: '6e9b68ad-7d20-46fc-be94-3c2ac3fa16b9',
-    email: 'boa90@test.menrush',
-    name: 'BOA90',
+    id: '7a1e0000-0000-4000-8000-0000000000a1',
+    email: 'owner@example.com',
+    name: 'TestOwner',
     is_verified: false,
     verification_status: 'none',
     is_premium: true,
@@ -26,7 +26,7 @@ const OWNER = {
 const ME = {
   id: OWNER.user.id,
   email: OWNER.user.email,
-  name: 'BOA90',
+  name: 'TestOwner',
   age: 34,
   date_of_birth: '1991-01-15',
   bio: 'Scroll test bio — enough profile fields to keep the editor tall on phones.',
@@ -85,7 +85,7 @@ async function mockApis(page: Page) {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          referral_code: 'BOA90TEST',
+          referral_code: 'OWNERTEST',
           verified_count: 0,
           pending_count: 0,
           credited_count: 0,

@@ -61,7 +61,7 @@ Veriff integration types in Station:
 - `POST /api/auth/adult-assurance/:sessionId/start-id` — optional ID after liveness passed
 - `GET /api/auth/adult-assurance/:sessionId` — status + token when passed; includes `id_verified`
 - `POST /api/auth/adult-assurance/:sessionId/submitted`
-- `POST /api/auth/adult-assurance/fixture` — BOA90 outcomes: `underage` \| `adult` \| `adult_with_id` \| `declined` \| `failed`
+- `POST /api/auth/adult-assurance/fixture` — owner account outcomes: `underage` \| `adult` \| `adult_with_id` \| `declined` \| `failed`
 - Register body: `adult_assurance_token`
 
 ## Migrations
@@ -69,7 +69,7 @@ Veriff integration types in Station:
 - `058_verified_age_18_plus.sql` — `users.verified_age_18_plus` + `adult_assurance_sessions` (057 taken by outdoor Hot Spots on main)
 - `059_adult_assurance_liveness_id.sql` — `check_kind`, `parent_session_id`, `id_verified`, `id_session_id`
 
-## BOA90 fixtures (staging)
+## owner account fixtures (staging)
 
 ```bash
 ADULT_ASSURANCE_ALLOW_TEST_FIXTURE=true

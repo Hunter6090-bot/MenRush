@@ -1,6 +1,6 @@
 /**
  * Profile essentials: Settings lists every missing item; /profile highlights them.
- * Mocked API — incomplete owner-style path (BOA90-shaped display name).
+ * Mocked API — incomplete owner-style path (owner account-shaped display name).
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import fs from 'fs';
@@ -9,8 +9,8 @@ import path from 'path';
 const OWNER = {
   token: 'e2eprofilepayload.e2eprofilesignature00',
   user: {
-    id: '6e9b68ad-7d20-46fc-be94-3c2ac3fa16b9',
-    email: 'boa90@test.menrush',
+    id: '7a1e0000-0000-4000-8000-0000000000a1',
+    email: 'owner@example.com',
     name: 'B',
     is_verified: false,
     verification_status: 'none',
@@ -85,7 +85,7 @@ async function mockApis(page: Page) {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          referral_code: 'BOA90TEST',
+          referral_code: 'OWNERTEST',
           verified_count: 0,
           pending_count: 0,
           credited_count: 0,

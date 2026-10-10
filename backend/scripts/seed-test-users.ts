@@ -30,7 +30,7 @@ type SeedUser = {
   seedLondonLocation?: boolean;
   /**
    * Auth-only team login (no dating profile). Seed must not restore location / visibility.
-   * Pete uses Bigbear25 as his personal account.
+   * The team member behind it uses a separate personal account.
    */
   authOnly?: boolean;
   /**
@@ -45,27 +45,27 @@ type SeedUser = {
 
 export const SEED_USERS: SeedUser[] = [
   {
-    id: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
-    email: 'al.zain9690@gmail.com',
-    name: 'Al',
+    id: 'f0000001-0001-4f01-8f01-000000000001',
+    email: 'founder@example.com',
+    name: 'Founder',
     age: 30,
-    label: 'Founder (Boss)',
+    label: 'Founder fixture',
     seedLondonLocation: true,
   },
   {
-    id: '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
-    email: 'petegreen69@hotmail.com',
-    name: 'Pete',
+    id: 'f0000002-0002-4f02-8f02-000000000002',
+    email: 'team-login@example.com',
+    name: 'Team Login',
     age: 32,
-    label: 'Marketing manager (auth-only — personal account is Bigbear25)',
+    label: 'Auth-only team login fixture (no dating profile)',
     authOnly: true,
   },
   {
-    id: 'b2000003-0003-4003-8003-000000000003',
-    email: 'rfell30@hotmail.com',
-    name: 'RFell',
+    id: 'f0000003-0003-4f03-8f03-000000000003',
+    email: 'tester@example.com',
+    name: 'Tester',
     age: 30,
-    label: 'Tester',
+    label: 'Tester fixture',
     seedLondonLocation: true,
   },
   {

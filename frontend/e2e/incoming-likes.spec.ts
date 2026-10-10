@@ -75,7 +75,7 @@ test.beforeAll(async () => {
         user: confirmBody.user,
       };
     } else {
-      // BOA90 lock: non-Al signups keep legacy session until EMAIL_CONFIRM_MAIL_OPEN=true.
+      // owner account lock: non-Al signups keep legacy session until EMAIL_CONFIRM_MAIL_OPEN=true.
       expect(regBody.token).toBeTruthy();
       liker = {
         token: regBody.token,

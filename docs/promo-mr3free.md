@@ -18,7 +18,7 @@ Promoter (docs only): **Bronze Apps UK Limited t/a MenRush**.
 | Stacking vs Pride / BSF26 | **No stack.** Reject if any Pride or BSF26 path exists. |
 | vs 30-day waitlist gift | **Replaces** Terms 7.2 waitlist gift. Not added on top. |
 | Beta promises | **Does not cancel 12-month beta promises.** Existing longer `premium_until` is preserved. |
-| Existing Premium | **Does not wipe existing Premium.** Always-premium owners (`BOA90`, etc.) and higher `premium_until` preserved. |
+| Existing Premium | **Does not wipe existing Premium.** Always-premium owners (`owner account`, etc.) and higher `premium_until` preserved. |
 | Day one unlock | Pulse, discovery, and chat unlocked immediately from day of registration (`premium_starts_at` is set to registration date in Europe/London). |
 | Double-claim | Rejected (`shared_promo_redemptions` unique on `email_hash` + `user_id` per campaign). |
 | 18+ | Adult-assurance age-gate still applies at register (#97). |

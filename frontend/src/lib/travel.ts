@@ -139,13 +139,13 @@ export function tripDatesError(startsOn: string, endsOn: string, now: Date = new
   return null;
 }
 
-/** Owner accounts that always have Premium (same list as the server). */
-const ALWAYS_PREMIUM_NAMES = ['boa90', 'bigbear25', 'hantsbear'];
-
-/** Client hint only; the server decides (402 shows the same Premium card). */
-export function hasTravelAccess(user: { is_premium?: boolean | null; name?: string | null } | null | undefined): boolean {
+/**
+ * Client hint only; the server decides (402 shows the same Premium card).
+ * Owner accounts are set on the server by id and arrive as `travel_owner`.
+ */
+export function hasTravelAccess(
+  user: { is_premium?: boolean | null; travel_owner?: boolean | null } | null | undefined,
+): boolean {
   if (!user) return false;
-  if (user.is_premium) return true;
-  const n = String(user.name ?? '').trim().toLowerCase();
-  return ALWAYS_PREMIUM_NAMES.includes(n);
+  return Boolean(user.is_premium || user.travel_owner);
 }

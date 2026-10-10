@@ -31,7 +31,7 @@ import crypto from 'crypto';
 import type { PoolClient } from 'pg';
 import pool, { query } from '../db';
 import { premiumService } from './premium.service';
-import { ALWAYS_PREMIUM_NAMES, isAlwaysPremiumName } from '../lib/always-premium';
+import { alwaysPremiumUserIds, isAlwaysPremiumUserId } from '../lib/always-premium';
 import {
   REFERRAL_MAX_MONTHS_PER_12_MONTHS,
   bankedMonths,
@@ -44,11 +44,10 @@ import {
 export { REFERRAL_MAX_MONTHS_PER_12_MONTHS };
 export type { ReferralRewardMode };
 
-export { ALWAYS_PREMIUM_NAMES, isAlwaysPremiumName };
+export { alwaysPremiumUserIds, isAlwaysPremiumUserId };
 
 type Queryable = PoolClient | typeof pool;
 
-/** @deprecated use ALWAYS_PREMIUM_NAMES from lib — re-exported for callers */
 export const REFERRAL_UNLOCK_EVERY = 3;
 export const REFERRAL_UNLOCK_MONTHS = 1;
 export const REFERRAL_PAYOUT_RATE = 0.2;
@@ -170,7 +169,7 @@ async function allocateUniqueCode(db: Queryable): Promise<string> {
 export const referralService = {
   generateReferralCode,
   normalizeReferralCode,
-  isAlwaysPremiumName,
+  isAlwaysPremiumUserId,
   classifyForeignCode,
 
   async ensureReferralCode(userId: string, client?: PoolClient): Promise<string> {

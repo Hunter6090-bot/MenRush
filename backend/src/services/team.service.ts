@@ -1,15 +1,15 @@
 /**
  * Team / ops allowlist for in-app moderation surfaces.
  *
- * Railway:
- *   TEAM_EMAILS=al.zain9690@gmail.com,hello@menrush.com
+ * Railway (comma-separated; personal team logins live only in env, never in
+ * this public repo):
+ *   TEAM_EMAILS=<team login emails>,hello@menrush.com
  *   REPORT_NOTIFY_EMAIL=hello@menrush.com   (inbox for new report mail)
+ *
+ * Unset TEAM_EMAILS falls back to the shared company inbox only.
  */
 
-const DEFAULT_TEAM_EMAILS = [
-  'al.zain9690@gmail.com',
-  'hello@menrush.com',
-];
+const DEFAULT_TEAM_EMAILS = ['hello@menrush.com'];
 
 export function getTeamEmails(): string[] {
   const raw = (process.env.TEAM_EMAILS || '').trim();

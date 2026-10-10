@@ -23,12 +23,12 @@ const OWNER = {
   },
 };
 
-const REAL_PHOTO = '/uploads/profiles/bigbear-real.jpg';
+const REAL_PHOTO = '/uploads/profiles/member-b-real.jpg';
 
 const CONVERSATIONS = [
   {
     other_user_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-    other_user_name: 'Bigbear25',
+    other_user_name: 'TestMemberB',
     photo_url: REAL_PHOTO,
     online: true,
     last_message: 'No it hasn\'t',
@@ -161,7 +161,7 @@ test('Messages list: circle-only avatars, Brand empty face, no square ring', asy
 
   await page.goto('/conversations', { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('messaging-inbox')).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText('Bigbear25')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('TestMemberB')).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText('Nick')).toBeVisible();
   await expect(page.getByText('ChubbyBear')).toBeVisible();
 
@@ -171,9 +171,9 @@ test('Messages list: circle-only avatars, Brand empty face, no square ring', asy
   await expect(emptyImg).toHaveAttribute('src', '/brand/medallion-transparent.png');
 
   // Real photo kept
-  const realImg = page.locator(`img[alt="Bigbear25"]`);
+  const realImg = page.locator(`img[alt="TestMemberB"]`);
   await expect(realImg).toBeVisible();
-  await expect(realImg).toHaveAttribute('src', /uploads\/profiles\/bigbear-real/);
+  await expect(realImg).toHaveAttribute('src', /uploads\/profiles\/member-b-real/);
 
   // No square ring chrome on the inbox
   const ringCount = await page.locator('[data-testid="messaging-inbox"] [class*="ring-2"]').count();

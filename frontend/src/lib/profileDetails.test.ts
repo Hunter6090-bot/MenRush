@@ -20,12 +20,12 @@ const empty = {
 };
 
 const complete = {
-  name: 'BOA90',
+  name: 'TestOwner',
   date_of_birth: '1990-01-15',
   bio: 'Owner account nearby for real meetups tonight.',
   headline: 'Hosting in town',
   looking_for: 'Chat and meet',
-  photo_url: '/uploads/profiles/boa90.jpg',
+  photo_url: '/uploads/profiles/owner.jpg',
   interests: ['Otter', 'Chat', 'Fitness', 'Nightlife', 'Casual'],
   height_cm: 180,
   relationship_status: 'Single',

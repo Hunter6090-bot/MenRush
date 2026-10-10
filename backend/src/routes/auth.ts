@@ -294,7 +294,7 @@ router.post('/adult-assurance/:sessionId/submitted', adultAssuranceLimiter, asyn
 
 /**
  * POST /api/auth/adult-assurance/fixture
- * BOA90 / CI controlled path. Never available in production.
+ * owner account / CI controlled path. Never available in production.
  */
 router.post('/adult-assurance/fixture', adultAssuranceLimiter, async (req, res: Response) => {
   try {

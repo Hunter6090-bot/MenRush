@@ -192,13 +192,17 @@ async function main() {
     assert.strictEqual(sum.months_saved, 1);
     await referralService.syncEarnedMonths(O); // login: still open-ended, stays banked
     assert.deepStrictEqual(await st(O), { p: true, until: null });
-    const ownerName = `HantsBear`;
-    const ownerExisting = (await query(`SELECT id FROM users WHERE name = $1`, [ownerName])).rows[0];
-    if (!ownerExisting) {
-      const W = await insertUser({ email: mail('w'), name: ownerName, isPremium: true, until: null });
+    // Owner account: always-Premium by id from env (made-up member, no real id).
+    const W = await insertUser({ email: mail('w'), name: `RemOwner${sfx}`, isPremium: true, until: null });
+    const prevOwners = process.env.ALWAYS_PREMIUM_USER_IDS;
+    process.env.ALWAYS_PREMIUM_USER_IDS = W;
+    try {
       await earn(W, 3);
       assert.deepStrictEqual(await st(W), { p: true, until: null }, 'owner open-ended untouched');
       assert.deepStrictEqual(await states(W), ['banked']);
+    } finally {
+      if (prevOwners === undefined) delete process.env.ALWAYS_PREMIUM_USER_IDS;
+      else process.env.ALWAYS_PREMIUM_USER_IDS = prevOwners;
     }
     console.log('ok  - open-ended Premium never shortened (owner and non-owner): month banked');
 
@@ -270,14 +274,14 @@ async function main() {
     console.log('ok  - cap: 6th month granted, 7th held, then granted once the 12 month window allows');
 
     // ── 6. Gmail dedupe ─────────────────────────────────────────────────────
-    assert.strictEqual(referralEmailKey('Pete.Green+x@Gmail.com'), 'petegreen@gmail.com');
-    assert.strictEqual(referralEmailKey('p.e.t.e.green@googlemail.com'), 'petegreen@gmail.com');
-    assert.strictEqual(referralEmailKey('pete.green+a@outlook.com'), 'pete.green@outlook.com');
-    const G = await insertUser({ email: `Rem.Pete.Green${sfx}+x@Gmail.com`, name: `RemG${sfx}` });
+    assert.strictEqual(referralEmailKey('Fake.Member+x@Gmail.com'), 'fakemember@gmail.com');
+    assert.strictEqual(referralEmailKey('f.a.k.e.member@googlemail.com'), 'fakemember@gmail.com');
+    assert.strictEqual(referralEmailKey('fake.member+a@outlook.com'), 'fake.member@outlook.com');
+    const G = await insertUser({ email: `Rem.Fake.Member${sfx}+x@Gmail.com`, name: `RemG${sfx}` });
     const variants = [
-      `rempetegreen${sfx}@gmail.com`,
-      `r.e.m.pete.green${sfx}+zz@googlemail.com`,
-      `REM.PETE.GREEN${sfx}@GOOGLEMAIL.COM`,
+      `remfakemember${sfx}@gmail.com`,
+      `r.e.m.fake.member${sfx}+zz@googlemail.com`,
+      `REM.FAKE.MEMBER${sfx}@GOOGLEMAIL.COM`,
     ];
     for (const [i, e] of variants.entries()) {
       const u = await insertUser({ email: e, name: `RemGv${i}${sfx}`, confirmed: false });

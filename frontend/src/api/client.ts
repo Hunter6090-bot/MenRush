@@ -311,7 +311,7 @@ export const authAPI = {
     }>(`/auth/adult-assurance/${sessionId}`),
   markAdultAssuranceSubmitted: (sessionId: string) =>
     apiClient.post(`/auth/adult-assurance/${sessionId}/submitted`),
-  /** Non-prod BOA90 / CI fixture only — never in production. */
+  /** Non-prod owner account / CI fixture only — never in production. */
   adultAssuranceFixture: (data: {
     sessionId: string;
     outcome: 'adult' | 'adult_with_id' | 'underage' | 'declined' | 'failed' | 'missing_dob';

@@ -102,7 +102,7 @@ describe('tap audit: grid tiles and chat rows open something', () => {
         <Routes>
           <Route
             path="/conversations"
-            element={<ConversationItem userId="u2" name="BOA90" lastMessage="Come by" variant="default" />}
+            element={<ConversationItem userId="u2" name="TestOwner" lastMessage="Come by" variant="default" />}
           />
           <Route path="/messages/:id" element={<p data-testid="thread-route">thread</p>} />
         </Routes>

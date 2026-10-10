@@ -82,9 +82,9 @@ if [ -n "$CONFIRM1" ]; then
   [ -n "$TOKEN1" ] || die "Alice confirm failed: $CONF1"
   ok "Alice registered + confirmed ($USER1_ID)"
 elif [ -n "$TOKEN1" ]; then
-  # BOA90 lock: non-Al may still get legacy session until EMAIL_CONFIRM_MAIL_OPEN=true
+  # owner account lock: non-Al may still get legacy session until EMAIL_CONFIRM_MAIL_OPEN=true
   [ -n "$USER1_ID" ] || die "Alice registration failed: $RES1"
-  ok "Alice registered via legacy session during BOA90 lock ($USER1_ID)"
+  ok "Alice registered via legacy session during owner account lock ($USER1_ID)"
 else
   die "Alice registration failed: $RES1"
 fi
@@ -107,7 +107,7 @@ if [ -n "$CONFIRM2" ]; then
   ok "Bob registered + confirmed ($USER2_ID)"
 elif [ -n "$TOKEN2" ]; then
   [ -n "$USER2_ID" ] || die "Bob registration failed: $RES2"
-  ok "Bob registered via legacy session during BOA90 lock ($USER2_ID)"
+  ok "Bob registered via legacy session during owner account lock ($USER2_ID)"
 else
   die "Bob registration failed: $RES2"
 fi

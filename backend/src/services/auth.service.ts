@@ -327,11 +327,11 @@ export const authService = {
       throw new Error('You must be 18 or older to join MenRush.');
     }
 
-    // Al lock: confirm/welcome mails only to al@menrush.com / BOA90 until
+    // Al lock: confirm/welcome mails only to the owner inbox until
     // EMAIL_CONFIRM_MAIL_OPEN=true. Others keep legacy live session (no mass-send).
     // Decide before the transaction so confirm/token DB writes commit atomically
     // with the user row (no post-COMMIT orphan on transient write failure).
-    const sendConfirmMail = maySendEmailConfirmTransactional(data.email, data.name);
+    const sendConfirmMail = maySendEmailConfirmTransactional(data.email);
 
     const client = await pool.connect();
     let committed = false;
@@ -534,7 +534,7 @@ export const authService = {
 
     if (!sendConfirmMail) {
       console.log(
-        `[email-confirm] BOA90 lock — held confirm/welcome mail for ${user!.email}; legacy session issued. First live mails are Al-only until EMAIL_CONFIRM_MAIL_OPEN=true.`,
+        `[email-confirm] owner lock — held confirm/welcome mail for ${user!.email}; legacy session issued. First live mails are Al-only until EMAIL_CONFIRM_MAIL_OPEN=true.`,
       );
       return {
         user: user!,
@@ -582,7 +582,7 @@ export const authService = {
   async sendConfirmEmail(deliverTo: string, rawToken: string): Promise<void> {
     if (!maySendEmailConfirmTransactional(deliverTo)) {
       console.log(
-        `[email-confirm] BOA90 lock — skipped confirm mail to ${deliverTo} (Al-only until EMAIL_CONFIRM_MAIL_OPEN=true)`,
+        `[email-confirm] owner lock — skipped confirm mail to ${deliverTo} (Al-only until EMAIL_CONFIRM_MAIL_OPEN=true)`,
       );
       return;
     }
@@ -601,7 +601,7 @@ export const authService = {
   async sendWelcomeEmailOnce(userId: string, deliverTo: string): Promise<boolean> {
     if (!maySendEmailConfirmTransactional(deliverTo)) {
       console.log(
-        `[email-confirm] BOA90 lock — skipped welcome mail to ${deliverTo} (Al-only until EMAIL_CONFIRM_MAIL_OPEN=true)`,
+        `[email-confirm] owner lock — skipped welcome mail to ${deliverTo} (Al-only until EMAIL_CONFIRM_MAIL_OPEN=true)`,
       );
       return false;
     }

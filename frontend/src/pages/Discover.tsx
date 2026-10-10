@@ -1565,7 +1565,7 @@ export const Discover = () => {
       markMarkerCanvasPassThrough(selfEl);
 
       mapRef.current = map;
-      // E2E / BOA90 tooling: read center+zoom after touch pan across pins.
+      // E2E / owner account tooling: read center+zoom after touch pan across pins.
       (window as unknown as { __menrushDiscoverMap?: mapboxgl.Map }).__menrushDiscoverMap = map;
     })();
 
