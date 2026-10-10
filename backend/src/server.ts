@@ -34,10 +34,12 @@ import campaignRoutes from './routes/campaigns';
 import socialRoutes from './routes/social';
 import mapFeedRoutes from './routes/map-feed';
 import locationPrivacyRoutes from './routes/location-privacy';
+import travelRoutes from './routes/travel';
 import communityRoutes from './routes/community';
 import mediaDisplayRoutes from './routes/media-display';
 import { startPulseExpiryCron } from './services/pulse.service';
 import { startRoomMessagePurgeCron, startRoomTempIdentityPurgeCron } from './services/room.service';
+import { startTravelCleanupCron } from './services/travel.service';
 import { noteRoomEnter, noteRoomExit } from './services/room-presence';
 import {
   hasWelcomeBeenSent,
@@ -156,6 +158,7 @@ app.use('/api/campaigns', campaignRoutes);
 app.use('/api/social', socialRoutes);
 app.use('/api/map-feed', mapFeedRoutes);
 app.use('/api/location-privacy', locationPrivacyRoutes);
+app.use('/api/travel', travelRoutes);
 app.use('/api/community', communityRoutes);
 
 // Waitlist signup — POSTs to /api/waitlist land here; the dripRoutes router
@@ -977,6 +980,7 @@ server.listen(PORT, () => {
   startPulseExpiryCron();
   startRoomTempIdentityPurgeCron();
   startRoomMessagePurgeCron();
+  startTravelCleanupCron();
   startVerificationRetentionWorker();
   // Off unless LOCATION_PURGE_ENABLED=true (periods TBD, see config/locationRetention.ts).
   startLocationRetentionWorker();
