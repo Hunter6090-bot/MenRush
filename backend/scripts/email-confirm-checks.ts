@@ -145,6 +145,7 @@ async function runDbTests() {
       password,
       name: `Confirm_${suffix}`,
       age: 28,
+      date_of_birth: '1998-01-01',
     });
     assert.strictEqual(reg.requiresEmailConfirm, true);
     assert.ok(!('token' in reg && (reg as { token?: string }).token), 'register must not return session token');
@@ -208,6 +209,7 @@ async function runDbTests() {
       password,
       name: `Locked_${suffix}`,
       age: 28,
+      date_of_birth: '1998-01-01',
     });
     assert.strictEqual(locked.requiresEmailConfirm, false);
     assert.ok(locked.token, 'legacy session while mail gate locked');
@@ -236,6 +238,7 @@ async function runDbTests() {
             password,
             name: `Orphan_${suffix}`,
             age: 28,
+      date_of_birth: '1998-01-01',
           }),
         (err: Error) => !!err,
       );
@@ -262,6 +265,7 @@ async function runDbTests() {
       password,
       name: `MailFail_${suffix}`,
       age: 28,
+      date_of_birth: '1998-01-01',
     });
     assert.strictEqual(mailFailReg.requiresEmailConfirm, true);
     assert.ok(mailFailReg.devConfirmToken, 'token must exist even when mail send fails');

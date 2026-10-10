@@ -57,6 +57,7 @@ test.beforeAll(async () => {
         password: TEST_PASSWORD,
         name: 'Incoming Liker',
         age: 29,
+        date_of_birth: '1997-01-01',
       },
     });
     expect(reg.ok()).toBeTruthy();

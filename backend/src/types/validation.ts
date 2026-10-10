@@ -34,9 +34,10 @@ export const RegisterSchema = z.object({
   email: normalizedEmail,
   password: z.string().min(8),
   name: z.string().min(2).max(50),
-  age: z.number().min(18).max(120),
-  /** Preferred source of truth for age — persisted and used to recompute age. */
-  date_of_birth: isoDateOnly.optional(),
+  /** Ignored for the decision: age is always worked out from date_of_birth. */
+  age: z.number().min(18).max(120).optional(),
+  /** Required. Full date of birth; a bare age is refused (see lib/registerDob). */
+  date_of_birth: isoDateOnly,
   invite_code: z.string().min(1).max(64).optional(),
   /** Optional public promo (e.g. Pride QR). Validated at register. */
   promo_code: z.string().min(1).max(64).optional(),
