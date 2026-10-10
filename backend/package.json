@@ -64,6 +64,7 @@
     "test:hot-spot-free-counts": "ts-node --transpile-only scripts/hot-spot-free-counts-checks.ts",
     "test:hot-spot-live-sort-integration": "ts-node --transpile-only scripts/hot-spot-live-sort-integration.ts",
     "test:pride-invite-register-integration": "ts-node --transpile-only scripts/pride-invite-register-integration.ts",
+    "test:delete-room-creator-integration": "ts-node --transpile-only scripts/delete-room-creator-integration.ts",
     "test:nightlife-integration": "ts-node scripts/nightlife-checkin-integration.ts",
     "test:push": "ts-node scripts/test-push.ts",
     "test:features": "bash ../test-features.sh",
