@@ -363,7 +363,7 @@ CTA: waitlist at menrush.com. Opens 1 October.`,
       reddit: `Title: What would make a dating app feel faster and less exhausting for men?
 
 Body:
-I am working on MenRush, a new app built around a simple question: who nearby is actually worth your attention right now?
+I am working on MenRush, a new app built around a simple question: who nearby is actually worth your attention?
 
 The idea is less noise, less wasted motion, and more local signal. We open 1 October (UK first).
 
@@ -525,31 +525,31 @@ CTA: join early at menrush.com`,
       templateSlug: 'oct1-launch-signal',
       xAm: `MenRush is being designed around one question:
 
-Who is actually around, available, and worth your attention right now?
+Who is actually around, available, and worth your attention?
 
 Waitlist:
 ${CTA}`,
       xPm: `The product question is simple:
 
-Who nearby is actually worth your attention right now?
+Who nearby is actually worth your attention?
 
 That is the lane.
 ${CTA}`,
       ig: `Who is around.
 Who is available.
-Who is worth your attention right now.
+Who is worth your attention.
 
 That is the question.
 
 menrush.com`,
       bluesky: `The question behind MenRush:
 
-who nearby is actually worth your attention right now?
+who nearby is actually worth your attention?
 
 ${CTA}`,
       tiktok: `This is the product question every dating app should start with.
 
-Beat: "Who is actually nearby and worth your attention right now?"
+Beat: "Who is actually nearby and worth your attention?"
 CTA: MenRush waitlist is live.`,
       reddit: `Comment angle: Ask for feature feedback without over-selling.
 
@@ -609,7 +609,7 @@ ${CTA}`,
 
 Who is nearby.
 Who is available.
-Who is worth your attention right now.
+Who is worth your attention.
 
 menrush.com`,
       bluesky: `Proximity without the noise.
