@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { NotificationSettings } from '../components/NotificationSettings';
+import { EmailNotificationSettings } from '../components/EmailNotificationSettings';
 import { HideLocationList } from '../components/HideLocationList';
 import { ShowInLookAroundRow } from '../components/ShowInLookAroundRow';
 import { TwoFactorSettings } from '../components/TwoFactorSettings';
@@ -28,7 +29,7 @@ import {
 
 const RADIUS_KEY = 'menrush_default_radius_km';
 /** Section ids the top-right Menu links to. */
-const SETTINGS_ANCHORS = ['account', 'two-factor', 'notifications', 'blocked', 'delete-account'];
+const SETTINGS_ANCHORS = ['account', 'two-factor', 'notifications', 'email-notifications', 'blocked', 'delete-account'];
 
 const fieldClass =
   'w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3.5 py-2.5 text-[16px] text-[var(--cream)] placeholder:text-[var(--cream-faded)] outline-none focus:border-[var(--copper)]';
@@ -407,16 +408,57 @@ export const Settings = () => {
     return () => window.clearTimeout(id);
   }, [unblockNotice]);
 
-  // Deep links from the top-right Menu: #account, #two-factor, #notifications, #blocked, #delete-account.
+  // Deep links from the top-right Menu: #account, #two-factor, #notifications,
+  // #email-notifications, #blocked, #delete-account. Email ticks load after
+  // GET /email-notifications, so wait up to 10s (observer + retry) for that
+  // sub-heading to mount.
   useEffect(() => {
     const id = location.hash.replace(/^#/, '');
     if (!SETTINGS_ANCHORS.includes(id)) return;
     if (id === 'blocked' && blockedLoading) return;
-    const el = document.getElementById(id);
-    if (!el) return;
-    window.requestAnimationFrame(() => {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+    let cancelled = false;
+    let observer: MutationObserver | null = null;
+    let retryTimer: number | undefined;
+    const deadline = Date.now() + 10_000;
+
+    const scrollTo = (el: Element) => {
+      window.requestAnimationFrame(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    };
+
+    const stopWaiting = () => {
+      observer?.disconnect();
+      observer = null;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      retryTimer = undefined;
+    };
+
+    const tryScroll = () => {
+      if (cancelled) return;
+      const el = document.getElementById(id);
+      if (el) {
+        stopWaiting();
+        scrollTo(el);
+        return;
+      }
+      if (id === 'email-notifications' && Date.now() < deadline) {
+        retryTimer = window.setTimeout(tryScroll, 100);
+      } else {
+        stopWaiting();
+      }
+    };
+
+    tryScroll();
+    if (id === 'email-notifications' && !document.getElementById(id)) {
+      observer = new MutationObserver(() => tryScroll());
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    return () => {
+      cancelled = true;
+      stopWaiting();
+    };
   }, [location.hash, blockedLoading, blocked.length]);
 
   useEffect(() => {
@@ -963,6 +1005,8 @@ export const Settings = () => {
                   <ChevronRight />
                 </div>
               </Link>
+
+              <EmailNotificationSettings flush />
             </div>
           </div>
 

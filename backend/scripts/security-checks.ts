@@ -196,7 +196,49 @@ export const AUTH_ONLY_ROUTERS: Record<string, string> = {
   // The caller's own "Don't show again" choices. Nothing about any other member,
   // and the prompts show before verification finishes (#357).
   'prompt-prefs': 'own prompt choices only, shown before verification',
+  // The caller's own activity-mail ticks. Nothing about any other member.
+  'email-notifications': 'own email notification ticks only',
 };
+
+const PUBLIC_NO_AUTH_GUARD_LINE = /^router\.use\(privateNoStore\);?[ \t]*$/m;
+
+/**
+ * Public routers: no login. Must still be private, no-store (prefs / tokens
+ * must not land in a shared cache) and rate limited. Failed attempts count
+ * per IP; successful applies must not share one Vercel egress bucket.
+ */
+export const PUBLIC_RATE_LIMITED_ROUTERS: Record<string, string> = {
+  'email-unsubscribe': 'public RFC 8058 unsubscribe; no auth; privateNoStore; rate limited',
+};
+
+export function assertPublicRateLimitedRouterGuard(route: string, source: string): void {
+  const code = stripComments(source);
+  const guard = PUBLIC_NO_AUTH_GUARD_LINE.exec(code);
+  assert.ok(guard, `${route}: router.use must start a line and apply privateNoStore only`);
+  const firstRoute = FIRST_ROUTE.exec(code);
+  assert.ok(firstRoute, `${route}: no routes found`);
+  assert.ok(guard.index < firstRoute.index, `${route}: router.use must come before the first route`);
+  assert.ok(!/\bauthMiddleware\b/.test(code), `${route}: public route must not use authMiddleware`);
+  assert.ok(!/\bverifiedMiddleware\b/.test(code), `${route}: public route must not use verifiedMiddleware`);
+  assert.ok(/\brateLimit\s*\(/.test(code), `${route}: must be rate limited`);
+  assert.ok(/skipSuccessfulRequests\s*:\s*true/.test(code), `${route}: IP limiter counts only failed / invalid tokens`);
+  assert.ok(/skipFailedRequests\s*:\s*true/.test(code), `${route}: success limiter ignores invalid tokens`);
+  assert.ok(/userId/.test(code) && /type/.test(code), `${route}: successful applies must key by user and type`);
+  assert.match(code, /const\s+failIpLimiter\s*=\s*rateLimit\s*\(/, `${route}: failIpLimiter must exist`);
+  // stripComments blanks string contents, so verb + path checks read the raw source.
+  for (const verb of ['head', 'get', 'post'] as const) {
+    assert.match(
+      source,
+      new RegExp(String.raw`router\.${verb}\(\s*['"]\/['"]\s*,\s*failIpLimiter\b`),
+      `${route}: failIpLimiter must wrap ${verb.toUpperCase()}`,
+    );
+  }
+  assert.match(
+    code,
+    /skip:\s*\(req[^)]*\)\s*=>\s*(?:emailNotify\.)?readSignedUnsubscribeToken\(tokenFrom\(req\)\)\.ok/,
+    `${route}: failIpLimiter must skip when the token verifies`,
+  );
+}
 
 export function assertAuthOnlyRouterGuard(route: string, source: string): void {
   const code = stripComments(source);
@@ -458,6 +500,20 @@ test('source guard helpers reject commented, hidden, extra, late or indented rou
   assert.match(stripped, /^ *e\(\);$/m);
 });
 
+test('public rate-limited guard requires privateNoStore, no auth, and split rate keys', () => {
+  const ok =
+    "const router = Router();\nrouter.use(privateNoStore);\nconst failIpLimiter = rateLimit({ skipSuccessfulRequests: true, keyGenerator: rateLimitKey, skip: (req) => readSignedUnsubscribeToken(tokenFrom(req)).ok });\nconst win = rateLimit({ skipFailedRequests: true, keyGenerator: (req) => `email-unsub:${payload.userId}:${payload.type}` });\nrouter.head('/', failIpLimiter, h);\nrouter.get('/', failIpLimiter, h);\nrouter.post('/', failIpLimiter, win, h);\n";
+  assertPublicRateLimitedRouterGuard('ok', ok);
+  const bad: Record<string, string> = {
+    'has auth': ok.replace('privateNoStore);', 'privateNoStore, authMiddleware);'),
+    'no no-store': ok.replace('router.use(privateNoStore);\n', ''),
+    'after first route': "const router = Router();\nrouter.get('/', h);\nrouter.use(privateNoStore);\n",
+  };
+  for (const [name, source] of Object.entries(bad)) {
+    assert.throws(() => assertPublicRateLimitedRouterGuard(name, source), assert.AssertionError, name);
+  }
+});
+
 test('auth-only guard helper rejects missing no-store, extra use, aliases and member ids from the request', () => {
   const ok = "const router = Router();\nrouter.use(privateNoStore, authMiddleware);\nrouter.get('/', (req, res) => res.json(req.userId));\n";
   assertAuthOnlyRouterGuard('ok', ok);
@@ -487,6 +543,10 @@ test('source guards preserve location, push, socket, and media privacy boundarie
   }
   for (const route of Object.keys(AUTH_ONLY_ROUTERS)) {
     assertAuthOnlyRouterGuard(route, fs.readFileSync(path.join(root, `src/routes/${route}.ts`), 'utf8'));
+    assert.match(server, new RegExp(`app\\.use\\('/api/${route}',`), `${route}: mounted under /api/${route}`);
+  }
+  for (const route of Object.keys(PUBLIC_RATE_LIMITED_ROUTERS)) {
+    assertPublicRateLimitedRouterGuard(route, fs.readFileSync(path.join(root, `src/routes/${route}.ts`), 'utf8'));
     assert.match(server, new RegExp(`app\\.use\\('/api/${route}',`), `${route}: mounted under /api/${route}`);
   }
   // Events: keep no-store at router level ahead of auth, so nearby, check-in and their 401s are never cached.

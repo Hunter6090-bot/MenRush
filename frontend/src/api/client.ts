@@ -1506,3 +1506,21 @@ export const promptPrefsAPI = {
   setNever: (prompt: PromptPrefKey) =>
     apiClient.put<{ never: PromptPrefKey[] }>(`/prompt-prefs/${encodeURIComponent(prompt)}/never`),
 };
+
+export type EmailNotifyPrefs = {
+  messages: boolean;
+  matches: boolean;
+  jerks: boolean;
+};
+
+export type EmailNotifyState = EmailNotifyPrefs & {
+  enabled: boolean;
+  jerkEnabled: boolean;
+};
+
+/** Own activity-mail ticks. All three default on. Saved on the server. */
+export const emailNotificationsAPI = {
+  get: () => apiClient.get<EmailNotifyState>('/email-notifications'),
+  update: (prefs: Partial<EmailNotifyPrefs>) =>
+    apiClient.put<EmailNotifyState>('/email-notifications', prefs),
+};

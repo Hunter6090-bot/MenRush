@@ -12,6 +12,8 @@ export type TransactionalEmailOptions = {
   bodyHtml: string;
   ctaUrl?: string;
   ctaLabel?: string;
+  /** Safe HTML rendered after the copper button and before the address block. */
+  afterCtaHtml?: string;
   footerNote?: string;
 };
 
@@ -30,6 +32,7 @@ export function buildTransactionalEmail(options: TransactionalEmailOptions): str
     bodyHtml,
     ctaUrl,
     ctaLabel,
+    afterCtaHtml,
     footerNote = 'You received this because of activity on your MenRush account.',
   } = options;
 
@@ -59,6 +62,15 @@ export function buildTransactionalEmail(options: TransactionalEmailOptions): str
             </td>
           </tr>`
       : '';
+
+  const afterCtaBlock = afterCtaHtml
+    ? `
+          <tr>
+            <td style="padding:24px 40px 0 40px;">
+              ${afterCtaHtml}
+            </td>
+          </tr>`
+    : '';
 
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
@@ -105,6 +117,7 @@ export function buildTransactionalEmail(options: TransactionalEmailOptions): str
             </td>
           </tr>
           ${ctaBlock}
+          ${afterCtaBlock}
           <tr>
             <td style="padding:38px 40px 0 40px;">
               <div style="border-top:1px solid #3a2a14; height:1px; line-height:1px; font-size:0;">&nbsp;</div>

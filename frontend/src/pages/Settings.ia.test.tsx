@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   listReports: vi.fn(),
   updateReportStatus: vi.fn(),
   updateLocation: vi.fn(),
+  getEmailNotify: vi.fn(),
+  updateEmailNotify: vi.fn(),
 }));
 
 vi.mock('../api/client', () => ({
@@ -43,6 +45,10 @@ vi.mock('../api/client', () => ({
     listHidden: vi.fn().mockResolvedValue({ data: { hidden: [], limit: 500 } }),
     hide: vi.fn(),
     unhide: vi.fn(),
+  },
+  emailNotificationsAPI: {
+    get: mocks.getEmailNotify,
+    update: mocks.updateEmailNotify,
   },
   usersAPI: {
     getMe: mocks.getMe,
@@ -136,6 +142,12 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
       data: { is_team: false },
     });
     mocks.logoutApi.mockResolvedValue({});
+    mocks.getEmailNotify.mockResolvedValue({
+      data: { enabled: true, jerkEnabled: false, messages: true, matches: true, jerks: true },
+    });
+    mocks.updateEmailNotify.mockResolvedValue({
+      data: { enabled: true, jerkEnabled: false, messages: true, matches: true, jerks: true },
+    });
   });
 
   it('renders phone-first sectioned IA with all must-keep controls intact', async () => {
@@ -180,6 +192,18 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     // Section 6: Notifications (Push toggle + Activity link)
     expect(screen.getByTestId('notification-settings')).toBeInTheDocument();
     expect(screen.getByText('Activity')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('email-notification-settings')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('email-notify-messages')).toBeInTheDocument();
+    expect(screen.getByTestId('email-notify-matches')).toBeInTheDocument();
+    expect(screen.queryByTestId('email-notify-jerks')).not.toBeInTheDocument();
+    const emailHeading = screen.getByTestId('email-notifications-heading');
+    expect(emailHeading).toHaveAttribute('id', 'email-notifications');
+    expect(screen.getByText('Email notifications')).toBeInTheDocument();
+    expect(screen.getByText('Email me about')).toBeInTheDocument();
+    expect(screen.getByText('Email notifications').className).toMatch(/text-\[15px\]/);
+    expect(screen.getByText('Email notifications').className).not.toMatch(/text-\[11px\]/);
 
     // Section 7: Safety (Safety centre + Blocked people)
     expect(screen.getByText('Safety centre')).toBeInTheDocument();
@@ -203,6 +227,65 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     // Section 10: Account actions (Delete account + Sign out)
     expect(screen.getByTestId('settings-delete-account')).toBeInTheDocument();
     expect(screen.getByTestId('settings-sign-out')).toBeInTheDocument();
+  });
+
+  it('scrolls #email-notifications to the Email notifications sub-heading', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    render(
+      <MemoryRouter initialEntries={['/settings#email-notifications']}>
+        <Settings />
+      </MemoryRouter>,
+    );
+    const heading = await screen.findByTestId('email-notifications-heading');
+    expect(heading).toHaveAttribute('id', 'email-notifications');
+    expect(heading).toHaveTextContent('Email notifications');
+    expect(heading).toHaveTextContent('Email me about');
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+  });
+
+  it('keeps waiting past 1s for #email-notifications to mount', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    mocks.getEmailNotify.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(
+            () =>
+              resolve({
+                data: { enabled: true, jerkEnabled: false, messages: true, matches: true, jerks: true },
+              }),
+            1200,
+          );
+        }),
+    );
+    render(
+      <MemoryRouter initialEntries={['/settings#email-notifications']}>
+        <Settings />
+      </MemoryRouter>,
+    );
+    await new Promise((r) => setTimeout(r, 1100));
+    expect(screen.queryByTestId('email-notifications-heading')).not.toBeInTheDocument();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    const heading = await screen.findByTestId('email-notifications-heading', {}, { timeout: 3000 });
+    expect(heading).toHaveAttribute('id', 'email-notifications');
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled(), { timeout: 3000 });
+  });
+
+  it('hides email ticks when GET /email-notifications reports enabled false', async () => {
+    mocks.getEmailNotify.mockResolvedValue({
+      data: { enabled: false, jerkEnabled: false, messages: true, matches: true, jerks: true },
+    });
+    render(
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(mocks.getEmailNotify).toHaveBeenCalled());
+    expect(screen.queryByTestId('email-notification-settings')).not.toBeInTheDocument();
+    expect(screen.queryByText('Email notifications')).not.toBeInTheDocument();
+    expect(screen.queryByText('Email me about')).not.toBeInTheDocument();
+    expect(screen.getByTestId('notification-settings')).toBeInTheDocument();
   });
 
   it('allows copying Account ID to clipboard', async () => {
@@ -356,10 +439,14 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     expect(text).not.toMatch(/Video room defaults/i);
     expect(text).not.toMatch(/Sexual health filters/i);
 
-    // MenRush hookup voice: never dating/match/relationship section labels
+    // MenRush hookup voice: never dating/match/relationship section labels.
+    // "Matches" on the email-notifications card is the existing activity type, not a dating section.
     const shellScope = within(shell);
     expect(shellScope.queryByText(/^dating$/i)).not.toBeInTheDocument();
-    expect(shellScope.queryByText(/^matches$/i)).not.toBeInTheDocument();
+    const datingMatches = shellScope
+      .queryAllByText(/^matches$/i)
+      .filter((el) => !el.closest('[data-testid="email-notification-settings"]'));
+    expect(datingMatches).toHaveLength(0);
     expect(shellScope.queryByText(/^relationship$/i)).not.toBeInTheDocument();
   });
 

@@ -5,6 +5,7 @@ import { messageService } from '../services/message.service';
 import { albumService } from '../services/album.service';
 import { sendPushToUser } from '../services/push.service';
 import { notificationService } from '../services/notification.service';
+import { queueEmailNotification } from '../services/email-notification.service';
 import { isDiscreetMediaBlurEnabled } from '../services/discreet-media';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { SecurityError } from '../security/access';
@@ -128,6 +129,11 @@ router.post('/', async (req: AuthRequest, res: Response) => {
         linkPath: `/messages/${req.userId}`,
       })
       .catch((notifyErr) => console.error('[notification:message]', notifyErr));
+    queueEmailNotification({
+      recipientId: data.receiver_id,
+      actorId: req.userId!,
+      type: 'message',
+    });
   } catch (error: unknown) {
     if (error instanceof SecurityError) {
       return res.status(error.status).json({ error: error.message, code: error.code });
@@ -161,6 +167,11 @@ router.post('/location', async (req: AuthRequest, res: Response) => {
     } catch (notifyErr) {
       console.error('[notification:location]', notifyErr);
     }
+    queueEmailNotification({
+      recipientId: data.receiver_id,
+      actorId: req.userId!,
+      type: 'message',
+    });
 
     res.status(201).json(message);
   } catch (error: any) {
@@ -264,6 +275,11 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
       .catch((notifyErr) => {
         console.error('[notification:media]', notifyErr);
       });
+    queueEmailNotification({
+      recipientId: receiver_id,
+      actorId: req.userId!,
+      type: 'message',
+    });
   } catch (error: any) {
     // Roll back the upload if the DB insert / match check fails.
     try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
@@ -348,6 +364,11 @@ router.post('/media/from-album', async (req: AuthRequest, res: Response) => {
       .catch((notifyErr) => {
         console.error('[notification:media:from-album]', notifyErr);
       });
+    queueEmailNotification({
+      recipientId: receiver_id,
+      actorId: req.userId!,
+      type: 'message',
+    });
   } catch (error: any) {
     if (copiedKey) {
       try {
