@@ -439,20 +439,15 @@ export const communityService = {
   },
 
   /**
-   * Delete author's own Community post.
-   * Enforces author ownership and 24h expiry (expired post fails with post_not_found).
-   * Cascades comments via DB foreign key constraint.
+   * Delete author's own Community post, at any age (not only inside the 24h
+   * feed window). The row goes, so its saved lat / lng / location go with it.
+   * Comments cascade via the post_id foreign key.
    */
   async deletePost(
     userId: string,
     postId: string,
   ): Promise<{ ok: boolean }> {
-    const existing = await query(
-      `SELECT id, user_id FROM community_posts
-       WHERE id = $1
-         AND created_at > NOW() - INTERVAL '24 hours'`,
-      [postId],
-    );
+    const existing = await query(`SELECT id, user_id FROM community_posts WHERE id = $1`, [postId]);
     if (existing.rows.length === 0) {
       throw new Error('post_not_found');
     }
@@ -460,8 +455,18 @@ export const communityService = {
       throw new Error('forbidden');
     }
 
-    await query(`DELETE FROM community_posts WHERE id = $1`, [postId]);
+    // user_id in the WHERE as well, so ownership is enforced in the same statement.
+    await query(`DELETE FROM community_posts WHERE id = $1 AND user_id = $2`, [postId, userId]);
     return { ok: true };
+  },
+
+  /**
+   * Delete every Community post this member has ever made (any age), with
+   * their saved coordinates and comments. Returns how many were removed.
+   */
+  async deleteAllOwnPosts(userId: string): Promise<{ deleted: number }> {
+    const res = await query(`DELETE FROM community_posts WHERE user_id = $1`, [userId]);
+    return { deleted: res.rowCount ?? 0 };
   },
 
   /**

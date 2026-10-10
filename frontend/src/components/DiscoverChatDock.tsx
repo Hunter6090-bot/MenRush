@@ -4,6 +4,7 @@ import { useSocket } from '../hooks/useSocket';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { IconClose } from './icons';
 import { FadedBrandFace } from './FadedBrandFace';
+import { OwnPostMenu } from './OwnPostMenu';
 
 const DOCK_STORAGE_KEY = 'menrush_discover_chat_dock';
 const MAX_VISIBLE = 6;
@@ -107,9 +108,16 @@ export function DiscoverChatDock({
         setHasNewMsg(true);
       }
     };
+    // A post deleted by its author drops out of every dock that still shows it.
+    const onFeedDeleted = (data: { id?: string }) => {
+      if (!data?.id) return;
+      setMessages((prev) => prev.filter((m) => m.id !== data.id));
+    };
     socket.on('map:feed:message', onFeedMsg);
+    socket.on('map:feed:deleted', onFeedDeleted);
     return () => {
       socket.off('map:feed:message', onFeedMsg);
+      socket.off('map:feed:deleted', onFeedDeleted);
     };
   }, [socket, open, onOpenChange]);
 
@@ -159,6 +167,17 @@ export function DiscoverChatDock({
     } finally {
       setSending(false);
       inputRef.current?.focus();
+    }
+  };
+
+  const [deleteError, setDeleteError] = useState('');
+  const handleDelete = async (id: string) => {
+    setDeleteError('');
+    try {
+      await mapFeedAPI.deleteMessage(id);
+      setMessages((prev) => prev.filter((m) => m.id !== id));
+    } catch {
+      setDeleteError('Could not delete that post. Try again.');
     }
   };
 
@@ -222,7 +241,8 @@ export function DiscoverChatDock({
           <div className="flex flex-col gap-1.5">
             {visible.map((msg) => {
               const opacity = msgOpacity(msg);
-              const isMine = msg.display_name === user?.name;
+              // sender_id, not display name: two members can share a name.
+              const isMine = !!user?.id && msg.sender_id === user.id;
               return (
                 <div
                   key={msg.id}
@@ -242,6 +262,7 @@ export function DiscoverChatDock({
                       {isMine ? 'You' : msg.display_name}
                       {msg.distance_label ? ` · ${msg.distance_label}` : ''}
                     </span>
+                    <div className={`flex items-start gap-1 ${isMine ? 'flex-row-reverse' : ''}`}>
                     <div
                       className="rounded-2xl px-3 py-1.5 text-base leading-snug"
                       style={
@@ -261,11 +282,32 @@ export function DiscoverChatDock({
                     >
                       {msg.message}
                     </div>
+                    {isMine ? (
+                      <OwnPostMenu
+                        tone="dark"
+                        label="Options for your map post"
+                        testId={`map-feed-more-${msg.id}`}
+                        items={[
+                          {
+                            label: 'Delete post',
+                            danger: true,
+                            testId: `map-feed-delete-${msg.id}`,
+                            onSelect: () => void handleDelete(msg.id),
+                          },
+                        ]}
+                      />
+                    ) : null}
+                    </div>
                     <span className="mt-0.5 text-xs text-[#4A3520]">{formatTime(msg.created_at)}</span>
                   </div>
                 </div>
               );
             })}
+            {deleteError ? (
+              <p role="alert" className="text-[15px] font-semibold text-[#FF9A8A]">
+                {deleteError}
+              </p>
+            ) : null}
             <div ref={bottomRef} />
           </div>
         )}

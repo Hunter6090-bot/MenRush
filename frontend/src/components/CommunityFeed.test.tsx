@@ -262,8 +262,12 @@ describe('CommunityFeed Mention Autocomplete', () => {
     renderFeed();
 
     // Verify edit button is only visible on own post
-    expect(await screen.findByTestId('community-post-edit-post-mine-1')).toBeInTheDocument();
-    expect(screen.queryByTestId('community-post-edit-post-other-2')).not.toBeInTheDocument();
+    // Edit / Delete sit under the ••• menu on the member's own post only.
+    const more = await screen.findByTestId('community-post-more-post-mine-1');
+    expect(screen.queryByTestId('community-post-more-post-other-2')).not.toBeInTheDocument();
+    expect(more).toHaveClass('h-11', 'w-11');
+    await user.click(more);
+    expect(await screen.findByTestId('community-post-edit-post-mine-1')).toHaveClass('min-h-[44px]', 'text-[15px]');
 
     // Click edit on own post
     await user.click(screen.getByTestId('community-post-edit-post-mine-1'));
@@ -319,6 +323,7 @@ describe('CommunityFeed Mention Autocomplete', () => {
     const user = userEvent.setup();
     renderFeed();
 
+    await user.click(await screen.findByTestId('community-post-more-post-mine-1'));
     const deleteBtn = await screen.findByTestId('community-post-delete-post-mine-1');
     await user.click(deleteBtn);
 

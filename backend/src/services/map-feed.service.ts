@@ -157,4 +157,25 @@ export const mapFeedService = {
     );
     return result.rows.map((r: { user_id: string }) => r.user_id);
   },
+  /**
+   * Delete the member's own map feed post, at any age. The row goes, so its
+   * saved lat / lng / location go with it. Returns the deleted row's raw
+   * point (server-side only, for the fan-out) or null when the post does not
+   * exist or belongs to someone else (callers answer 404 either way, so a
+   * non-owner learns nothing about other members' posts).
+   */
+  async deleteOwn(userId: string, postId: string): Promise<{ id: string; lat: number; lng: number } | null> {
+    const res = await query(
+      `DELETE FROM map_feed_messages WHERE id = $1 AND sender_id = $2 RETURNING id, lat, lng`,
+      [postId, userId],
+    );
+    const row = res.rows[0];
+    return row ? { id: row.id, lat: Number(row.lat), lng: Number(row.lng) } : null;
+  },
+
+  /** Delete every map feed post this member has ever made (any age). */
+  async deleteAllOwn(userId: string): Promise<{ deleted: number }> {
+    const res = await query(`DELETE FROM map_feed_messages WHERE sender_id = $1`, [userId]);
+    return { deleted: res.rowCount ?? 0 };
+  },
 };

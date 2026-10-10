@@ -19,6 +19,7 @@ import {
 import { clearDeviceTrustToken } from '../lib/deviceTrust';
 import { isGenericAvatarUrl } from '../lib/genericAvatar';
 import { IconBluesky, IconInstagram } from '../components/icons';
+import { DeleteMyPostsRow } from '../components/DeleteMyPostsRow';
 import {
   profileCompletionScore,
   type ProfileEssentialItem,
@@ -917,6 +918,8 @@ export const Settings = () => {
                   <ChevronRight />
                 </div>
               </Link>
+
+              <DeleteMyPostsRow />
             </div>
           </div>
 

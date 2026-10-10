@@ -184,3 +184,5 @@ jobs:
         run: npm run --if-present test:hide-location-integration
       - name: Community leaves out Ghost and hidden members
         run: npm run --if-present test:community-ghost-hidden
+      - name: Members delete their own map and Community posts (real PG)
+        run: npm run test:delete-own-posts-integration
