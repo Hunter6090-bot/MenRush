@@ -24,7 +24,7 @@ export interface PremiumInvoiceRow {
   plan_days: number;
   amount_pence: number;
   currency: string;
-  status: 'unpaid' | 'paid' | 'cancelled';
+  status: 'unpaid' | 'paid' | 'cancelled' | 'refunded';
   payment_method: string;
   payment_reference: string;
   notes: string | null;
@@ -32,6 +32,8 @@ export interface PremiumInvoiceRow {
   confirmed_by_admin_id: string | null;
   cancelled_at: string | null;
   immediate_start_consent_at: string | null;
+  /** When the member asked for the invoice. The 14 day window runs from here. */
+  requested_at?: string;
   refund_amount_pence?: number | null;
   refund_days_had?: number | null;
   cancelled_by?: string | null;
@@ -64,6 +66,22 @@ export interface ManualPaymentInstructions {
   payment_reference: string;
   instructions: string;
   bank_configured: boolean;
+  /** When this invoice's Premium starts, from the member's recorded choice. */
+  premium_start_line: string | null;
+}
+
+/**
+ * The start line for an invoice, from the member's recorded choice (Terms 7.6A).
+ * Same wording as the Premium page (frontend lib/premiumStart.ts).
+ */
+export function invoiceStartLine(invoice: {
+  immediate_start_consent_at: string | Date | null;
+  requested_at?: string | Date | null;
+  created_at?: string | Date | null;
+}): string {
+  if (invoice.immediate_start_consent_at) return 'Your Premium starts as soon as we confirm your payment.';
+  const bought = new Date((invoice.requested_at ?? invoice.created_at ?? new Date()) as string | Date);
+  return `Your Premium starts on ${londonDate(cancellationPeriodEnd(bought))}, after the 14 day cancellation period, or when we confirm your payment if that is later.`;
 }
 
 function escapeEmailHtml(value: string): string {
@@ -75,7 +93,10 @@ function escapeEmailHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-export function getManualPaymentInstructions(reference: string): ManualPaymentInstructions {
+export function getManualPaymentInstructions(
+  reference: string,
+  invoice?: Parameters<typeof invoiceStartLine>[0],
+): ManualPaymentInstructions {
   const account_name = process.env.MANUAL_PAYMENT_ACCOUNT_NAME?.trim() || null;
   const sort_code = process.env.MANUAL_PAYMENT_SORT_CODE?.trim() || null;
   const account_number = process.env.MANUAL_PAYMENT_ACCOUNT_NUMBER?.trim() || null;
@@ -86,7 +107,7 @@ export function getManualPaymentInstructions(reference: string): ManualPaymentIn
   const instructions =
     process.env.MANUAL_PAYMENT_INSTRUCTIONS?.trim() ||
     (bank_configured
-      ? 'Use your payment reference as the bank transfer reference. Premium switches on once we have confirmed your payment.'
+      ? 'Use your payment reference as the bank transfer reference.'
       : 'Bank details are not shown here yet. Email support@menrush.com with your payment reference and we will reply with how to pay.');
 
   return {
@@ -98,6 +119,7 @@ export function getManualPaymentInstructions(reference: string): ManualPaymentIn
     payment_reference: reference,
     instructions,
     bank_configured,
+    premium_start_line: invoice ? invoiceStartLine(invoice) : null,
   };
 }
 
@@ -219,9 +241,18 @@ export function buildRefundPaidEmail(params: {
  * Mailer used for invoice emails. Tests replace `send` with a mock; the default
  * never sends in NODE_ENV=test or to test addresses.
  */
-export const invoiceMailer: { send: (msg: { to: string; subject: string; html: string; text: string }) => Promise<unknown> } = {
+type InvoiceMail = { to: string; subject: string; html: string; text: string };
+export const invoiceMailer: {
+  send: (msg: InvoiceMail) => Promise<unknown>;
+  /** Team alerts (no member data). */
+  sendOps: (msg: InvoiceMail) => Promise<unknown>;
+} = {
   async send(msg) {
     if (process.env.NODE_ENV === 'test' || msg.to.endsWith('@test.menrush.local')) return undefined;
+    return sendTransactionalEmail(msg);
+  },
+  async sendOps(msg) {
+    if (process.env.NODE_ENV === 'test') return undefined;
     return sendTransactionalEmail(msg);
   },
 };
@@ -361,9 +392,9 @@ export const invoiceService = {
       `INSERT INTO premium_invoices (
          user_id, plan_tier, plan_days, amount_pence, currency,
          status, payment_method, payment_reference, invoice_number,
-         notes, metadata, immediate_start_consent_at
+         notes, metadata, immediate_start_consent_at, requested_at
        ) VALUES ($1, $2, $3, $4, 'GBP', 'unpaid', 'bank_transfer', $5, $6, $7, $8::jsonb,
-                 CASE WHEN $9::boolean THEN NOW() ELSE NULL END)
+                 CASE WHEN $9::boolean THEN NOW() ELSE NULL END, NOW())
        RETURNING *`,
       [
         params.userId,
@@ -505,6 +536,9 @@ export const invoiceService = {
       if (invoice.status === 'cancelled') {
         throw new Error('Cannot confirm payment for cancelled invoice');
       }
+      if (invoice.status === 'refunded') {
+        throw new Error('Cannot confirm payment for refunded invoice');
+      }
 
       const adminUuid =
         adminUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminUserId)
@@ -529,7 +563,7 @@ export const invoiceService = {
       const confirmedAt = new Date();
       const startedStraightAway = Boolean(invoice.immediate_start_consent_at);
       const premiumStartsAt = paidPremiumStartsAt({
-        boughtAt: new Date(invoice.created_at),
+        boughtAt: new Date(invoice.requested_at ?? invoice.created_at),
         confirmedAt,
         immediateStartConsent: startedStraightAway,
       });
@@ -630,7 +664,8 @@ export const invoiceService = {
       const invoice: PremiumInvoiceRow | undefined = inv.rows[0];
       if (!invoice) throw new InvoiceActionError(404, 'invoice_not_found');
       if (invoice.status !== 'paid') throw new InvoiceActionError(409, 'invoice_not_paid');
-      if (now.getTime() > cancellationPeriodEnd(new Date(invoice.created_at)).getTime()) {
+      // The window runs from when the member asked for the invoice, not from payment.
+      if (now.getTime() > cancellationPeriodEnd(new Date(invoice.requested_at ?? invoice.created_at)).getTime()) {
         throw new InvoiceActionError(409, 'cancellation_period_over');
       }
 
@@ -740,27 +775,68 @@ export const invoiceService = {
     );
 
     // Sent once: only the call that set refund_paid_at reaches here.
-    try {
-      const u = await query(`SELECT email, name FROM users WHERE id = $1`, [row.user_id]);
-      const user = u.rows[0];
-      if (user?.email) {
-        const email = buildRefundPaidEmail({
-          name: user.name ?? null,
-          refundPence: row.refund_amount_pence ?? 0,
-          invoiceNumber: row.invoice_number,
-          premiumEndedAt: new Date(row.cancelled_at ?? now),
-          premiumHadStarted: Boolean((row.metadata as { premium_had_started?: boolean })?.premium_had_started),
-        });
+    await this.sendRefundEmail(row.id, now);
+    return (await this.getInvoiceById(row.id)) ?? row;
+  },
+
+  /**
+   * Send the refund email for a refunded, refund-paid invoice, at most once.
+   * Tries twice. If it still fails: sets metadata.refund_email_failed_at (shown in
+   * the admin invoice list) and alerts the team, so ops can resend with
+   * POST /api/admin/premium/invoices/:id/resend-refund-email.
+   */
+  async sendRefundEmail(invoiceId: string, now = new Date()): Promise<'sent' | 'already_sent' | 'failed' | 'not_due'> {
+    const r = await query(`SELECT * FROM premium_invoices WHERE id = $1`, [invoiceId]);
+    const row: PremiumInvoiceRow | undefined = r.rows[0];
+    if (!row || row.status !== 'refunded' || !row.refund_paid_at) return 'not_due';
+    if ((row.metadata as { refund_email_sent_at?: string })?.refund_email_sent_at) return 'already_sent';
+    const u = await query(`SELECT email, name FROM users WHERE id = $1`, [row.user_id]);
+    const user = u.rows[0];
+    if (!user?.email) return 'not_due';
+    const email = buildRefundPaidEmail({
+      name: user.name ?? null,
+      refundPence: row.refund_amount_pence ?? 0,
+      invoiceNumber: row.invoice_number,
+      premiumEndedAt: new Date(row.cancelled_at ?? now),
+      premiumHadStarted: Boolean((row.metadata as { premium_had_started?: boolean })?.premium_had_started),
+    });
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
         await invoiceMailer.send({ to: user.email, ...email });
         await query(
-          `UPDATE premium_invoices SET metadata = metadata || jsonb_build_object('refund_email_sent_at', $2::text) WHERE id = $1`,
+          `UPDATE premium_invoices
+              SET metadata = (metadata - 'refund_email_failed_at') || jsonb_build_object('refund_email_sent_at', $2::text),
+                  updated_at = NOW()
+            WHERE id = $1`,
           [row.id, now.toISOString()],
         );
+        return 'sent';
+      } catch {
+        console.error(`[invoice] refund email attempt ${attempt} failed invoice=${row.id}`);
       }
-    } catch (err) {
-      console.error(`[invoice] refund email failed invoice=${row.id}`);
     }
-    return row;
+    await query(
+      `UPDATE premium_invoices
+          SET metadata = metadata || jsonb_build_object('refund_email_failed_at', $2::text), updated_at = NOW()
+        WHERE id = $1`,
+      [row.id, now.toISOString()],
+    );
+    // Ops-visible alert: invoice id and reference only, no member data.
+    console.error(`[ops-alert] refund email not sent invoice=${row.id} at=${now.toISOString()}`);
+    try {
+      const { getTeamEmails } = await import('./team.service');
+      for (const to of getTeamEmails()) {
+        await invoiceMailer.sendOps({
+          to,
+          subject: 'MenRush ops: refund email not sent',
+          text: `The refund email for invoice ${row.invoice_number} (id ${row.id}) could not be sent after 2 tries. The refund itself is recorded as paid. Resend it with POST /api/admin/premium/invoices/${row.id}/resend-refund-email.`,
+          html: `<p>The refund email for invoice <strong>${escapeEmailHtml(row.invoice_number)}</strong> (id ${escapeEmailHtml(row.id)}) could not be sent after 2 tries. The refund itself is recorded as paid.</p><p>Resend it with <code>POST /api/admin/premium/invoices/${escapeEmailHtml(row.id)}/resend-refund-email</code>.</p>`,
+        });
+      }
+    } catch {
+      console.error(`[ops-alert] team alert email also failed invoice=${row.id}`);
+    }
+    return 'failed';
   },
 
   async cancelInvoice(invoiceIdOrNumber: string, reason?: string): Promise<PremiumInvoiceRow> {

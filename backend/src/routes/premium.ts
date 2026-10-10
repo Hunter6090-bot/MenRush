@@ -48,7 +48,7 @@ router.get('/invoices/unpaid', async (req: AuthRequest, res: Response) => {
     if (!invoice) {
       return res.json({ invoice: null });
     }
-    const paymentInstructions = getManualPaymentInstructions(invoice.payment_reference);
+    const paymentInstructions = getManualPaymentInstructions(invoice.payment_reference, invoice);
     res.json({
       invoice,
       payment_instructions: paymentInstructions,
@@ -73,7 +73,7 @@ router.post('/invoices', async (req: AuthRequest, res: Response) => {
       immediateStartConsent: parsed.data.immediate_start_consent,
     });
 
-    const paymentInstructions = getManualPaymentInstructions(invoice.payment_reference);
+    const paymentInstructions = getManualPaymentInstructions(invoice.payment_reference, invoice);
     res.status(201).json({
       invoice,
       payment_instructions: paymentInstructions,

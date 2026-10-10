@@ -1,4 +1,4 @@
-import { premiumStartLine } from '../lib/premiumStart';
+import { invoiceStartLine, pendingStartLine, premiumStartLine } from '../lib/premiumStart';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { premiumAPI, PremiumPlan, PremiumInvoice, ManualPaymentInstructions } from '../api/premium';
@@ -39,6 +39,7 @@ export const Premium: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isPremium, setIsPremium] = useState(Boolean(user?.is_premium));
   const [premiumUntil, setPremiumUntil] = useState<string | null>(null);
+  const [premiumStartsAt, setPremiumStartsAt] = useState<string | null>(null);
 
   // Manual invoice state
   const [unpaidInvoice, setUnpaidInvoice] = useState<PremiumInvoice | null>(null);
@@ -66,6 +67,7 @@ export const Premium: React.FC = () => {
         setPlan(plansRes.data.plans[0] ?? null);
         setIsPremium(statusRes.data.is_premium);
         setPremiumUntil(statusRes.data.premium_until);
+        setPremiumStartsAt(statusRes.data.premium_starts_at ?? null);
         setPremium(statusRes.data.tier, statusRes.data.is_premium);
         if (unpaidRes.data?.invoice) {
           setUnpaidInvoice(unpaidRes.data.invoice);
@@ -196,6 +198,7 @@ export const Premium: React.FC = () => {
               : 'Direct proximity edge. Full features, no swiping theatre.'}
           </p>
 
+          {!isPremium ? (
           <div className="rounded-xl border border-[#C4832A]/40 bg-[#C4832A]/10 p-4 text-center mb-5">
             <p className="text-[#C4832A] font-bold">
               {BETA_INVITE_REQUIRED ? 'Your access includes Premium' : 'In-app card billing is being set up'}
@@ -208,15 +211,25 @@ export const Premium: React.FC = () => {
               </a>.
             </p>
           </div>
+          ) : null}
 
           {isPremium ? (
             <div className="rounded-xl border border-[#C4832A]/40 bg-[#C4832A]/10 p-4 text-center mb-5" data-testid="premium-active-status">
               <p className="text-[#C4832A] font-bold">You&apos;re Premium.</p>
-              <p className="text-xs text-[var(--cream-muted)] mt-1">
+              <p className="text-[15px] text-[var(--cream-muted)] mt-1">
                 {untilDateFormatted
                   ? `Active until ${untilDateFormatted}. Entitlements stack on extension.`
                   : 'Your perks are active.'}
               </p>
+            </div>
+          ) : null}
+
+          {!isPremium && premiumStartsAt && new Date(premiumStartsAt).getTime() > Date.now() ? (
+            <div
+              className="rounded-xl border border-[#C4832A]/40 bg-[#C4832A]/10 p-4 text-center mb-5"
+              data-testid="premium-pending-start"
+            >
+              <p className="text-[15px] font-bold text-[var(--cream)]">{pendingStartLine(premiumStartsAt)}</p>
             </div>
           ) : null}
 
@@ -241,8 +254,8 @@ export const Premium: React.FC = () => {
                 <div className="rounded-xl border border-[#C4832A]/60 bg-[#16120C] p-5 mb-5 space-y-4 shadow-lg" data-testid="unpaid-invoice-card">
                   <div className="flex items-start justify-between border-b border-[#3D2C1D] pb-3">
                     <div>
-                      <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded bg-[#C4832A]/20 text-[#C4832A] border border-[#C4832A]/30">
-                        Invoice Unpaid
+                      <span className="text-[15px] font-bold px-2 py-0.5 rounded bg-[#C4832A]/20 text-[#C4832A] border border-[#C4832A]/30">
+                        Invoice unpaid
                       </span>
                       <p className="font-mono text-sm font-semibold text-[var(--cream)] mt-1">
                         {unpaidInvoice.invoice_number}
@@ -252,40 +265,40 @@ export const Premium: React.FC = () => {
                       <p className="text-lg font-black text-[#C4832A]">
                         £{(unpaidInvoice.amount_pence / 100).toFixed(2)}
                       </p>
-                      <p className="text-[11px] text-[var(--cream-muted)]">
+                      <p className="text-[15px] text-[var(--cream-muted)]">
                         {unpaidInvoice.plan_days} days
                       </p>
                     </div>
                   </div>
 
                   <div>
-                    <p className="text-xs font-semibold text-[var(--cream)] mb-2">
-                      Bank Transfer Instructions:
+                    <p className="text-[15px] font-semibold text-[var(--cream)] mb-2">
+                      Bank transfer instructions
                     </p>
                     {paymentInstructions.bank_configured && paymentInstructions.sort_code && paymentInstructions.account_number ? (
-                      <div className="space-y-2 text-xs font-mono bg-[#0D0A06] p-3 rounded-lg border border-[#2D2014]">
+                      <div className="space-y-2 text-[15px] font-mono bg-[#0D0A06] p-3 rounded-lg border border-[#2D2014]">
                         {paymentInstructions.account_name ? (
                           <div className="flex justify-between items-center">
-                            <span className="text-[var(--cream-muted)]">Account Name:</span>
+                            <span className="text-[var(--cream-muted)]">Account name</span>
                             <span className="font-bold text-[var(--cream)]">{paymentInstructions.account_name}</span>
                           </div>
                         ) : null}
                         {paymentInstructions.bank_name ? (
                           <div className="flex justify-between items-center">
-                            <span className="text-[var(--cream-muted)]">Bank:</span>
+                            <span className="text-[var(--cream-muted)]">Bank</span>
                             <span className="font-bold text-[var(--cream)]">{paymentInstructions.bank_name}</span>
                           </div>
                         ) : null}
                         <div className="flex justify-between items-center">
-                          <span className="text-[var(--cream-muted)]">Sort Code:</span>
+                          <span className="text-[var(--cream-muted)]">Sort code</span>
                           <span className="font-bold text-[var(--cream)]">{paymentInstructions.sort_code}</span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-[var(--cream-muted)]">Account No:</span>
+                          <span className="text-[var(--cream-muted)]">Account number</span>
                           <span className="font-bold text-[var(--cream)]">{paymentInstructions.account_number}</span>
                         </div>
                         <div className="flex justify-between items-center pt-1 border-t border-[#2D2014]">
-                          <span className="text-[#C4832A] font-semibold">Payment Ref:</span>
+                          <span className="text-[#C4832A] font-semibold">Payment reference</span>
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-[#E0A14A] bg-[#C4832A]/10 px-1.5 py-0.5 rounded">
                               {paymentInstructions.payment_reference}
@@ -293,7 +306,8 @@ export const Premium: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleCopy(paymentInstructions.payment_reference, 'ref')}
-                              className="text-[10px] text-[var(--cream-muted)] hover:text-[#C4832A] underline"
+                              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center px-2 text-[15px] text-[var(--cream-muted)] hover:text-[#C4832A] underline"
+                              data-testid="copy-reference"
                             >
                               {copiedField === 'ref' ? 'Copied' : 'Copy'}
                             </button>
@@ -301,9 +315,9 @@ export const Premium: React.FC = () => {
                         </div>
                       </div>
                     ) : (
-                      <div className="p-3 bg-[#0D0A06] rounded-lg border border-[#2D2014] text-xs space-y-2">
+                      <div className="p-3 bg-[#0D0A06] rounded-lg border border-[#2D2014] text-[15px] space-y-2">
                         <div className="flex justify-between items-center">
-                          <span className="text-[#C4832A] font-semibold">Payment Ref:</span>
+                          <span className="text-[#C4832A] font-semibold">Payment reference</span>
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-[#E0A14A] bg-[#C4832A]/10 px-1.5 py-0.5 rounded font-mono">
                               {paymentInstructions.payment_reference}
@@ -311,7 +325,8 @@ export const Premium: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleCopy(paymentInstructions.payment_reference, 'ref')}
-                              className="text-[10px] text-[var(--cream-muted)] hover:text-[#C4832A] underline"
+                              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center px-2 text-[15px] text-[var(--cream-muted)] hover:text-[#C4832A] underline"
+                              data-testid="copy-reference"
                             >
                               {copiedField === 'ref' ? 'Copied' : 'Copy'}
                             </button>
@@ -323,10 +338,13 @@ export const Premium: React.FC = () => {
                       </div>
                     )}
                     {paymentInstructions.bank_configured && (
-                      <p className="text-[11px] text-[var(--cream-muted)] mt-2 leading-relaxed">
-                        Please include reference <strong className="text-[#E0A14A] font-mono">{paymentInstructions.payment_reference}</strong> on your transfer. Premium switches on once we have confirmed your payment.
+                      <p className="text-[15px] text-[var(--cream-muted)] mt-2 leading-relaxed">
+                        Please include reference <strong className="text-[#E0A14A] font-mono">{paymentInstructions.payment_reference}</strong> on your transfer.
                       </p>
                     )}
+                    <p className="text-[15px] font-bold text-[var(--cream)] mt-2 leading-relaxed" data-testid="invoice-start-line">
+                      {paymentInstructions.premium_start_line ?? invoiceStartLine(unpaidInvoice)}
+                    </p>
                   </div>
 
                   <div className="flex justify-end pt-1">
@@ -334,15 +352,16 @@ export const Premium: React.FC = () => {
                       type="button"
                       disabled={cancellingInvoice}
                       onClick={handleCancelInvoice}
-                      className="text-xs text-[var(--cream-muted)] hover:text-red-400 transition-colors"
+                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center px-2 text-[15px] text-[var(--cream-muted)] hover:text-red-400 transition-colors"
+                      data-testid="cancel-invoice"
                     >
                       {cancellingInvoice ? 'Cancelling…' : 'Cancel invoice'}
                     </button>
                   </div>
                 </div>
               ) : (
-                /* Invoice Generation Button, behind the required immediate start tick */
-                plan && (
+                /* Buy offer: hidden from anyone already Premium (including while Premium is free for everyone). */
+                plan && !isPremium && (
                   <>
                   <div
                     className="mb-3 space-y-2 text-[15px] leading-snug text-[var(--cream-muted)]"
@@ -392,15 +411,15 @@ export const Premium: React.FC = () => {
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-left">
                         <p className="font-bold text-[var(--cream)]">Get MenRush Premium</p>
-                        <p className="text-xs text-[var(--cream-muted)] mt-1">Manual bank invoice • 30 days access</p>
+                        <p className="text-[15px] text-[var(--cream-muted)] mt-1">Manual bank invoice • 30 days access</p>
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-lg font-black text-[#C4832A]">£{plan.price}</p>
-                        <p className="text-[10px] text-[var(--cream-muted)]">one-off</p>
+                        <p className="text-[15px] text-[var(--cream-muted)]">one-off</p>
                       </div>
                     </div>
                     {generatingInvoice ? (
-                      <p className="text-xs text-[#C4832A] mt-2 flex items-center gap-2">
+                      <p className="text-[15px] text-[#C4832A] mt-2 flex items-center gap-2">
                         <PulseRing size={12} /> Generating payment invoice…
                       </p>
                     ) : null}

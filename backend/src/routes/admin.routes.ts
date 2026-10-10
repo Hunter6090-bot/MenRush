@@ -673,6 +673,31 @@ router.post('/premium/invoices/:id/refund-paid', privateNoStore, async (req: Req
 });
 
 /**
+ * POST /api/admin/premium/invoices/:id/resend-refund-email
+ * Resend a refund email that failed. Sends nothing if it was already sent.
+ */
+router.post('/premium/invoices/:id/resend-refund-email', privateNoStore, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const { AdminMarkRefundPaidSchema } = await import('../types/validation');
+  const parsed = AdminMarkRefundPaidSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'validation_error', details: parsed.error.flatten() });
+  }
+  try {
+    const { invoiceService } = await import('../services/invoice.service');
+    const inv = await invoiceService.getInvoiceById(req.params.id);
+    if (!inv) return res.status(404).json({ error: 'invoice_not_found' });
+    const result = await invoiceService.sendRefundEmail(inv.id);
+    console.log(`[invoice] resend-refund-email invoice=${inv.id} admin=${parsed.data.admin_actor} result=${result}`);
+    if (result === 'not_due') return res.status(409).json({ error: 'refund_not_paid' });
+    return res.status(result === 'failed' ? 502 : 200).json({ ok: result !== 'failed', result });
+  } catch {
+    console.error('[admin] resend-refund-email error');
+    return res.status(500).json({ error: 'resend_failed' });
+  }
+});
+
+/**
  * POST /api/admin/premium/invoices/:id/confirm-payment
  * Ops mark invoice paid after real payment received (bank transfer / manual).
  * Activates / extends Premium with entitlement stacking.

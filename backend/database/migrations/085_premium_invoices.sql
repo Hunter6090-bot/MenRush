@@ -22,6 +22,9 @@ CREATE TABLE IF NOT EXISTS premium_invoices (
   paid_at TIMESTAMPTZ,
   confirmed_by_admin_id UUID REFERENCES users(id) ON DELETE SET NULL,
   cancelled_at TIMESTAMPTZ,
+  -- When the member asked for this invoice (bought Premium). The 14 day
+  -- cancellation window (Terms 7.6A) runs from here, not from payment.
+  requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   -- When the member chose "Start my Premium as soon as my payment is confirmed"
   -- (Terms 7.6A). NULL means not chosen: Premium starts after the 14 days.
   immediate_start_consent_at TIMESTAMPTZ,
@@ -39,6 +42,7 @@ CREATE TABLE IF NOT EXISTS premium_invoices (
 -- 085 has never been applied anywhere (it is not on main yet); this keeps any
 -- local dev table from an earlier draft of this branch in step.
 ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS immediate_start_consent_at TIMESTAMPTZ;
+ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS refund_amount_pence INTEGER;
 ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS refund_days_had INTEGER;
 ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS cancelled_by VARCHAR(64);

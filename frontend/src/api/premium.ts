@@ -16,11 +16,15 @@ export type PremiumInvoice = {
   plan_days: number;
   amount_pence: number;
   currency: string;
-  status: 'unpaid' | 'paid' | 'cancelled';
+  status: 'unpaid' | 'paid' | 'cancelled' | 'refunded';
   payment_method: string;
   payment_reference: string;
   notes: string | null;
   paid_at: string | null;
+  /** Set when the member chose to start Premium as soon as payment is confirmed. */
+  immediate_start_consent_at?: string | null;
+  /** When the member asked for the invoice; the 14 day window runs from here. */
+  requested_at?: string;
   created_at: string;
   updated_at: string;
 };
@@ -34,6 +38,8 @@ export type ManualPaymentInstructions = {
   payment_reference: string;
   instructions: string;
   bank_configured?: boolean;
+  /** When this invoice's Premium starts, from the member's recorded choice. */
+  premium_start_line?: string | null;
 };
 
 export type PremiumStatus = {
@@ -41,6 +47,8 @@ export type PremiumStatus = {
   is_premium: boolean;
   beta_premium_included: boolean;
   premium_until: string | null;
+  /** In the future while a paid invoice waits for the 14 day cancellation period. */
+  premium_starts_at?: string | null;
   features: string[];
   free_limits: {
     likesPerDay: number;
