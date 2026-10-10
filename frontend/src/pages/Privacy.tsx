@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { SiteFooter } from '../components/SiteFooter';
-import { LOCATION_RETENTION_TEXT } from '../lib/legalLocationRetention';
+import { LOCATION_RETENTION_TEXT, TRAVEL_TRIP_RETENTION_TEXT } from '../lib/legalLocationRetention';
 
 const sections = [
   {
@@ -78,6 +78,9 @@ export const Privacy = () => {
             </h2>
             <p className="mt-2 text-sm leading-7 text-[var(--cream-muted)]" data-testid="privacy-location-retention">
               {LOCATION_RETENTION_TEXT}
+            </p>
+            <p className="mt-2 text-sm leading-7 text-[var(--cream-muted)]" data-testid="privacy-travel-retention">
+              {TRAVEL_TRIP_RETENTION_TEXT}
             </p>
           </section>
 

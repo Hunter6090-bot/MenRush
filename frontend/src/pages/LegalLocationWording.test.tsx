@@ -8,6 +8,10 @@ import { Privacy } from './Privacy';
 const RETENTION =
   "We keep your current location while your account is open. It's replaced each time your device sends a new one, including when you use Ghost mode, and we delete it when you delete your account. We also keep the location from when you first joined. When you post to the map or the community, we automatically save your exact location with that post. We keep it with the post until you delete your account, even after the post stops showing. A location you share in a chat is kept until you withdraw it or delete your account. We're shortening how long we keep location data and will update this section when that's in place.";
 
+/** Travel trip retention (#359 and #384), written out so a drift in the copy fails. */
+const TRAVEL_RETENTION =
+  "Travel: when you plan a trip, we keep the city and dates you choose. If you end the trip with End trip, or replace it with a new one, we delete it straight away. Otherwise we delete it automatically 30 days after the trip ends, or sooner if you delete your account.";
+
 /** Rendered text with whitespace collapsed, so JSX line breaks do not matter. */
 function pageText(ui: React.ReactElement): string {
   const { container, unmount } = render(<MemoryRouter>{ui}</MemoryRouter>);
@@ -82,6 +86,25 @@ describe('Legal location wording (Legal, Oct 2026)', () => {
       expect(claims).toBeGreaterThan(0);
       expect(withException).toBe(claims);
     }
+  });
+
+  it('Privacy retention section has the Travel trip line (#359 and #384)', () => {
+    const { getByTestId, unmount } = render(
+      <MemoryRouter>
+        <Privacy />
+      </MemoryRouter>,
+    );
+    const travel = (getByTestId('privacy-travel-retention').textContent ?? '').replace(/\s+/g, ' ').trim();
+    unmount();
+    expect(travel).toBe(TRAVEL_RETENTION);
+    expect(travel).toContain('we keep the city and dates you choose');
+    expect(travel).toContain('End trip');
+    expect(travel).toContain('we delete it straight away');
+    expect(travel).toContain('30 days after the trip ends');
+    expect(travel).not.toMatch(/[\u2012\u2013\u2014\u2015]| - /);
+    expect(travel).not.toMatch(/waitlist/i);
+    // The Legal 6.5 text is unchanged and still separate.
+    expect(pageText(<Privacy />)).toContain(RETENTION);
   });
 
   it('Privacy drops the stale waitlist and launch lines', () => {
