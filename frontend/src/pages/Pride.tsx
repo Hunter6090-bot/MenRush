@@ -24,7 +24,7 @@ const PRIDE_WASH =
  * Printed QR goes to menrush.com/pride.
  * The offer closed on 31 August 2026: no claim form for new visitors.
  * People who already hold a Pride code can still enter it at register
- * (Pride invites have no expiry; register checks the code and the email).
+ * by 31 October 2026 (23:59:59 UK time); register checks the code and the email.
  * Grant rules live in Terms. No Brighton.
  */
 export const Pride = () => {
@@ -84,7 +84,7 @@ export const Pride = () => {
               className="mt-3 text-pretty text-[15px] leading-[1.55] text-[var(--cream-muted)]"
               data-testid="pride-redeem-note"
             >
-              Already have a Pride code from your email? Enter it at register with that same email.
+              Already have a Pride code from your email? Enter it at register with that same email by 31 October.
             </p>
             <Link to="/register" className={`mt-5 ${publicPrimaryButtonClass}`} data-testid="pride-register-cta">
               Create your account

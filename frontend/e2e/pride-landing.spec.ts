@@ -30,7 +30,7 @@ test.describe('Pride promotion landing', () => {
     await expect(page.getByTestId('pride-closed-note')).toHaveText('New Pride codes are no longer available.');
     const redeem = page.getByTestId('pride-redeem-note');
     await expect(redeem).toHaveText(
-      'Already have a Pride code from your email? Enter it at register with that same email.',
+      'Already have a Pride code from your email? Enter it at register with that same email by 31 October.',
     );
     await expect(redeem).toHaveCSS('font-size', '15px');
     const cta = page.getByTestId('pride-register-cta');
@@ -111,7 +111,8 @@ test.describe('Pride promotion landing', () => {
     await expect(body).toContainText(/5 September 2026/i);
     await expect(body).toContainText(/earlier email/i);
     await expect(body).toContainText(/31 October 2026/i);
-    await expect(body).toContainText(/3 months of Premium from launch/i);
+    await expect(body).toContainText('Redeeming a valid Pride code grants 3 months of Premium.');
+    await expect(body).not.toContainText(/Premium from launch/i);
     await expect(body).toContainText(/One grant per person/i);
     await expect(body).toContainText(/No stacking/i);
     await expect(body).toContainText(/clause 7\.2/i);

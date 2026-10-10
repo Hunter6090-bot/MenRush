@@ -37,6 +37,8 @@ import {
   isSharedBsf26Code,
   isSharedPrideCode,
   personalPrideExpiredMessage,
+  isPrideCodeRedeemOpen,
+  PERSONAL_PRIDE_EXPIRED_MESSAGE,
   promoService,
   SHARED_BSF26_EXPIRED_MESSAGE,
   SHARED_MR3FREE_EXPIRED_MESSAGE,
@@ -163,6 +165,10 @@ export const authService = {
     if (inviteCode) {
       prideInviteMonths = await inviteCodeService.getPrideMonths(inviteCode);
       if (prideInviteMonths) {
+        // Pride invites close with every Pride code at 31 Oct 23:59:59 London.
+        if (!isPrideCodeRedeemOpen()) {
+          throw new Error(PERSONAL_PRIDE_EXPIRED_MESSAGE);
+        }
         await assertPrideInviteEmailMatch(inviteCode, data.email);
         if (usingSharedPride || usingPersonalPride || usingSharedBsf26 || usingSharedMr3Free) {
           throw new Error(
