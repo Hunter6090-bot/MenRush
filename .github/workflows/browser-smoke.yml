@@ -94,11 +94,12 @@ jobs:
 
       # Frontend is started by Playwright webServer (port 4173). Do not start a
       # second Vite process here — --strictPort would fail the suite.
-      # Job gate is public routes + anonymous route protection only.
+      # Job gate is public routes + anonymous route protection, plus the locked
+      # public landing design (public-design-lock.spec.ts, #377).
       # Full authenticated e2e (image/nav/notif/video) is separate and flaky in CI.
       - name: Run browser smoke tests
         working-directory: frontend
-        run: npx playwright test e2e/public.smoke.spec.ts
+        run: npx playwright test e2e/public.smoke.spec.ts e2e/public-design-lock.spec.ts
 
       - name: Upload backend log
         if: ${{ !cancelled() }}
