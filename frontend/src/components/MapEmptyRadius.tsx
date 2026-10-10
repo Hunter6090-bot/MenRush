@@ -13,7 +13,7 @@ export function MapEmptyRadius({
 }) {
   const label = formatRadiusControlLabel(nextRadiusKm);
   return (
-    <div className="pointer-events-none flex justify-center px-4 pb-[max(7rem,calc(var(--fab-size,4rem)+var(--fab-offset,1rem)+2rem))]">
+    <div className="pointer-events-none flex justify-center px-4 pb-2 pt-1">
       <div
         className="pointer-events-auto w-full max-w-sm rounded-2xl border border-[var(--border-default)] bg-[rgba(30,21,8,0.95)] px-5 py-5 text-center shadow-lg backdrop-blur-md"
         data-testid="map-empty-radius"

@@ -2324,6 +2324,21 @@ export const Discover = () => {
                 <QuietMapPulseCard compact onStart={requestOpenPulse} onDismiss={dismissQuietPulse} />
               ) : null
             }
+            notes={
+              !needsLocationGate && !tokenMissing ? (
+                <p
+                  className="mx-auto mb-1 w-fit max-w-[min(90%,320px)] rounded-full px-3 py-1 text-center text-[15px] font-medium leading-snug"
+                  style={{
+                    background: 'rgba(13,10,6,0.72)',
+                    color: 'rgba(240,224,192,0.85)',
+                    border: '1px solid rgba(196,131,42,0.25)',
+                  }}
+                  data-testid="map-privacy-note"
+                >
+                  {formatFuzzPrivacyNote(mapPinFuzzM)}
+                </p>
+              ) : null
+            }
             footer={
               !loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
                 <MapEmptyRadius nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
@@ -2338,19 +2353,6 @@ export const Discover = () => {
               onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
               onTravel={() => navigate('/travel')}
             />
-            {!needsLocationGate && !tokenMissing ? (
-              <p
-                className="mx-auto mt-2 w-fit max-w-[min(90%,320px)] rounded-full px-3 py-1 text-center text-[15px] font-medium leading-snug"
-                style={{
-                  background: 'rgba(13,10,6,0.72)',
-                  color: 'rgba(240,224,192,0.85)',
-                  border: '1px solid rgba(196,131,42,0.25)',
-                }}
-                data-testid="map-privacy-note"
-              >
-                {formatFuzzPrivacyNote(mapPinFuzzM)}
-              </p>
-            ) : null}
           </MapTopPillBar>
           <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
         </div>
@@ -2463,6 +2465,21 @@ export const Discover = () => {
                   <QuietMapPulseCard compact onStart={requestOpenPulse} onDismiss={dismissQuietPulse} />
                 ) : null
               }
+              notes={
+                !needsLocationGate && !tokenMissing ? (
+                  <p
+                    className="mx-auto mb-1 w-fit max-w-[min(90%,320px)] rounded-full px-3 py-1 text-center text-[15px] font-medium leading-snug"
+                    style={{
+                      background: 'rgba(13,10,6,0.72)',
+                      color: 'rgba(240,224,192,0.85)',
+                      border: '1px solid rgba(196,131,42,0.25)',
+                    }}
+                    data-testid="map-privacy-note"
+                  >
+                    {formatFuzzPrivacyNote(mapPinFuzzM)}
+                  </p>
+                ) : null
+              }
               footer={
                 !loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
                   <MapEmptyRadius nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
@@ -2477,19 +2494,6 @@ export const Discover = () => {
                 onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
               onTravel={() => navigate('/travel')}
               />
-              {!needsLocationGate && !tokenMissing ? (
-                <p
-                  className="mx-auto mt-2 w-fit max-w-[min(90%,320px)] rounded-full px-3 py-1 text-center text-[15px] font-medium leading-snug"
-                  style={{
-                    background: 'rgba(13,10,6,0.72)',
-                    color: 'rgba(240,224,192,0.85)',
-                    border: '1px solid rgba(196,131,42,0.25)',
-                  }}
-                  data-testid="map-privacy-note"
-                >
-                  {formatFuzzPrivacyNote(mapPinFuzzM)}
-                </p>
-              ) : null}
             </MapTopPillBar>
           ) : null}
 

@@ -1,5 +1,8 @@
 import { useRef, type ReactNode } from 'react';
-import { useClearanceBelowTopPrompt } from '../lib/topPromptOverlay';
+import {
+  MAP_OVERLAY_BOTTOM_CLEARANCE_CLASS,
+  useClearanceBelowTopPrompt,
+} from '../lib/topPromptOverlay';
 /**
  * Map-first top chrome: Radius / Filters (icon + short label). App-wide search
  * lives in the top-right Menu and on the Chat list, not on the map.
@@ -19,6 +22,7 @@ export function MapTopPillBar({
   filtersActive = false,
   leading,
   children,
+  notes,
   footer,
 }: {
   radiusKm: number;
@@ -29,74 +33,83 @@ export function MapTopPillBar({
   leading?: ReactNode;
   /** Second row (Discretion / layers): stacked in-flow so it never sits under wrapping pills. */
   children?: ReactNode;
-  /** Bottom of the map overlay column (empty-radius card). Flex spacer keeps it off the top stack. */
+  /** Privacy / pin note, pinned with the empty card above the bottom chrome. */
+  notes?: ReactNode;
+  /** Empty-radius card. Pinned at the bottom of the visible map; never scrolls away. */
   footer?: ReactNode;
 }) {
   const radiusLabel = formatRadiusControlLabel(radiusKm);
-  // Full-height column clipped to the map. Banner clearance is padding (it takes
-  // space). Pulse floats in `leading` so it never pushes the map down. Overflow
-  // scrolls inside the map, so Widen / Map spots cannot sit under the tab bar,
-  // PULSE FAB or chat dock. Hidden until the first layout measure so the first
-  // paint is never a leftover offset (QC P2, y606 jump).
+  // Split overlay: the top stack (Pulse, pills, layers) scrolls if the map is
+  // short. The empty card and bottom notes are pinned above the tab bar,
+  // PULSE FAB, chat dock and locate control. The column itself does not scroll,
+  // so Widen cannot open under the tab bar.
   const columnRef = useRef<HTMLDivElement | null>(null);
   const { offset, ready } = useClearanceBelowTopPrompt(columnRef);
 
   return (
     <div
       ref={columnRef}
-      className="pointer-events-none absolute inset-0 z-20 flex flex-col overflow-y-auto overscroll-y-contain"
+      className={`pointer-events-none absolute inset-0 z-20 flex flex-col overflow-hidden ${MAP_OVERLAY_BOTTOM_CLEARANCE_CLASS}`}
       data-testid="map-overlay-column"
       data-offset-for-banner={offset}
       data-overlay-ready={ready ? 'true' : 'false'}
     >
-      {!ready ? null : (
       <div
-        className="flex flex-col gap-2 px-3 pt-3"
-        style={offset > 0 ? { paddingTop: `${PILL_STACK_PAD_PX + offset}px` } : undefined}
-        data-offset-for-banner={offset}
-        data-testid="map-top-stack"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain"
+        data-testid="map-overlay-top"
+        style={{ visibility: ready ? 'visible' : 'hidden' }}
       >
-        {leading ? (
-          <div className="pointer-events-auto w-full" data-testid="map-top-stack-leading">
-            {leading}
-          </div>
-        ) : null}
-        {/* flex-nowrap: wrapping at 360px covered Discretion; one scrollable row keeps height stable. */}
         <div
-          className="pointer-events-auto flex max-w-full flex-nowrap items-center justify-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          data-testid="map-top-pill-bar"
+          className="flex flex-col gap-2 px-3 pt-3"
+          style={offset > 0 ? { paddingTop: `${PILL_STACK_PAD_PX + offset}px` } : undefined}
+          data-offset-for-banner={offset}
+          data-testid="map-top-stack"
         >
-          <button
-            type="button"
-            data-testid="map-pill-radius"
-            aria-label={`Radius ${radiusLabel}`}
-            onClick={onRadiusClick}
-            className={pillClass}
+          {leading ? (
+            <div className="pointer-events-auto w-full" data-testid="map-top-stack-leading">
+              {leading}
+            </div>
+          ) : null}
+          {/* flex-nowrap: wrapping at 360px covered Discretion; one scrollable row keeps height stable. */}
+          <div
+            className="pointer-events-auto flex max-w-full flex-nowrap items-center justify-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            data-testid="map-top-pill-bar"
           >
-            <RadiusGlyph />
-            <span>Radius {radiusLabel.replace(/^Radius\s+/i, '')}</span>
-          </button>
-          <button
-            type="button"
-            data-testid="map-pill-filters"
-            aria-label="Filters"
-            aria-pressed={filtersActive}
-            onClick={onFiltersClick}
-            className={`${pillClass} ${filtersActive ? 'border-[var(--copper)] text-[var(--copper)]' : ''}`}
-          >
-            <FiltersGlyph />
-            <span>Filters</span>
-          </button>
-        </div>
-        {children ? (
-          <div className="pointer-events-none w-full" data-testid="map-top-stack-below">
-            {children}
+            <button
+              type="button"
+              data-testid="map-pill-radius"
+              aria-label={`Radius ${radiusLabel}`}
+              onClick={onRadiusClick}
+              className={pillClass}
+            >
+              <RadiusGlyph />
+              <span>Radius {radiusLabel.replace(/^Radius\s+/i, '')}</span>
+            </button>
+            <button
+              type="button"
+              data-testid="map-pill-filters"
+              aria-label="Filters"
+              aria-pressed={filtersActive}
+              onClick={onFiltersClick}
+              className={`${pillClass} ${filtersActive ? 'border-[var(--copper)] text-[var(--copper)]' : ''}`}
+            >
+              <FiltersGlyph />
+              <span>Filters</span>
+            </button>
           </div>
-        ) : null}
+          {children ? (
+            <div className="pointer-events-none w-full" data-testid="map-top-stack-below">
+              {children}
+            </div>
+          ) : null}
+        </div>
       </div>
-      )}
-      {ready ? <div className="min-h-0 flex-1" aria-hidden data-testid="map-overlay-spacer" /> : null}
-      {ready ? footer : null}
+      {notes || footer ? (
+        <div className="pointer-events-none shrink-0" data-testid="map-overlay-pinned">
+          {notes}
+          {footer}
+        </div>
+      ) : null}
     </div>
   );
 }

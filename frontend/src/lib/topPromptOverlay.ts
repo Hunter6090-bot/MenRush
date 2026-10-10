@@ -1,30 +1,49 @@
 /**
  * Where the floating alerts banner ends on screen, so overlaid controls (the
  * map's Radius and Filters pills, and the quiet-map Pulse card) can sit clear
- * of it (QC P2 on #357, follow-up after #392).
+ * of it (QC P2 on #357, follow-up after #392 / #405).
  *
  * The banner floats over the page so content does not jump, but on Nearby that
  * covered the map's top controls until it was closed. The banner publishes its
  * bottom edge (viewport px) while it is on screen; null when it is not.
  *
- * Clearance must follow later layout changes (a late-loading Pulse card pushes
- * the map down). Measuring only when the banner value changes left the pills
- * ~153px too low.
+ * `settled` is false while the banner is still deciding (async push check).
+ * Map chrome stays hidden until then so pills never paint at y70 and jump.
  */
 import { useLayoutEffect, useState, useSyncExternalStore, type RefObject } from 'react';
 
-let bottom: number | null = null;
+export type TopPromptSnapshot = {
+  bottom: number | null;
+  settled: boolean;
+};
+
+let snapshot: TopPromptSnapshot = { bottom: null, settled: true };
 const listeners = new Set<() => void>();
 
-export function setTopPromptBottom(next: number | null): void {
-  const value = next == null ? null : Math.round(next);
-  if (value === bottom) return;
-  bottom = value;
+function emit(): void {
   for (const listener of listeners) listener();
 }
 
+export function getTopPromptSnapshot(): TopPromptSnapshot {
+  return snapshot;
+}
+
 export function getTopPromptBottom(): number | null {
-  return bottom;
+  return snapshot.bottom;
+}
+
+/** Banner is still checking. Map pills must not paint at the un-offset y. */
+export function markTopPromptPending(): void {
+  if (!snapshot.settled && snapshot.bottom == null) return;
+  snapshot = { bottom: null, settled: false };
+  emit();
+}
+
+export function setTopPromptBottom(next: number | null): void {
+  const value = next == null ? null : Math.round(next);
+  if (snapshot.settled && value === snapshot.bottom) return;
+  snapshot = { bottom: value, settled: true };
+  emit();
 }
 
 function subscribe(listener: () => void): () => void {
@@ -36,6 +55,16 @@ function subscribe(listener: () => void): () => void {
 
 export function useTopPromptBottom(): number | null {
   return useSyncExternalStore(subscribe, getTopPromptBottom, getTopPromptBottom);
+}
+
+export function useTopPromptSnapshot(): TopPromptSnapshot {
+  return useSyncExternalStore(subscribe, getTopPromptSnapshot, getTopPromptSnapshot);
+}
+
+/** Test-only: restore the idle snapshot between cases. */
+export function resetTopPromptOverlayForTests(): void {
+  snapshot = { bottom: null, settled: true };
+  emit();
 }
 
 /** Gap kept between the banner and a control moved below it. */
@@ -52,26 +81,32 @@ export function offsetBelowTopPrompt(containerTop: number, bannerBottom: number 
 }
 
 /**
+ * Space reserved at the bottom of the map so pinned chrome (empty card, notes)
+ * and the scrolling top stack stay above the tab bar, PULSE FAB, chat dock
+ * and Mapbox locate control.
+ */
+export const MAP_OVERLAY_BOTTOM_CLEARANCE_CLASS =
+  'pb-[calc(var(--fab-size,4rem)+var(--fab-offset,1rem)+1.75rem)]';
+
+/**
  * How far `anchorRef` must move down to clear the banner. Re-measures when the
- * banner changes and whenever the anchor or its parent resizes (Pulse card
- * loading, rotation, font wrap). Apply the result as padding-top or margin so
- * it takes space in a stacked layout; do not use CSS `top` on an overlay that
- * can slide over siblings.
- *
- * The anchor's border-box top must stay stable when the offset is applied
- * (padding-top on the same node is safe; margin-top on the same node is not).
+ * banner changes and whenever the anchor or its parent resizes. Pills stay
+ * hidden until the banner has settled, so a late mount cannot flash y70→y221.
  */
 export function useClearanceBelowTopPrompt(anchorRef: RefObject<HTMLElement | null>): {
   offset: number;
   ready: boolean;
 } {
-  const bannerBottom = useTopPromptBottom();
+  const { bottom: bannerBottom, settled } = useTopPromptSnapshot();
   const [offset, setOffset] = useState(0);
-  // Always hide until the first layout measure so the first painted frame is
-  // never offset-0 (pills under the banner) or a leftover offset (y606).
   const [ready, setReady] = useState(false);
 
   useLayoutEffect(() => {
+    if (!settled) {
+      setReady(false);
+      return;
+    }
+
     const anchor = anchorRef.current;
     if (!anchor) {
       setOffset(0);
@@ -81,10 +116,6 @@ export function useClearanceBelowTopPrompt(anchorRef: RefObject<HTMLElement | nu
 
     const measure = () => {
       const live = getTopPromptBottom();
-      const bannerEl = document.querySelector('[data-testid="push-alert-banner"]');
-      // Banner is in the tree but has not published yet — stay hidden so the
-      // first painted pills are not at the un-offset y (QC P2).
-      if (bannerEl && live == null) return;
       setOffset(offsetBelowTopPrompt(anchor.getBoundingClientRect().top, live));
       setReady(true);
     };
@@ -101,7 +132,7 @@ export function useClearanceBelowTopPrompt(anchorRef: RefObject<HTMLElement | nu
       ro?.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, [anchorRef, bannerBottom]);
+  }, [anchorRef, bannerBottom, settled]);
 
   return { offset, ready };
 }

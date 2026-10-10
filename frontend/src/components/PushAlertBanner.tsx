@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { setTopPromptBottom } from '../lib/topPromptOverlay';
+import { markTopPromptPending, setTopPromptBottom } from '../lib/topPromptOverlay';
 import {
   enablePushNotifications,
   getPushSupport,
@@ -71,6 +71,9 @@ export function PushAlertBanner() {
   // On a new device also wait for the member's server prefs (or the short
   // timeout), so the banner never shows and then vanishes.
   const ready = install.ready && alerts.ready;
+  if (eligible === undefined || !ready) {
+    markTopPromptPending();
+  }
   const slotState = (kind: 'install' | 'alerts', hidden: boolean): PromptSlotState => {
     if (eligible === undefined || !ready) return kind === 'install' ? 'pending' : 'none';
     if (eligible !== kind) return 'none';
@@ -92,6 +95,10 @@ export function PushAlertBanner() {
   // below it instead of being covered (QC P2 on #357).
   const cardRef = useRef<HTMLDivElement | null>(null);
   useLayoutEffect(() => {
+    if (eligible === undefined || !ready) {
+      markTopPromptPending();
+      return;
+    }
     const card = cardRef.current;
     if (!visible || !card) {
       setTopPromptBottom(null);
@@ -105,9 +112,15 @@ export function PushAlertBanner() {
     return () => {
       ro?.disconnect();
       window.removeEventListener('resize', publish);
-      setTopPromptBottom(null);
     };
-  }, [visible]);
+  }, [visible, eligible, ready]);
+
+  useLayoutEffect(
+    () => () => {
+      setTopPromptBottom(null);
+    },
+    [],
+  );
 
   if (!visible) return null;
 

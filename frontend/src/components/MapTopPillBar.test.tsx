@@ -49,7 +49,8 @@ describe('MapTopPillBar stacking', () => {
     const column = screen.getByTestId('map-overlay-column');
     const leading = screen.getByTestId('map-top-stack-leading');
     const pills = screen.getByTestId('map-top-pill-bar');
-    expect(column.className).toMatch(/overflow-y-auto/);
+    expect(screen.getByTestId('map-overlay-top').className).toMatch(/overflow-y-auto/);
+    expect(column.className).toMatch(/overflow-hidden/);
     expect(leading).toContainElement(screen.getByTestId('pulse-nudge'));
     expect(leading.compareDocumentPosition(pills) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
