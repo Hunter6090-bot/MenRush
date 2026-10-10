@@ -241,6 +241,8 @@ export function isSecureMediaEnvironment(): boolean {
 export async function acquireLocalMedia(
   facingMode: CameraFacing = 'user',
   preferredDeviceId?: string,
+  /** `audio: false` asks for the camera only (room join with the mic off). */
+  options: { audio?: boolean } = {},
 ): Promise<MediaStream> {
   const hasGetUserMedia = Boolean(
     navigator?.mediaDevices?.getUserMedia ||
@@ -280,7 +282,7 @@ export async function acquireLocalMedia(
     },
     { video: { facingMode: { ideal: facingMode } }, audio: true },
     { video: true, audio: true },
-  ];
+  ].map((c) => (options.audio === false ? { ...c, audio: false } : c));
 
   let lastError: unknown;
   for (const constraints of attempts) {

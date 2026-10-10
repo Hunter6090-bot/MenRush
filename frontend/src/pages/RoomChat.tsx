@@ -12,6 +12,7 @@ import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { getPhotoUrl } from '../components/UserAvatar';
 import { parseRoomImageMessage } from '../lib/roomMediaMessage';
 import { RoomTempIdentityGate } from '../components/RoomTempIdentityGate';
+import { ROOM_MEDIA_OFF, type RoomMediaChoice } from '../lib/roomJoinMedia';
 import { RoomPresentPeopleList } from '../components/RoomPresentPeopleList';
 import { RoomInRoomDm, type InRoomDmMessage } from '../components/RoomInRoomDm';
 import { FadedBrandFace } from '../components/FadedBrandFace';
@@ -136,6 +137,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [identityReady, setIdentityReady] = useState(false);
+  const [joinMedia, setJoinMedia] = useState<RoomMediaChoice>(ROOM_MEDIA_OFF);
   const [loadingRoom, setLoadingRoom] = useState(true);
   const [joinError, setJoinError] = useState<string | null>(null);
   /** Present occupancy for side list — socket presence only, not DB membership. */
@@ -168,7 +170,13 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     videoDevices,
     currentCameraId,
     switchCameraDevice,
-  } = useRoomVideo({ roomId, userId: user?.id, enabled: identityReady && !!roomId });
+  } = useRoomVideo({
+    roomId,
+    userId: user?.id,
+    enabled: identityReady && !!roomId,
+    // Camera / Mic from the join screen: the room starts in exactly that state.
+    initialMedia: joinMedia,
+  });
 
   const leaveRoomSurface = useCallback(() => {
     // Hard-stop local A/V before navigate so iOS camera indicator clears immediately.
@@ -870,6 +878,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             setIdentityReady(true);
           }}
           onCancel={leaveRoomSurface}
+          onMediaChoiceChange={setJoinMedia}
         />
       </div>
     );
@@ -1192,8 +1201,9 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
 
       {videoError && (
         <div
-          className="mx-3 mt-2 rounded-xl border px-3 py-2 text-xs"
-          style={{ borderColor: 'rgba(196,131,42,0.35)', background: 'rgba(196,131,42,0.1)', color: 'var(--cream)' }}
+          className="mx-3 mt-2 rounded-xl border border-[var(--border-strong)] bg-[var(--bg-elevated)] px-3 py-2 text-[15px] leading-snug text-[var(--cream)]"
+          role="status"
+          data-testid="room-video-note"
         >
           {videoError}
         </div>

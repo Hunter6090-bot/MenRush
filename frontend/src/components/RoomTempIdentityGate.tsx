@@ -6,6 +6,13 @@ import { BrandAvatar } from './BrandAvatar';
 import { FadedBrandFace } from './FadedBrandFace';
 import { isPlaceholderAvatarUrl } from '../lib/avatarFallback';
 import { SelfieCaptureModal } from './SelfieCaptureModal';
+import {
+  ROOM_MEDIA_OFF,
+  joinScreenBlockedNote,
+  requestRoomMediaPermission,
+  type RoomMediaChoice,
+  type RoomMediaKind,
+} from '../lib/roomJoinMedia';
 
 /** Gate result: explicit profile path, or temp name (+ optional photo). */
 export type RoomIdentityGateResult =
@@ -40,6 +47,11 @@ interface RoomTempIdentityGateProps {
   profilePhotoUrl?: string | null;
   onReady: (identity: RoomIdentityGateResult) => void | Promise<void>;
   onCancel?: () => void;
+  /**
+   * Board pre-join Camera / Mic toggles. Called with the member's choice (both
+   * off at first). Separate from onReady so the identity payload is unchanged.
+   */
+  onMediaChoiceChange?: (choice: RoomMediaChoice) => void;
 }
 
 const NAME_MAX = 40;
@@ -130,6 +142,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   profilePhotoUrl,
   onReady,
   onCancel,
+  onMediaChoiceChange,
 }) => {
   const isWide = useMediaQuery('(min-width: 1280px)');
   const [displayName, setDisplayName] = useState('');
@@ -143,6 +156,37 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   const [rulesOpen, setRulesOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [photoChoiceOpen, setPhotoChoiceOpen] = useState(false);
+  // Board Camera / Mic: off by default, only record what the member wants.
+  const [media, setMedia] = useState<RoomMediaChoice>(ROOM_MEDIA_OFF);
+  const [mediaAsking, setMediaAsking] = useState<RoomMediaKind | null>(null);
+  const [mediaNote, setMediaNote] = useState<string | null>(null);
+  const onMediaChoiceRef = useRef(onMediaChoiceChange);
+  onMediaChoiceRef.current = onMediaChoiceChange;
+  useEffect(() => {
+    onMediaChoiceRef.current?.(media);
+  }, [media]);
+
+  const toggleMedia = async (kind: RoomMediaKind) => {
+    const key = kind === 'camera' ? 'camera' : 'mic';
+    if (media[key]) {
+      // Turning off never asks for anything.
+      setMedia((m) => ({ ...m, [key]: false }));
+      setMediaNote(null);
+      return;
+    }
+    // Turning on is the first moment we ask the browser for permission.
+    setMediaAsking(kind);
+    setMediaNote(null);
+    const result = await requestRoomMediaPermission(kind);
+    setMediaAsking(null);
+    if (result === 'granted') {
+      setMedia((m) => ({ ...m, [key]: true }));
+    } else {
+      setMedia((m) => ({ ...m, [key]: false }));
+      setMediaNote(joinScreenBlockedNote(kind, result));
+    }
+  };
   const [hadSavedIdentity, setHadSavedIdentity] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>(() =>
@@ -477,6 +521,39 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   );
 
   /** Board tiles: Camera / Temp photo. Upload kept so nothing is lost. */
+  const mediaTile = (kind: RoomMediaKind) => {
+    const on = kind === 'camera' ? media.camera : media.mic;
+    const label = kind === 'camera' ? 'Camera' : 'Mic';
+    const asking = mediaAsking === kind;
+    return (
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label={`${label} ${on ? 'on' : 'off'} when you join`}
+        disabled={asking}
+        data-testid={kind === 'camera' ? 'room-join-camera' : 'room-join-mic'}
+        onClick={() => void toggleMedia(kind)}
+        className={`flex min-h-[72px] flex-col items-center justify-center gap-0.5 rounded-2xl border text-[15px] font-bold transition-colors ${
+          on
+            ? 'border-[var(--copper)] bg-[var(--bg-elevated)] text-[var(--nn-accent-text)]'
+            : 'border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[var(--copper)]'
+        }`}
+      >
+        {kind === 'camera' ? (
+          <VideoIcon className="h-5 w-5 text-[var(--nn-accent-text)]" off={!on} />
+        ) : (
+          <MicIcon className="h-5 w-5 text-[var(--nn-accent-text)]" off={!on} />
+        )}
+        <span>{label}</span>
+        <span className="text-[15px] font-semibold text-[var(--cream-muted)]">
+          {asking ? 'Asking…' : on ? 'On' : 'Off'}
+        </span>
+      </button>
+    );
+  };
+
+  /** Board tiles: Camera / Mic / Temp photo. Temp photo offers Take photo or Upload. */
   const photoControls = (
     <div>
       <input
@@ -487,33 +564,62 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
         data-testid="room-temp-gallery-input"
         onChange={(e) => void handlePhotoPick(e.target.files?.[0] ?? null)}
       />
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
+        {mediaTile('camera')}
+        {mediaTile('mic')}
         <button
           type="button"
           disabled={uploading}
-          data-testid="room-temp-take-photo"
-          onClick={() => {
-            setFormError(null);
-            setCameraOpen(true);
-          }}
-          className="flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[15px] font-bold text-[var(--cream)] transition-colors hover:border-[var(--copper)] disabled:opacity-60"
-        >
-          <CameraIcon className="h-5 w-5 text-[var(--nn-accent-text)]" />
-          Take photo
-        </button>
-        <button
-          type="button"
-          disabled={uploading}
-          data-testid="room-temp-upload"
-          onClick={() => galleryInputRef.current?.click()}
-          className="flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[15px] font-bold text-[var(--cream)] transition-colors hover:border-[var(--copper)] disabled:opacity-60"
+          aria-expanded={photoChoiceOpen}
+          data-testid="room-temp-photo-tile"
+          onClick={() => setPhotoChoiceOpen((v) => !v)}
+          className="flex min-h-[72px] flex-col items-center justify-center gap-0.5 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[15px] font-bold text-[var(--cream)] transition-colors hover:border-[var(--copper)] disabled:opacity-60"
         >
           <ImageIcon className="h-5 w-5 text-[var(--nn-accent-text)]" />
-          {uploading ? 'Uploading…' : 'Temp photo'}
+          <span>Temp photo</span>
+          <span className="text-[15px] font-semibold text-[var(--cream-muted)]">
+            {uploading ? 'Uploading…' : photoUrl || photoPreview ? 'Added' : 'Optional'}
+          </span>
         </button>
       </div>
+      {photoChoiceOpen ? (
+        <div className="mt-2 grid grid-cols-2 gap-2" data-testid="room-temp-photo-choice">
+          <button
+            type="button"
+            disabled={uploading}
+            data-testid="room-temp-take-photo"
+            onClick={() => {
+              setFormError(null);
+              setPhotoChoiceOpen(false);
+              setCameraOpen(true);
+            }}
+            className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[15px] font-bold text-[var(--cream)] hover:border-[var(--copper)] disabled:opacity-60"
+          >
+            <CameraIcon className="h-5 w-5 text-[var(--nn-accent-text)]" />
+            Take photo
+          </button>
+          <button
+            type="button"
+            disabled={uploading}
+            data-testid="room-temp-upload"
+            onClick={() => {
+              setPhotoChoiceOpen(false);
+              galleryInputRef.current?.click();
+            }}
+            className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[15px] font-bold text-[var(--cream)] hover:border-[var(--copper)] disabled:opacity-60"
+          >
+            <ImageIcon className="h-5 w-5 text-[var(--nn-accent-text)]" />
+            Upload
+          </button>
+        </div>
+      ) : null}
+      {mediaNote ? (
+        <p className="mt-2 text-[15px] leading-snug text-[var(--cream)]" role="status" data-testid="room-join-media-note">
+          {mediaNote}
+        </p>
+      ) : null}
       <p className="mt-2 text-[15px] leading-snug text-[var(--cream-muted)]">
-        Optional temporary photo, never your profile face. You choose camera and mic inside the room.
+        Optional temporary photo, never your profile face.
       </p>
     </div>
   );
@@ -847,6 +953,26 @@ function CameraIcon({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
       <path d="M4 8h3l1.5-2h7L17 8h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z" strokeLinejoin="round" />
       <circle cx="12" cy="14" r="3.25" />
+    </svg>
+  );
+}
+
+function VideoIcon({ className, off }: { className?: string; off?: boolean }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <rect x="3" y="6.5" width="12.5" height="11" rx="2.5" />
+      <path d="M15.5 10.5l5-3v9l-5-3" strokeLinejoin="round" />
+      {off ? <path d="M3 4l18 16" strokeLinecap="round" /> : null}
+    </svg>
+  );
+}
+
+function MicIcon({ className, off }: { className?: string; off?: boolean }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" strokeLinecap="round" />
+      {off ? <path d="M4 4l16 16" strokeLinecap="round" /> : null}
     </svg>
   );
 }

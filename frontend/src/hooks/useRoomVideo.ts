@@ -3,6 +3,15 @@ import type { Socket } from 'socket.io-client';
 import { getPhotoUrl } from '../components/UserAvatar';
 import { useSocket } from './useSocket';
 import {
+  acquireMicOnly,
+  createPlaceholderAudioTrack,
+  createPlaceholderVideoTrack,
+  isPlaceholderTrack,
+  roomMediaBlockedNote,
+  roomMediaStillBlockedNote,
+  type RoomMediaChoice,
+} from '../lib/roomJoinMedia';
+import {
   acquireLocalMedia,
   attachLocalTracks,
   createPeerConnection,
@@ -28,6 +37,12 @@ interface UseRoomVideoOptions {
   roomId?: string;
   userId?: string;
   enabled?: boolean;
+  /**
+   * Camera / Mic picked on the join screen. When set, the room starts in exactly
+   * that state and only asks for the devices that are on; an off device joins
+   * as a silent placeholder track. Omitted: old behaviour (camera and mic on).
+   */
+  initialMedia?: RoomMediaChoice;
 }
 
 interface PeerSlot {
@@ -75,7 +90,7 @@ function shouldCreateOffer(myId: string, peerId: string): boolean {
   return myId < peerId;
 }
 
-export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOptions) {
+export function useRoomVideo({ roomId, userId, enabled = true, initialMedia }: UseRoomVideoOptions) {
   const socket = useSocket();
   const [participants, setParticipants] = useState<RoomParticipant[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -100,6 +115,8 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
   const userIdRef = useRef(userId);
   const socketRef = useRef<Socket | null>(socket);
 
+  const initialMediaRef = useRef<RoomMediaChoice | undefined>(initialMedia);
+  initialMediaRef.current = initialMedia;
   roomIdRef.current = roomId;
   userIdRef.current = userId;
   socketRef.current = socket;
@@ -297,20 +314,80 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     }
   }, []);
 
-  const startCamera = useCallback(async () => {
+  /**
+   * Local media for this join. No choice: camera and mic together (old path).
+   * With a choice: only the devices that are on, placeholders for the rest, and
+   * a plain note for any device that was blocked (join still goes ahead).
+   */
+  const acquireForJoin = useCallback(
+    async (
+      choice: RoomMediaChoice | undefined,
+    ): Promise<{ stream: MediaStream; cameraLive: boolean; micLive: boolean; note: string }> => {
+      if (!choice) {
+        // iOS Safari: keep getUserMedia early in this call stack (no await before it).
+        const stream = await acquireLocalMedia('user', selectedCameraIdRef.current || undefined);
+        return { stream, cameraLive: true, micLive: true, note: '' };
+      }
+      const tracks: MediaStreamTrack[] = [];
+      let cameraLive = false;
+      let micLive = false;
+      let cameraBlocked = false;
+      let micBlocked = false;
+      if (choice.camera) {
+        try {
+          const cam = await acquireLocalMedia('user', selectedCameraIdRef.current || undefined, { audio: false });
+          const track = cam.getVideoTracks()[0];
+          cam.getAudioTracks().forEach((t) => t.stop());
+          if (track) {
+            tracks.push(track);
+            cameraLive = true;
+          }
+        } catch {
+          cameraBlocked = true;
+        }
+      }
+      if (choice.mic) {
+        try {
+          tracks.push(await acquireMicOnly());
+          micLive = true;
+        } catch {
+          micBlocked = true;
+        }
+      }
+      if (!cameraLive) {
+        const v = createPlaceholderVideoTrack();
+        if (v) tracks.push(v);
+      }
+      if (!micLive) {
+        const a = createPlaceholderAudioTrack();
+        if (a) tracks.push(a);
+      }
+      return {
+        stream: new MediaStream(tracks),
+        cameraLive,
+        micLive,
+        note: roomMediaBlockedNote(cameraBlocked, micBlocked),
+      };
+    },
+    [],
+  );
+
+  const startCamera = useCallback(async (override?: RoomMediaChoice) => {
     if (!enabled || !roomId) return;
     setMediaError('');
-    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    const choice = override ?? initialMediaRef.current;
+    const needsDevices = !choice || choice.camera || choice.mic;
+    if (needsDevices && (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia)) {
       setMediaError('Group video needs HTTPS and camera access.');
       setCameraOn(false);
-      return;
+      if (!choice) return;
     }
 
     const session = ++mediaSessionRef.current;
 
     try {
-      // iOS Safari: keep getUserMedia early in this call stack (no await before it).
-      const stream = await acquireLocalMedia('user', selectedCameraIdRef.current || undefined);
+      const { stream, cameraLive, micLive, note } = await acquireForJoin(choice);
+      if (note) setMediaError(note);
 
       // Hangup / leave / unmount won the race — never keep an orphan stream.
       if (session !== mediaSessionRef.current) {
@@ -321,8 +398,8 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
       stopMediaStreamTracks(streamRef.current);
       streamRef.current = stream;
       setLocalStream(stream);
-      setCameraOn(true);
-      setMicMuted(false);
+      setCameraOn(cameraLive);
+      setMicMuted(!micLive);
 
       const activeVideoTrack = stream.getVideoTracks()[0];
       if (activeVideoTrack) {
@@ -345,7 +422,7 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
       const myId = userIdRef.current;
       if (myId) {
         setParticipants((prev) =>
-          prev.map((p) => (p.user_id === myId ? { ...p, isLive: true } : p)),
+          prev.map((p) => (p.user_id === myId ? { ...p, isLive: cameraLive } : p)),
         );
       }
       await replaceLocalTracksOnPeers(stream);
@@ -413,7 +490,7 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
         return;
       }
 
-      emitMediaState(false, true);
+      emitMediaState(!micLive, cameraLive);
     } catch (error: unknown) {
       if (session !== mediaSessionRef.current) return;
       setCameraOn(false);
@@ -424,7 +501,7 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
           : 'Could not start your camera.',
       );
     }
-  }, [enabled, roomId, replaceLocalTracksOnPeers, emitMediaState, ensurePeer, flushPendingIce]);
+  }, [enabled, roomId, acquireForJoin, replaceLocalTracksOnPeers, emitMediaState, ensurePeer, flushPendingIce]);
 
   // Once local media is live, mesh to every other present participant (camera on or off).
   useEffect(() => {
@@ -457,13 +534,62 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     emitMediaState(true, false);
   }, [emitMediaState]);
 
+  /** Swap a real device track in for a join placeholder (same stream, same senders). */
+  const swapInRealTrack = useCallback(
+    async (next: MediaStreamTrack) => {
+      const cur = streamRef.current;
+      if (!cur) {
+        next.stop();
+        return false;
+      }
+      const old = cur.getTracks().find((t) => t.kind === next.kind);
+      if (old) {
+        try {
+          cur.removeTrack?.(old);
+        } catch {
+          /* ignore */
+        }
+        old.stop();
+      }
+      try {
+        cur.addTrack?.(next);
+      } catch {
+        /* ignore */
+      }
+      await replaceLocalTracksOnPeers(cur);
+      setLocalStream(new MediaStream(cur.getTracks()));
+      return true;
+    },
+    [replaceLocalTracksOnPeers],
+  );
+
   const toggleCamera = useCallback(() => {
     if (!localStream) {
-      void startCamera();
+      const choice = initialMediaRef.current;
+      void startCamera(choice ? { camera: true, mic: choice.mic } : undefined);
       return;
     }
     const track = localStream.getVideoTracks()[0];
-    if (!track) return;
+    if (!track || isPlaceholderTrack(track)) {
+      // Joined with the camera off: ask for it now, through the same path.
+      void (async () => {
+        try {
+          const cam = await acquireLocalMedia('user', selectedCameraIdRef.current || undefined, { audio: false });
+          cam.getAudioTracks().forEach((t) => t.stop());
+          const real = cam.getVideoTracks()[0];
+          if (!real || !(await swapInRealTrack(real))) return;
+          setMediaError('');
+          setCameraOn(true);
+          if (userId) {
+            setParticipants((prev) => prev.map((p) => (p.user_id === userId ? { ...p, isLive: true } : p)));
+          }
+          emitMediaState(micMuted, true);
+        } catch {
+          setMediaError(roomMediaStillBlockedNote('camera'));
+        }
+      })();
+      return;
+    }
     track.enabled = !track.enabled;
     const on = track.enabled;
     setCameraOn(on);
@@ -474,17 +600,31 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
       );
     }
     emitMediaState(micMuted, on);
-  }, [localStream, startCamera, micMuted, emitMediaState, userId]);
+  }, [localStream, startCamera, swapInRealTrack, micMuted, emitMediaState, userId]);
 
   const toggleMic = useCallback(() => {
     if (!localStream) return;
     const track = localStream.getAudioTracks()[0];
-    if (!track) return;
+    if (!track || isPlaceholderTrack(track)) {
+      // Joined with the mic off: ask for it now, through the same path.
+      void (async () => {
+        try {
+          const real = await acquireMicOnly();
+          if (!(await swapInRealTrack(real))) return;
+          setMediaError('');
+          setMicMuted(false);
+          emitMediaState(false, cameraOn);
+        } catch {
+          setMediaError(roomMediaStillBlockedNote('mic'));
+        }
+      })();
+      return;
+    }
     track.enabled = !track.enabled;
     const muted = !track.enabled;
     setMicMuted(muted);
     emitMediaState(muted, cameraOn);
-  }, [localStream, cameraOn, emitMediaState]);
+  }, [localStream, cameraOn, swapInRealTrack, emitMediaState]);
 
   const switchCameraDevice = useCallback(
     async (deviceId: string) => {
