@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { assertJwtSecret } from './lib/jwtSecret';
 import './observability/sentry';
 import express from 'express';
 import { Server as SocketIOServer, Socket } from 'socket.io';
@@ -71,6 +72,8 @@ import { logCallMetric } from './services/call-metrics.service';
 import { mediaStorageMode } from './services/media-storage.service';
 import { warmIceServers } from './services/webrtc.service';
 import { EarlyCallIceBuffer } from './services/call-ice-buffer';
+
+assertJwtSecret();
 
 // Transient DB disconnects must not take down login/API.
 process.on('unhandledRejection', (reason) => {

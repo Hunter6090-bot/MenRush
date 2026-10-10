@@ -47,6 +47,43 @@ export type ResolvingPhotoOptions = {
 };
 
 /**
+ * Photo URLs that already failed to load in this tab (404, volume wipe, bad
+ * stored path). Every remount of an avatar (list refresh, socket update, new
+ * screen) used to request the same broken URL again: a 404 is not cached, so one
+ * bad photo_url on a busy list meant a fresh /uploads request on every render
+ * pass. Now the first failure is remembered for a while and later mounts go
+ * straight to the Brand placeholder without a request.
+ * Display-only: the stored photo path is never touched (media lock).
+ */
+export const BROKEN_PHOTO_TTL_MS = 10 * 60 * 1000;
+const BROKEN_PHOTO_MAX = 500;
+const brokenPhotoSrcs = new Map<string, number>();
+
+export function isKnownBrokenPhotoSrc(src: string, now = Date.now()): boolean {
+  const at = brokenPhotoSrcs.get(src);
+  if (at == null) return false;
+  if (now - at > BROKEN_PHOTO_TTL_MS) {
+    brokenPhotoSrcs.delete(src);
+    return false;
+  }
+  return true;
+}
+
+export function markBrokenPhotoSrc(src: string, now = Date.now()): void {
+  brokenPhotoSrcs.delete(src);
+  brokenPhotoSrcs.set(src, now);
+  if (brokenPhotoSrcs.size > BROKEN_PHOTO_MAX) {
+    const oldest = brokenPhotoSrcs.keys().next().value;
+    if (oldest !== undefined) brokenPhotoSrcs.delete(oldest);
+  }
+}
+
+/** Test hook: forget every remembered failure. */
+export function resetBrokenPhotoSrcs(): void {
+  brokenPhotoSrcs.clear();
+}
+
+/**
  * Walk upload URL candidates (API host ↔ same-origin rewrite) before giving up.
  * Keeps real /uploads photos visible when Vercel rewrite and VITE_API_URL disagree.
  *
@@ -60,30 +97,37 @@ export function useResolvingPhotoSrc(
   _age?: number,
   options?: ResolvingPhotoOptions,
 ): { src: string | undefined; onError: () => void } {
-  const [candidateIdx, setCandidateIdx] = useState(0);
+  // Bumped after a failure so the filtered candidate list is re-read.
+  const [, setFailures] = useState(0);
   const [failed, setFailed] = useState(false);
   const displayWidth = options?.displayWidth;
   const realUrl = realAvatarUrl(photoUrl);
 
-  const candidates =
+  const resolved =
     realUrl == null
       ? []
       : displayWidth != null
         ? resolveDisplayThumbCandidates(realUrl, displayWidth)
         : resolveUploadUrlCandidates(realUrl);
+  const allCandidates =
+    realUrl != null && resolved.length === 0 ? [resolveAssetUrl(realUrl)] : resolved;
+  // Skip candidates that already failed in this tab, so a broken photo is not
+  // requested again on every remount. The failed one drops out of the list, so
+  // the next candidate is always the first one left.
+  const candidates = allCandidates.filter(
+    (c): c is string => Boolean(c) && !isKnownBrokenPhotoSrc(c as string),
+  );
 
   useEffect(() => {
-    setCandidateIdx(0);
     setFailed(false);
   }, [realUrl, displayWidth]);
 
-  let src: string | undefined;
-  if (failed || realUrl == null) src = undefined;
-  else src = candidates[candidateIdx] ?? resolveAssetUrl(realUrl);
+  const src: string | undefined = failed || realUrl == null ? undefined : candidates[0];
 
   const onError = () => {
-    if (candidateIdx + 1 < candidates.length) {
-      setCandidateIdx((i) => i + 1);
+    if (src) markBrokenPhotoSrc(src);
+    if (candidates.length > 1) {
+      setFailures((n) => n + 1);
       return;
     }
     // Broken /uploads (volume wipe, 404) → Brand placeholder, never a legacy default.
