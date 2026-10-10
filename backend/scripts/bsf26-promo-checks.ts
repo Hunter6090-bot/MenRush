@@ -77,6 +77,13 @@ test('BSF26 Al CLOCK LOCK — London calendar start days', () => {
   assert.strictEqual(europeLondonYmd(oct4.premiumStart), '2026-10-04');
   const oct5 = bsf26PremiumWindow(3, new Date('2026-10-05T20:00:00Z'));
   assert.strictEqual(europeLondonYmd(oct5.premiumStart), '2026-10-05');
+
+  // End: London midnight of (start London date + 3 months) minus 1 ms.
+  // 1 Oct start ends 31 Dec (old UTC rule took UTC date 30 Sep and ended 30 Dec).
+  assert.strictEqual(onLaunch.premiumEnd.toISOString(), '2026-12-31T23:59:59.999Z');
+  assert.strictEqual(before.premiumEnd.toISOString(), '2026-12-31T23:59:59.999Z');
+  // 5 Oct start ends 4 Jan (unchanged).
+  assert.strictEqual(oct5.premiumEnd.toISOString(), '2027-01-04T23:59:59.999Z');
 });
 
 test('BSF26 is not Pride; referral field rejects it as foreign', () => {

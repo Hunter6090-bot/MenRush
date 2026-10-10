@@ -77,18 +77,22 @@ test('MR3FREE Premium window: unlocked from day one for 3 months', () => {
   assert.strictEqual(europeLondonYmd(window17.premiumStart), '2026-09-17');
   assert.strictEqual(window17.premiumStart.toISOString(), '2026-09-16T23:00:00.000Z');
   assert.ok(window17.premiumStart.getTime() <= new Date('2026-09-17T12:00:00Z').getTime());
+  // London rule: 17 Sep + 3 months = 17 Dec; end is 1 ms before London midnight 17 Dec (unchanged).
   assert.strictEqual(window17.premiumEnd.toISOString(), '2026-12-16T23:59:59.999Z');
 
   // Redeemed on 1 Oct 2026
   const windowOct1 = mr3FreePremiumWindow(3, new Date('2026-10-01T15:00:00Z'));
   assert.strictEqual(europeLondonYmd(windowOct1.premiumStart), '2026-10-01');
   assert.strictEqual(windowOct1.premiumStart.toISOString(), '2026-09-30T23:00:00.000Z');
-  assert.strictEqual(windowOct1.premiumEnd.toISOString(), '2026-12-30T23:59:59.999Z');
+  // London rule: 1 Oct London + 3 months = 1 Jan; end is 1 ms before London midnight 1 Jan.
+  // (Old UTC rule took the UTC date 30 Sep and ended 30 Dec, a day short.)
+  assert.strictEqual(windowOct1.premiumEnd.toISOString(), '2026-12-31T23:59:59.999Z');
 
   // Redeemed on 5 Oct 2026
   const windowOct5 = mr3FreePremiumWindow(3, new Date('2026-10-05T20:00:00Z'));
   assert.strictEqual(europeLondonYmd(windowOct5.premiumStart), '2026-10-05');
   assert.strictEqual(windowOct5.premiumStart.toISOString(), '2026-10-04T23:00:00.000Z');
+  // London rule: 5 Oct + 3 months = 5 Jan; end is 1 ms before London midnight 5 Jan (unchanged).
   assert.strictEqual(windowOct5.premiumEnd.toISOString(), '2027-01-04T23:59:59.999Z');
 });
 
