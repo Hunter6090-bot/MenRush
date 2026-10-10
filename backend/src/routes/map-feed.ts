@@ -83,11 +83,36 @@ router.post('/', postLimiter, async (req: AuthRequest, res: Response) => {
 
 const PostIdParam = z.string().uuid();
 
+/**
+ * Tell docks that may still show these posts to drop them: map:feed:deleted
+ * { id } to the author and everyone near each post. Only the id goes out.
+ * Radius covers the 5 km fan-out from the fuzzed pin plus the widest fuzz.
+ * Best-effort: a fan-out failure never fails the delete.
+ */
+async function emitDeleted(
+  req: AuthRequest,
+  removed: Array<{ id: string; lat: number; lng: number }>,
+): Promise<void> {
+  const io = req.app.get('io');
+  if (!io || removed.length === 0) return;
+  for (const post of removed) {
+    try {
+      const ids = await mapFeedService.nearbyUserIds(post.lat, post.lng, 5 + MAP_PIN_FUZZ_MAX_M / 1000);
+      const targets = new Set([...ids, req.userId!]);
+      for (const uid of targets) io.to(`user:${uid}`).emit('map:feed:deleted', { id: post.id });
+    } catch (fanoutErr) {
+      console.error('[map-feed] delete fan-out', fanoutErr);
+    }
+  }
+}
+
 // DELETE /mine — delete every map feed post this member has made (any age).
 // Declared before /:id so 'mine' is never read as a post id.
 router.delete('/mine', async (req: AuthRequest, res: Response) => {
   try {
-    const { deleted } = await mapFeedService.deleteAllOwn(req.userId!);
+    const { deleted, removed } = await mapFeedService.deleteAllOwn(req.userId!);
+    // Same as a single delete: every removed post drops out of other docks.
+    await emitDeleted(req, removed);
     res.json({ ok: true, deleted });
   } catch (err: unknown) {
     console.error('[map-feed] delete all own', err);
@@ -105,22 +130,7 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
     const removed = await mapFeedService.deleteOwn(req.userId!, parsed.data);
     if (!removed) return res.status(404).json({ error: 'Post not found' });
 
-    // Tell docks that may still show it to drop it. Only the id goes out.
-    // Radius covers the 5 km fan-out from the fuzzed pin plus the widest fuzz.
-    const io = req.app.get('io');
-    if (io) {
-      try {
-        const ids = await mapFeedService.nearbyUserIds(
-          removed.lat,
-          removed.lng,
-          5 + MAP_PIN_FUZZ_MAX_M / 1000,
-        );
-        const targets = new Set([...ids, req.userId!]);
-        for (const uid of targets) io.to(`user:${uid}`).emit('map:feed:deleted', { id: removed.id });
-      } catch (fanoutErr) {
-        console.error('[map-feed] delete fan-out', fanoutErr);
-      }
-    }
+    await emitDeleted(req, [removed]);
     res.json({ ok: true });
   } catch (err: unknown) {
     console.error('[map-feed] delete', err);

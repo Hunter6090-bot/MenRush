@@ -22,7 +22,20 @@ async function main() {
   const { default: mapFeedRoutes } = await import('../src/routes/map-feed');
   const { default: communityRoutes } = await import('../src/routes/community');
 
+  // Fake socket.io: records every room emit so fan-out can be asserted.
+  const emits: Array<{ room: string; event: string; payload: { id?: string } }> = [];
+  const fakeIo = {
+    to: (room: string) => ({
+      emit: (event: string, payload: { id?: string }) => {
+        emits.push({ room, event, payload });
+      },
+    }),
+  };
+  const deletedFor = (room: string) =>
+    emits.filter((e) => e.room === room && e.event === 'map:feed:deleted').map((e) => e.payload.id);
+
   const app = express();
+  app.set('io', fakeIo);
   app.use(express.json());
   app.use('/api/map-feed', mapFeedRoutes);
   app.use('/api/community', communityRoutes);
@@ -100,6 +113,12 @@ async function main() {
     assert.equal(r.status, 200, 'owner deletes own 3-day-old map post');
     assert.equal(r.cache, 'private, no-store');
     assert.equal((await mapCoords(m1)).length, 0, 'map post row and coordinates gone');
+    assert.deepEqual(deletedFor(`user:${other.id}`), [m1], 'single delete: nearby member told to drop it');
+    assert.deepEqual(deletedFor(`user:${owner.id}`), [m1], 'single delete: author told too');
+    assert.ok(
+      emits.every((e) => Object.keys(e.payload).join() === 'id'),
+      'only the id goes out (no coordinates or sender)',
+    );
     r = await call('DELETE', `/api/map-feed/${m1}`, owner.token);
     assert.equal(r.status, 404, 'second delete is 404');
     r = await call('DELETE', `/api/map-feed/not-a-uuid`, owner.token);
@@ -122,9 +141,18 @@ async function main() {
     const theirs = await mapPost(other.id);
     const cMine = [await communityPost(owner.id), await communityPost(owner.id, 500)];
     const cTheirs = await communityPost(other.id);
+    emits.length = 0;
     r = await call('DELETE', `/api/map-feed/mine`, owner.token);
     assert.equal(r.status, 200);
     assert.equal(r.body?.deleted, 2);
+    // Bulk delete emits map:feed:deleted for EACH removed post, like a single delete.
+    assert.deepEqual(
+      [...deletedFor(`user:${other.id}`)].sort(),
+      [...mine].sort(),
+      'bulk delete: nearby member told to drop every removed post',
+    );
+    assert.deepEqual([...deletedFor(`user:${owner.id}`)].sort(), [...mine].sort(), 'bulk delete: author told too');
+    assert.ok(!emits.some((e) => e.payload.id === theirs), "other member's post not announced");
     r = await call('DELETE', `/api/community/posts/mine`, owner.token);
     assert.equal(r.status, 200);
     assert.equal(r.body?.deleted, 2);

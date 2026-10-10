@@ -173,9 +173,20 @@ export const mapFeedService = {
     return row ? { id: row.id, lat: Number(row.lat), lng: Number(row.lng) } : null;
   },
 
-  /** Delete every map feed post this member has ever made (any age). */
-  async deleteAllOwn(userId: string): Promise<{ deleted: number }> {
-    const res = await query(`DELETE FROM map_feed_messages WHERE sender_id = $1`, [userId]);
-    return { deleted: res.rowCount ?? 0 };
+  /**
+   * Delete every map feed post this member has ever made (any age). Returns
+   * the removed rows' ids and raw points (server-side only, for the fan-out).
+   */
+  async deleteAllOwn(userId: string): Promise<{ deleted: number; removed: Array<{ id: string; lat: number; lng: number }> }> {
+    const res = await query(
+      `DELETE FROM map_feed_messages WHERE sender_id = $1 RETURNING id, lat, lng`,
+      [userId],
+    );
+    const removed = res.rows.map((r: { id: string; lat: unknown; lng: unknown }) => ({
+      id: r.id,
+      lat: Number(r.lat),
+      lng: Number(r.lng),
+    }));
+    return { deleted: removed.length, removed };
   },
 };
