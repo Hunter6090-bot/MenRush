@@ -63,6 +63,8 @@ jobs:
         run: npm ci
       - name: Adult assurance checks
         run: npm run test:adult-assurance
+      - name: Adult assurance signup flag (unset, false, true, junk)
+        run: npm run test:adult-assurance-signup-flag
       - name: Adult assurance status-poll rate limit
         run: npm run test:adult-assurance-rate-limit
       - name: Rate-limit client IP key (x-real-ip, spoofed XFF, fallback)

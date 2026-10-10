@@ -41,7 +41,7 @@ Source of truth in UI: `frontend/src/components/AdultAssuranceFlow.tsx` → `ADU
 | `VERIFF_API_KEY` / `VERIFF_SHARED_SECRET` | Veriff credentials (ID path + default) |
 | `VERIFF_AGE_ESTIMATION_API_BASE` | Optional Age Estimation base URL for liveness start |
 | `VERIFF_AGE_ESTIMATION_API_KEY` | Optional Age Estimation API key (falls back to `VERIFF_API_KEY`) |
-| `ADULT_ASSURANCE_SIGNUP_REQUIRED` | `true` / `false` override. Default: required when Veriff configured |
+| `ADULT_ASSURANCE_SIGNUP_REQUIRED` | Only the exact value `true` makes the signup check required. Unset, empty, `false` or any other value means OFF |
 | `ADULT_ASSURANCE_ALLOW_TEST_FIXTURE` | Must be `true` for `/fixture` |
 | `ADULT_ASSURANCE_STAGING_FIXTURE` | Escape when Railway staging has `NODE_ENV=production` |
 | `RAILWAY_ENVIRONMENT` / `RAILWAY_ENVIRONMENT_NAME` | If name contains `staging`/`stage`, fixtures allowed |
