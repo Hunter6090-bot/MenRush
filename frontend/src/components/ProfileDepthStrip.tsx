@@ -56,10 +56,17 @@ export function ProfileDepthStrip() {
   }, [hidden, dismissal.hidden, pathname, refresh]);
 
   // One prompt at a time: Finish profile waits behind Get the app and alerts.
-  const wants = !hidden && !dismissal.hidden && gaps.length > 0;
+  const wants = !hidden && !dismissal.hidden && dismissal.ready && gaps.length > 0;
   const onTop = usePromptSlot('profile', wants ? 'want' : 'none');
 
-  if (!wants || !onTop) return null;
+  const visible = wants && onTop;
+  const { markShown } = dismissal;
+  // Once on screen it stays until closed, whatever the server prefs say later.
+  useEffect(() => {
+    if (visible) markShown();
+  }, [visible, markShown]);
+
+  if (!visible) return null;
 
   const primary = gaps[0];
   const detail = gaps.map((g) => DEPTH_COPY[g] ?? g).join(' · ');

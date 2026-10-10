@@ -12,9 +12,10 @@
  * A prompt that is still working out whether it wants to show ('pending')
  * holds back every lower prompt, so a lower one never flashes up and is then
  * replaced. The next prompt appears only once the current one is closed or
- * hidden (its state goes to 'none' or it unmounts).
+ * hidden (its state goes to 'none' or it unmounts). Once on screen a prompt
+ * keeps the slot until then, even if a higher one turns up later.
  */
-import { useLayoutEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
 
 export type PromptSlot = 'install-sheet' | 'install-banner' | 'alerts' | 'profile';
 export type PromptSlotState = 'pending' | 'want' | 'none';
@@ -35,8 +36,20 @@ const registrations = new Map<number, Registration>();
 const listeners = new Set<() => void>();
 let nextId = 1;
 let active: PromptSlot | null = null;
+let locked: PromptSlot | null = null;
 
 function compute(): PromptSlot | null {
+  // Sticky: the prompt on screen keeps the slot until it is closed or hidden,
+  // even if a higher one turns up later (a slow check, a route change). So
+  // nothing is swapped out from under the member.
+  // Only a prompt that has actually been painted is locked in (see usePromptSlot),
+  // so mount order within one commit cannot lock in the wrong one.
+  if (locked) {
+    for (const reg of registrations.values()) {
+      if (reg.slot === locked && reg.state === 'want') return locked;
+    }
+    locked = null;
+  }
   for (const slot of PROMPT_SLOT_ORDER) {
     let pending = false;
     for (const reg of registrations.values()) {
@@ -96,12 +109,21 @@ export function usePromptSlot(slot: PromptSlot, state: PromptSlotState): boolean
   );
 
   const current = useSyncExternalStore(subscribe, getActive, getActive);
-  return state === 'want' && current === slot;
+  const visible = state === 'want' && current === slot;
+
+  // Passive effect: runs once the prompt is on screen, after every prompt in the
+  // same commit has registered.
+  useEffect(() => {
+    if (visible && active === slot) locked = slot;
+  }, [visible, slot]);
+
+  return visible;
 }
 
 /** Test-only: forget every registration between Vitest cases. */
 export function resetPromptSlotsForTests(): void {
   registrations.clear();
   active = null;
+  locked = null;
   for (const listener of listeners) listener();
 }

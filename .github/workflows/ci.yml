@@ -75,6 +75,8 @@ jobs:
         run: npm run test:veriff
       - name: Hot-spot counts stay rounded for Free (no exact number)
         run: npm run test:hot-spot-free-counts
+      - name: Prompt prefs (auth, allowlist, no-store)
+        run: npm run test:prompt-prefs
       - name: Travel (dates, coarse centre, one place at a time)
         run: npm run test:travel
       - name: Travel GETs keep 'private, no-store'
@@ -206,6 +208,8 @@ jobs:
         run: npm run --if-present test:show-distance-integration
       - name: Hide my location from
         run: npm run --if-present test:hide-location-integration
+      - name: Prompt prefs on real PG (Don't show again across devices)
+        run: npm run --if-present test:prompt-prefs-integration
       - name: Community leaves out Ghost and hidden members
         run: npm run --if-present test:community-ghost-hidden
       - name: Travel (Look around and Plan a trip)
