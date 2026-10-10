@@ -66,7 +66,45 @@ async function assertPremiumGroupMember(userId: string) {
   }
 }
 
+type Q = (text: string, params?: unknown[]) => Promise<{ rowCount?: number | null }>;
+
 export const roomService = {
+  /**
+   * Account deletion (inside its transaction): the member's room_members rows
+   * cascade away, so a group they owned would be left with nobody able to add
+   * members or delete it. For every member-made group they own: delete it if
+   * nobody else is in it, otherwise make the longest-standing remaining member
+   * the owner. Official, venue and event rooms are not member-owned and are
+   * left alone.
+   */
+  async handOverOwnedRoomsOnAccountDeletion(userId: string, q: Q) {
+    const owned = `SELECT r.id FROM rooms r
+        JOIN room_members rm ON rm.room_id = r.id AND rm.user_id = $1 AND rm.role = 'owner'
+       WHERE COALESCE(r.is_official, FALSE) = FALSE
+         AND COALESCE(r.is_venue_managed, FALSE) = FALSE
+         AND r.venue_claim_id IS NULL
+         AND COALESCE(r.kind, 'room') <> 'event'`;
+    const deleted = await q(
+      `DELETE FROM rooms
+        WHERE id IN (${owned})
+          AND NOT EXISTS (SELECT 1 FROM room_members m WHERE m.room_id = rooms.id AND m.user_id <> $1)`,
+      [userId],
+    );
+    const promoted = await q(
+      `UPDATE room_members SET role = 'owner'
+        WHERE id IN (
+          SELECT DISTINCT ON (m.room_id) m.id
+            FROM room_members m
+           WHERE m.room_id IN (${owned})
+             AND m.user_id <> $1
+           ORDER BY m.room_id, m.joined_at ASC NULLS LAST, m.id
+        )
+          AND role <> 'owner'`,
+      [userId],
+    );
+    return { deleted: deleted.rowCount ?? 0, promoted: promoted.rowCount ?? 0 };
+  },
+
   async createRoom(userId: string, data: CreateRoomData) {
     const isLocationBased = data.is_location_based ?? false;
     await assertPremiumGroupCreator(userId, isLocationBased);
