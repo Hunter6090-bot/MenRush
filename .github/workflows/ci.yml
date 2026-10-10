@@ -212,6 +212,8 @@ jobs:
         run: npm run --if-present test:prompt-prefs-integration
       - name: Community leaves out Ghost and hidden members
         run: npm run --if-present test:community-ghost-hidden
+      - name: Members delete their own map and Community posts (real PG)
+        run: npm run test:delete-own-posts-integration
       - name: Travel (Look around and Plan a trip)
         run: npm run --if-present test:travel-integration
       - name: Account deletion erases Travel trips, all-or-nothing (real PG)

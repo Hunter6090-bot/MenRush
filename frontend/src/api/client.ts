@@ -839,6 +839,7 @@ export const roomsAPI = {
 // ── Map feed (Sniffies-style location chat on Discover map) ─────────────────
 export interface MapFeedMessage {
   id: string;
+  sender_id?: string;
   display_name: string;
   photo_url?: string | null;
   message: string;
@@ -856,6 +857,12 @@ export const mapFeedAPI = {
     ),
   post: (data: { message: string; lat?: number; lng?: number; display_name?: string }) =>
     apiClient.post<MapFeedMessage>('/map-feed', data),
+  /** Delete your own map post (any age). The saved location goes with it. */
+  deleteMessage: (id: string) => apiClient.delete<{ ok: boolean }>(`/map-feed/${id}`),
+  /** How many map posts you have (any age). */
+  countMine: () => apiClient.get<{ count: number }>('/map-feed/mine/count'),
+  /** Delete every map post you have made. */
+  deleteAllMine: () => apiClient.delete<{ ok: boolean; deleted: number }>('/map-feed/mine'),
 };
 
 export type ContactSubmitPayload = {
@@ -1404,6 +1411,11 @@ export const communityAPI = {
     apiClient.put<{ post: CommunityPostDTO }>(`/community/posts/${postId}`, { body }),
   deletePost: (postId: string) =>
     apiClient.delete<{ ok: boolean }>(`/community/posts/${postId}`),
+  /** How many Community posts you have (any age). */
+  countMyPosts: () => apiClient.get<{ count: number }>('/community/posts/mine/count'),
+  /** Delete every Community post you have made (any age). */
+  deleteAllMyPosts: () =>
+    apiClient.delete<{ ok: boolean; deleted: number }>('/community/posts/mine'),
   listComments: (postId: string) =>
     apiClient.get<{ comments: CommunityCommentDTO[] }>(`/community/posts/${postId}/comments`),
   createComment: (postId: string, body: string) =>

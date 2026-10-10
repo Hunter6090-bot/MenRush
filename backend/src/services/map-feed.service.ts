@@ -163,4 +163,42 @@ export const mapFeedService = {
     );
     return result.rows.map((r: { user_id: string }) => r.user_id);
   },
+  /**
+   * Delete the member's own map feed post, at any age. The row goes, so its
+   * saved lat / lng / location go with it. Returns the deleted row's raw
+   * point (server-side only, for the fan-out) or null when the post does not
+   * exist or belongs to someone else (callers answer 404 either way, so a
+   * non-owner learns nothing about other members' posts).
+   */
+  async deleteOwn(userId: string, postId: string): Promise<{ id: string; lat: number; lng: number } | null> {
+    const res = await query(
+      `DELETE FROM map_feed_messages WHERE id = $1 AND sender_id = $2 RETURNING id, lat, lng`,
+      [postId, userId],
+    );
+    const row = res.rows[0];
+    return row ? { id: row.id, lat: Number(row.lat), lng: Number(row.lng) } : null;
+  },
+
+  /** How many map feed posts this member has (any age), for the delete-all confirm. */
+  async countOwn(userId: string): Promise<number> {
+    const res = await query(`SELECT COUNT(*)::int AS n FROM map_feed_messages WHERE sender_id = $1`, [userId]);
+    return res.rows[0]?.n ?? 0;
+  },
+
+  /**
+   * Delete every map feed post this member has ever made (any age). Returns
+   * the removed rows' ids and raw points (server-side only, for the fan-out).
+   */
+  async deleteAllOwn(userId: string): Promise<{ deleted: number; removed: Array<{ id: string; lat: number; lng: number }> }> {
+    const res = await query(
+      `DELETE FROM map_feed_messages WHERE sender_id = $1 RETURNING id, lat, lng`,
+      [userId],
+    );
+    const removed = res.rows.map((r: { id: string; lat: unknown; lng: unknown }) => ({
+      id: r.id,
+      lat: Number(r.lat),
+      lng: Number(r.lng),
+    }));
+    return { deleted: removed.length, removed };
+  },
 };

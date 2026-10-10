@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { CommunityPostComments } from './CommunityPostComments';
+import { useAuthStore } from '../hooks/store';
 
 const listComments = vi.fn();
 const createComment = vi.fn();
@@ -35,6 +36,8 @@ function renderThread(count = 0) {
 describe('CommunityPostComments', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Own-comment controls key off the signed-in user (parked failure on main: no user set).
+    useAuthStore.setState({ user: { id: 'u-me', name: 'Me' } as never });
     listComments.mockResolvedValue({ data: { comments: [] } });
     createComment.mockResolvedValue({
       data: {
@@ -221,10 +224,11 @@ describe('CommunityPostComments', () => {
     await user.click(screen.getByTestId('community-comment-edit-save-c-mine'));
 
     await waitFor(() => {
-      expect(updateComment).toHaveBeenCalledWith('post-1', 'c-mine', 'Updated @Tropics Day Spa ');
+      // The component trims before saving.
+      expect(updateComment).toHaveBeenCalledWith('post-1', 'c-mine', 'Updated @Tropics Day Spa');
     });
 
-    expect(await screen.findByText('Updated @Tropics Day Spa ')).toBeInTheDocument();
+    expect(await screen.findByText((_, el) => el?.tagName === 'P' && el.textContent?.trim() === 'Updated @Tropics Day Spa')).toBeInTheDocument();
   });
 
   it('allows author to delete own comment with confirmation', async () => {
