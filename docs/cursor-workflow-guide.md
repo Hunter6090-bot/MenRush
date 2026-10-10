@@ -86,6 +86,10 @@ VITE_STATSIG_CLIENT_KEY=
 | Variable | Purpose |
 | --- | --- |
 | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | Transactional email |
+| `EMAIL_NOTIFICATIONS_ENABLED` | Activity mail (message / match / jerk). Default `false`. Prod stays off until Quality Check passes. |
+| `EMAIL_NOTIFY_SHOW_SENDER_NAME` | Add only the sender profile name to activity mail. Default `false`. |
+| `EMAIL_NOTIFY_JERK_ENABLED` | Jerk mail type. Default `false` (#325/#326 on hold). |
+| `EMAIL_NOTIFY_ACTIVE_MINUTES` | Skip mail when the recipient's socket is connected or `last_seen` is within this many minutes. Default `15`. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Web push |
 | `SENTRY_DSN` | Error reporting (PII scrubbed) |
 | `BETA_INVITE_REQUIRED` | Gate registration with invite codes |

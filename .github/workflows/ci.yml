@@ -87,6 +87,8 @@ jobs:
         run: npm run test:no-query-coordinates
       - name: Welcome emails use the official mark (no typed wordmark)
         run: npm run test:welcome-email-brand
+      - name: Email notifications (copy, headers, template, auth-only prefs)
+        run: npm run test:email-notifications
       - name: Social drafts say no waitlist, no dating app, no em dashes
         run: npm run test:social-copy-guard
 
@@ -133,6 +135,8 @@ jobs:
         run: npm run test:edge-proxy-secret
       - name: No coordinates in /api GET URLs (fix only in the POST body)
         run: npm run test:no-coords-in-urls
+      - name: Email notifications Settings contrast and size
+        run: npm run test:email-notifications
       # vercel build, then import and call the exact built middleware.js under
       # plain Node ESM from an isolated copy (catches ERR_MODULE_NOT_FOUND /
       # MIDDLEWARE_INVOCATION_FAILED that vitest and tsc cannot see). No
@@ -214,6 +218,8 @@ jobs:
         run: npm run --if-present test:hide-location-integration
       - name: Prompt prefs on real PG (Don't show again across devices)
         run: npm run --if-present test:prompt-prefs-integration
+      - name: Email notifications on real PG (hourly lock, safety, unsubscribe)
+        run: npm run test:email-notifications-integration
       - name: Community leaves out Ghost and hidden members
         run: npm run --if-present test:community-ghost-hidden
       - name: Members delete their own map and Community posts (real PG)
