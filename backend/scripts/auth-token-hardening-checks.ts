@@ -5,6 +5,7 @@
  *   npx ts-node --transpile-only scripts/auth-token-hardening-checks.ts
  */
 import assert from 'assert';
+import { spawnSync } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
 import http from 'http';
@@ -30,12 +31,9 @@ function base64UrlEncode(input: Buffer | string): string {
   return buf.toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 }
 
-function signPayload(payload: Record<string, unknown>): string {
+function signPayload(payload: Record<string, unknown>, secret = process.env.JWT_SECRET as string): string {
   const payloadJson = JSON.stringify(payload);
-  const signature = crypto
-    .createHmac('sha256', process.env.JWT_SECRET as string)
-    .update(payloadJson)
-    .digest();
+  const signature = crypto.createHmac('sha256', secret).update(payloadJson).digest();
   return `${base64UrlEncode(payloadJson)}.${base64UrlEncode(signature)}`;
 }
 
@@ -129,6 +127,20 @@ function jwtSecretChecks() {
     'your-secret-key',
     'placeholder still allowed outside production',
   );
+  const withNewline = 'a-real-production-secret-value\n';
+  assert.equal(
+    resolveJwtSecret({ JWT_SECRET: withNewline, NODE_ENV: 'production' }),
+    withNewline,
+    'HMAC secret keeps a trailing newline',
+  );
+  assert.equal(
+    resolveJwtSecret({ JWT_SECRET: '  kept-spaces  ', NODE_ENV: 'development' }),
+    '  kept-spaces  ',
+    'HMAC secret keeps surrounding spaces',
+  );
+  assert.throws(() =>
+    resolveJwtSecret({ JWT_SECRET: 'your-secret-key\n', NODE_ENV: 'production' }),
+  );
   assert.ok(isInsecureJwtSecretPlaceholder('your-secret-key'));
   assert.ok(!isInsecureJwtSecretPlaceholder('a-real-production-secret-value'));
 
@@ -179,11 +191,70 @@ function verifyTokenChecks() {
     () => authService.verifyToken(purposeToken(MEMBER_ID, { type: 'session', scope: '2fa_pending' })),
     'mixed session + pending',
   );
+  throwsInvalid(
+    () => authService.verifyToken(purposeToken(MEMBER_ID, { kind: 'reset' })),
+    'kind reset as session',
+  );
+  throwsInvalid(
+    () => authService.verifyToken(purposeToken(MEMBER_ID, { aud: 'menrush' })),
+    'aud as session',
+  );
+  throwsInvalid(
+    () => authService.verifyToken(purposeToken(MEMBER_ID, { scope: 'session' })),
+    'scope session as session',
+  );
+  throwsInvalid(
+    () => authService.verifyToken(purposeToken(MEMBER_ID, { typ: 'session' })),
+    'typ session as session',
+  );
+  throwsInvalid(
+    () => authService.verifyToken(purposeToken(MEMBER_ID, { extra: 'nope' })),
+    'unknown claim as session',
+  );
 
   const opaqueReset = crypto.randomBytes(32).toString('hex');
   const opaqueConfirm = crypto.randomBytes(32).toString('hex');
   throwsInvalid(() => authService.verifyToken(opaqueReset), 'opaque reset as session');
   throwsInvalid(() => authService.verifyToken(opaqueConfirm), 'opaque confirm as session');
+
+  rawSecretNewlineRoundtrip();
+}
+
+function rawSecretNewlineRoundtrip() {
+  const rawSecret = 'auth-token-hardening-newline-secret\n';
+  assert.equal(
+    resolveJwtSecret({ JWT_SECRET: rawSecret, NODE_ENV: 'production' }),
+    rawSecret,
+  );
+  const token = signPayload(
+    { userId: MEMBER_ID, exp: Math.floor(Date.now() / 1000) + 3600 },
+    rawSecret,
+  );
+  const child = spawnSync(
+    process.execPath,
+    [
+      '-r',
+      'ts-node/register/transpile-only',
+      '-e',
+      `
+        const { authService } = require(${JSON.stringify(path.join(__dirname, '../src/services/auth.service'))});
+        const decoded = authService.verifyToken(process.env.CHECK_TOKEN);
+        if (decoded.userId !== process.env.CHECK_USER) process.exit(2);
+      `,
+    ],
+    {
+      encoding: 'utf8',
+      cwd: path.join(__dirname, '..'),
+      env: {
+        ...process.env,
+        JWT_SECRET: rawSecret,
+        CHECK_TOKEN: token,
+        CHECK_USER: MEMBER_ID,
+        TS_NODE_TRANSPILE_ONLY: '1',
+      },
+    },
+  );
+  assert.equal(child.status, 0, child.stderr || child.stdout || 'newline-secret verify');
 }
 
 async function httpAuthChecks() {
@@ -234,6 +305,32 @@ async function httpAuthChecks() {
     assert.equal((await request(srv.port, '/api/users/me', { token: legacy })).status, 200);
     assert.equal((await request(srv.port, '/api/auth/account', { token: legacy })).status, 200);
 
+    assert.equal(
+      (await request(srv.port, '/api/users/me', { token: purposeToken(MEMBER_ID, { kind: 'reset' }) }))
+        .status,
+      401,
+    );
+    assert.equal(
+      (await request(srv.port, '/api/users/me', { token: purposeToken(MEMBER_ID, { aud: 'menrush' }) }))
+        .status,
+      401,
+    );
+    assert.equal(
+      (await request(srv.port, '/api/users/me', { token: purposeToken(MEMBER_ID, { scope: 'session' }) }))
+        .status,
+      401,
+    );
+    assert.equal(
+      (await request(srv.port, '/api/users/me', { token: purposeToken(MEMBER_ID, { typ: 'session' }) }))
+        .status,
+      401,
+    );
+    assert.equal(
+      (await request(srv.port, '/api/users/me', { token: purposeToken(MEMBER_ID, { extra: 'nope' }) }))
+        .status,
+      401,
+    );
+
     const verifyOk = await request(srv.port, '/api/auth/2fa/verify', {
       method: 'POST',
       body: { pendingToken: pending, code: '123456' },
@@ -261,7 +358,7 @@ async function httpAuthChecks() {
 function sourceGuards() {
   const auth = fs.readFileSync(AUTH_SRC, 'utf8');
   assert.match(auth, /type:\s*'session'/);
-  assert.match(auth, /PURPOSE_CLAIM_KEYS/);
+  assert.match(auth, /SESSION_TIME_KEYS/);
   assert.match(auth, /scope:\s*'2fa_pending'/);
   assert.match(auth, /verifyTwoFactorPendingToken/);
   assert.match(

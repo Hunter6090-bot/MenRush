@@ -1,7 +1,8 @@
 /**
  * Resolve JWT_SECRET for signing and verifying session tokens.
  * Missing is always fatal. In production, known insecure defaults are fatal too.
- * When a real secret is set, behaviour is unchanged.
+ * The value used for HMAC is the raw env string (same as main). Trim is only
+ * for the empty and placeholder checks.
  */
 
 const INSECURE_JWT_SECRET_PLACEHOLDERS = new Set([
@@ -15,9 +16,9 @@ export function isInsecureJwtSecretPlaceholder(value: string): boolean {
 }
 
 export function resolveJwtSecret(env: NodeJS.ProcessEnv = process.env): string {
-  const raw = (env.JWT_SECRET ?? '').trim();
+  const raw = env.JWT_SECRET ?? '';
   const nodeEnv = (env.NODE_ENV ?? '').trim().toLowerCase();
-  if (!raw) {
+  if (!raw.trim()) {
     throw new Error('JWT_SECRET environment variable is required');
   }
   if (nodeEnv === 'production' && isInsecureJwtSecretPlaceholder(raw)) {

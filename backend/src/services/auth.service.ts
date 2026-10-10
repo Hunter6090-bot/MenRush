@@ -66,8 +66,8 @@ type TokenPayload = {
   type?: 'session';
 };
 
-/** Claims that mark a token as something other than a login session. */
-const PURPOSE_CLAIM_KEYS = ['type', 'typ', 'purpose', 'scope', 'token_type', 'tokenType'] as const;
+/** Time claims are ignored when checking the session allow-list. */
+const SESSION_TIME_KEYS = new Set(['iat', 'exp', 'nbf']);
 
 type HandoffTokenPayload = {
   sessionId: string;
@@ -97,9 +97,6 @@ const base64UrlDecode = (input: string): Buffer => {
   return Buffer.from(padded, 'base64');
 };
 
-const isSessionPurposeValue = (value: unknown): boolean =>
-  value === undefined || value === 'session';
-
 const assertSessionPayload = (payload: unknown): TokenPayload => {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new Error('Invalid token');
@@ -114,11 +111,21 @@ const assertSessionPayload = (payload: unknown): TokenPayload => {
   if (record.exp < Math.floor(Date.now() / 1000)) {
     throw new Error('Token expired');
   }
-  for (const key of PURPOSE_CLAIM_KEYS) {
-    if (!isSessionPurposeValue(record[key])) {
-      throw new Error('Invalid token');
-    }
+
+  // Live session tokens on main are { userId, exp }. New tokens add type: 'session'.
+  // Ignore iat/exp/nbf; anything else is not a session.
+  const keys = Object.keys(record).filter((key) => !SESSION_TIME_KEYS.has(key));
+  const identity = new Set(keys);
+  const legacy = identity.size === 1 && identity.has('userId');
+  const typed =
+    identity.size === 2 &&
+    identity.has('userId') &&
+    identity.has('type') &&
+    record.type === 'session';
+  if (!legacy && !typed) {
+    throw new Error('Invalid token');
   }
+
   return {
     userId: record.userId,
     exp: record.exp,
