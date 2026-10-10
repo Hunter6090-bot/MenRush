@@ -12,10 +12,10 @@ import { CommunityFeed } from '../components/CommunityFeed';
 import { CruisingSearchBar } from '../components/CruisingSearchBar';
 import { CruisingSearchSheet } from '../components/CruisingSearchSheet';
 import { HotSpotReviewsModal } from '../components/HotSpotReviewsModal';
-import { useLocationStore } from '../hooks/store';
+import { HotSpotSheet } from '../components/HotSpotSheet';
+import { useAuthStore, useLocationStore } from '../hooks/store';
 import { formatDistanceFromKm } from '../lib/localeUnits';
-import { getDirectionsUrl } from '../lib/cruising';
-import { IconCommunity } from '../components/icons';
+import { IconCommunity, SpotTypeIcon, spotTypeKey } from '../components/icons';
 
 type OutChip = 'all' | 'sauna' | 'bar' | 'event' | 'community';
 
@@ -67,6 +67,13 @@ export function Out() {
   const [cruisingSearchOpen, setCruisingSearchOpen] = useState(false);
   const [actingSpotId, setActingSpotId] = useState<string | null>(null);
   const [reviewsSpot, setReviewsSpot] = useState<HotSpotDTO | null>(null);
+  // Tapping a row opens the spot sheet (directions live there now the row MAP button is gone).
+  const [sheetSpotId, setSheetSpotId] = useState<string | null>(null);
+  const isPremium = useAuthStore((s) => Boolean(s.user?.is_premium));
+  const sheetSpot = useMemo(
+    () => (sheetSpotId ? spots.find((s) => s.id === sheetSpotId) ?? null : null),
+    [spots, sheetSpotId],
+  );
 
   // Same check-in / check-out calls the map used for this sheet.
   const handleCheckIn = useCallback(async (spot: HotSpotDTO, anonymous: boolean) => {
@@ -175,6 +182,18 @@ export function Out() {
       >
         <div className="mb-3 flex items-center justify-between gap-3">
           <h1 className="text-2xl font-extrabold text-[var(--cream)]">Out</h1>
+          {/* Board state 09: Map pill top-right opens the existing Cruise map. */}
+          <Link
+            to="/hot-spots"
+            data-testid="out-map-pill"
+            aria-label="Open the Cruise map"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-4 text-[15px] font-bold text-[var(--cream)]"
+          >
+            <span className="text-[var(--nn-accent-text)]" aria-hidden>
+              <SpotTypeIcon type="pin" size={18} />
+            </span>
+            Map
+          </Link>
         </div>
 
         <div className="mb-3 shrink-0">
@@ -245,7 +264,7 @@ export function Out() {
         ) : (
           <div className="space-y-3" data-testid="out-list">
             {visibleSpots.map((spot) => (
-              <OutSpotRow key={spot.id} spot={spot} />
+              <OutSpotRow key={spot.id} spot={spot} onOpen={() => setSheetSpotId(spot.id)} />
             ))}
             {visibleEvents.map((ev) => (
               <OutEventRow key={ev.id} event={ev} />
@@ -288,6 +307,15 @@ export function Out() {
         onOpenReviews={(spot) => setReviewsSpot(spot)}
         actingSpotId={actingSpotId}
       />
+      <HotSpotSheet
+        spot={sheetSpot}
+        isPremium={isPremium}
+        acting={Boolean(sheetSpot && actingSpotId === sheetSpot.id)}
+        error=""
+        onClose={() => setSheetSpotId(null)}
+        onCheckIn={handleCheckIn}
+        onOpenReviews={(spot) => setReviewsSpot(spot)}
+      />
       <HotSpotReviewsModal
         spot={reviewsSpot}
         open={Boolean(reviewsSpot)}
@@ -297,38 +325,70 @@ export function Out() {
   );
 }
 
-function OutSpotRow({ spot }: { spot: HotSpotDTO }) {
+/** Real venue photo only when the spot has one and it loads; otherwise the copper type icon tile. */
+function OutSpotThumb({ spot }: { spot: HotSpotDTO }) {
+  const photo = typeof spot.photo_url === 'string' ? spot.photo_url.trim() : '';
+  const [failed, setFailed] = useState(false);
+  const showPhoto = photo !== '' && !failed;
+  return (
+    <span
+      className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--bg-elevated)] text-[var(--nn-accent-text)]"
+      data-testid={`out-spot-thumb-${spot.id}`}
+      data-thumb={showPhoto ? 'photo' : 'icon'}
+    >
+      {showPhoto ? (
+        <img
+          src={photo}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <SpotTypeIcon type={spotTypeKey(spot.category_slug, spot.category_name)} size={28} />
+      )}
+    </span>
+  );
+}
+
+function OutSpotRow({ spot, onOpen }: { spot: HotSpotDTO; onOpen: () => void }) {
   const dist =
     typeof spot.distance_km === 'number' ? formatDistanceFromKm(spot.distance_km) : null;
-  const mapUrl = getDirectionsUrl(spot.latitude, spot.longitude, spot.name);
+  const typeKey = spotTypeKey(spot.category_slug, spot.category_name);
+  const hours = typeof spot.opening_hours === 'string' ? spot.opening_hours.trim() : '';
 
   return (
-    <article
-      className="flex min-h-[72px] gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-3"
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`Open ${spot.name}`}
+      className="flex min-h-[72px] w-full gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-3 text-left"
       data-testid={`out-spot-${spot.id}`}
     >
-      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--bg-elevated)] text-2xl">
-        {spot.category_icon || '📍'}
-      </div>
-      <div className="min-w-0 flex-1">
-        <h2 className="truncate text-[15px] font-extrabold text-[var(--cream)]">{spot.name}</h2>
-        <p className="mt-0.5 truncate text-[15px] font-medium text-[var(--cream-muted)]">
+      <OutSpotThumb spot={spot} />
+      <span className="block min-w-0 flex-1">
+        <span className="block truncate text-[15px] font-extrabold text-[var(--cream)]">{spot.name}</span>
+        <span className="mt-0.5 block truncate text-[15px] font-medium text-[var(--cream-muted)]">
           {[dist, spot.city].filter(Boolean).join(' · ') || spot.category_name}
-        </p>
-        <p className="mt-1 text-[15px] text-[var(--cream-soft)]">
-          {spot.category_icon} {spot.category_name}
-        </p>
-      </div>
-      <a
-        href={mapUrl}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--border-default)] px-3 text-[15px] font-extrabold uppercase tracking-wide text-[var(--cream)]"
-        aria-label={`Map directions to ${spot.name}`}
+        </span>
+        {hours ? (
+          <span
+            className="mt-0.5 block truncate text-[15px] font-medium text-[var(--cream-muted)]"
+            data-testid={`out-spot-hours-${spot.id}`}
+          >
+            {hours}
+          </span>
+        ) : null}
+      </span>
+      <span
+        className="inline-flex min-h-[44px] max-w-[40%] shrink-0 items-center gap-1.5 self-center text-[15px] font-bold text-[var(--nn-accent-text)]"
+        data-testid={`out-spot-type-${spot.id}`}
       >
-        Map
-      </a>
-    </article>
+        <SpotTypeIcon type={typeKey} size={20} className="shrink-0" />
+        <span className="truncate">{spot.category_name}</span>
+      </span>
+    </button>
   );
 }
 
