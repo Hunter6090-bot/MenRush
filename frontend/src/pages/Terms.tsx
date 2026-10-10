@@ -437,8 +437,8 @@ export const Terms = () => {
                   That covers both kinds: Brighton Pride personal promo codes sent by email, and
                   MenRush Pride invites (MENRUSH codes) from the menrush.com/pride claim form. The
                   claim form closes at the same time. Redeeming a valid Pride code grants 3 months of
-                  Premium. One grant per person. No stacking. Pride replaces the 30-day
-                  waitlist Premium gift in clause 7.2. It does not add to that gift. Cannot be
+                  Premium. One grant per person. No stacking. Pride replaces the 30 days of
+                  Premium in clause 7.2. It does not add to them. Cannot be
                   combined with the{' '}
                   <span className="font-mono tracking-wide">BSF26</span> promo in clause 7.8 or the{' '}
                   <span className="font-mono tracking-wide">MR3FREE</span> promo in clause 7.9. 18+
