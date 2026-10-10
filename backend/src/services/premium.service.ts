@@ -2,6 +2,7 @@ import type { PoolClient } from 'pg';
 import pool, { query } from '../db';
 import { isInviteRequired } from './invite-code.service';
 import { isAlwaysPremiumName } from '../lib/always-premium';
+import { verifyVerotelPostback } from '../lib/verotelSignature';
 
 type Queryable = PoolClient | typeof pool;
 
@@ -16,6 +17,16 @@ export type PaymentWebhookEvent = {
   processor?: string;
   raw: Record<string, string>;
 };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Verotel dates are yyyy-mm-dd; Premium runs to the end of that day (UTC). */
+function verotelPeriodEnd(value: unknown): Date | null {
+  const s = typeof value === 'string' ? value.trim() : '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(`${s}T23:59:59Z`);
+  return Number.isFinite(d.getTime()) ? d : null;
+}
 
 export class BillingNotConfiguredError extends Error {
   constructor(message = 'Billing is not configured') {
@@ -100,8 +111,9 @@ async function syncUserEntitlements(
   tier: PremiumTier,
   active: boolean,
   until: Date | null,
+  db: Queryable = pool,
 ): Promise<void> {
-  await query(
+  await db.query(
     `UPDATE users
      SET premium_tier = $2,
          is_premium = $3,
@@ -110,6 +122,29 @@ async function syncUserEntitlements(
      WHERE id = $1`,
     [userId, tier, active, until],
   );
+}
+
+/**
+ * Webhook apply inside the replay-guard transaction: writes go through `db`
+ * (the transaction client); side effects outside the DB transaction, such as
+ * the referral record, run in `afterCommit` once the claim and writes commit.
+ */
+export type WebhookTx = { db: Queryable; afterCommit: Array<() => Promise<void>> };
+
+async function runReferralHook(
+  tx: WebhookTx | undefined,
+  label: string,
+  hook: () => Promise<void>,
+): Promise<void> {
+  const safe = async () => {
+    try {
+      await hook();
+    } catch (err) {
+      console.error(`[premium] referral ${label} hook failed`, err);
+    }
+  };
+  if (tx) tx.afterCommit.push(safe);
+  else await safe();
 }
 
 export const premiumService = {
@@ -241,6 +276,8 @@ export const premiumService = {
   /** Parse billed amount from a webhook body; fallback to list price. */
   extractPaymentAmount(raw: Record<string, string>): number {
     const keys = [
+      // Verotel: priceAmount on initial, amount on rebill.
+      'priceAmount',
       'billedAmount',
       'BilledAmount',
       'accountingAmount',
@@ -316,7 +353,8 @@ export const premiumService = {
     ];
   },
 
-  async activateFromWebhook(event: PaymentWebhookEvent) {
+  async activateFromWebhook(event: PaymentWebhookEvent, tx?: WebhookTx) {
+    const db: Queryable = tx?.db ?? pool;
     if (!event.userId) {
       return { ok: false, reason: 'missing_user_id' };
     }
@@ -325,7 +363,7 @@ export const premiumService = {
     const periodEnd =
       event.periodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    await query(
+    await db.query(
       `UPDATE subscriptions
        SET status = 'canceled', canceled_at = NOW(), updated_at = NOW()
        WHERE user_id = $1 AND status = 'active'`,
@@ -334,7 +372,7 @@ export const premiumService = {
 
     const processor = event.processor || 'verotel';
 
-    await query(
+    await db.query(
       `INSERT INTO subscriptions (
          user_id, tier, status, processor,
          processor_subscription_id, processor_customer_id,
@@ -351,29 +389,28 @@ export const premiumService = {
       ],
     );
 
-    await syncUserEntitlements(event.userId, tier, true, periodEnd);
+    await syncUserEntitlements(event.userId, tier, true, periodEnd, db);
 
     // Referral commission — record only; never send money / call payout rails.
-    try {
+    // After commit when inside the webhook transaction.
+    const paidUserId = event.userId;
+    const amount = this.extractPaymentAmount(event.raw);
+    await runReferralHook(tx, 'paid-upgrade', async () => {
       const { referralService } = await import('./referral.service');
-      await referralService.onPaidUpgrade(
-        event.userId,
-        this.extractPaymentAmount(event.raw),
-      );
-    } catch (err) {
-      console.error('[premium] referral paid-upgrade hook failed', err);
-    }
+      await referralService.onPaidUpgrade(paidUserId, amount);
+    });
 
     return { ok: true, userId: event.userId, tier, periodEnd };
   },
 
-  async renewFromWebhook(event: PaymentWebhookEvent) {
+  async renewFromWebhook(event: PaymentWebhookEvent, tx?: WebhookTx) {
+    const db: Queryable = tx?.db ?? pool;
     if (!event.userId) return { ok: false, reason: 'missing_user_id' };
 
     const periodEnd =
       event.periodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    const existing = await query(
+    const existing = await db.query(
       `SELECT tier FROM subscriptions
        WHERE user_id = $1 AND status = 'active'
        ORDER BY created_at DESC LIMIT 1`,
@@ -382,7 +419,7 @@ export const premiumService = {
 
     const tier = (existing.rows[0]?.tier || tierFromPassthrough(event.raw)) as PremiumTier;
 
-    await query(
+    await db.query(
       `UPDATE subscriptions
        SET current_period_end = $2,
            processor_subscription_id = COALESCE($3, processor_subscription_id),
@@ -392,28 +429,26 @@ export const premiumService = {
       [event.userId, periodEnd, event.subscriptionId, JSON.stringify(event.raw)],
     );
 
-    await syncUserEntitlements(event.userId, tier, true, periodEnd);
+    await syncUserEntitlements(event.userId, tier, true, periodEnd, db);
 
-    try {
+    const renewUserId = event.userId;
+    const renewAmount = this.extractPaymentAmount(event.raw);
+    await runReferralHook(tx, 'renew', async () => {
       const { referralService } = await import('./referral.service');
-      await referralService.onPaidUpgrade(
-        event.userId,
-        this.extractPaymentAmount(event.raw),
-      );
-    } catch (err) {
-      console.error('[premium] referral renew hook failed', err);
-    }
+      await referralService.onPaidUpgrade(renewUserId, renewAmount);
+    });
 
     return { ok: true, userId: event.userId, tier, periodEnd };
   },
 
-  async deactivateFromWebhook(event: PaymentWebhookEvent) {
+  async deactivateFromWebhook(event: PaymentWebhookEvent, tx?: WebhookTx) {
+    const db: Queryable = tx?.db ?? pool;
     if (!event.userId) return { ok: false, reason: 'missing_user_id' };
 
     // Never strip always-Premium owner accounts.
-    const nameRow = await query(`SELECT name FROM users WHERE id = $1`, [event.userId]);
+    const nameRow = await db.query(`SELECT name FROM users WHERE id = $1`, [event.userId]);
     if (isAlwaysPremiumName(nameRow.rows[0]?.name)) {
-      await query(
+      await db.query(
         `UPDATE subscriptions
          SET status = 'expired', updated_at = NOW()
          WHERE user_id = $1 AND status = 'active'`,
@@ -422,71 +457,124 @@ export const premiumService = {
       return { ok: true, userId: event.userId, preserved: true };
     }
 
-    await query(
+    await db.query(
       `UPDATE subscriptions
        SET status = 'expired', updated_at = NOW()
        WHERE user_id = $1 AND status = 'active'`,
       [event.userId],
     );
 
-    await syncUserEntitlements(event.userId, 'free', false, null);
+    await syncUserEntitlements(event.userId, 'free', false, null, db);
     return { ok: true, userId: event.userId };
   },
 
-  async handleWebhook(body: Record<string, unknown>) {
-    const raw: Record<string, string> = {};
-    for (const [key, value] of Object.entries(body)) {
-      if (typeof value === 'string') raw[key] = value;
+  /**
+   * Billing postback (Verotel FlexPay). `rawParams` is the exact query string
+   * or form body Verotel sent. Nothing is read or written until the Verotel
+   * signature over those bytes checks out (VEROTEL_SIGNATURE_KEY). Unsigned,
+   * badly signed, duplicate-key or unconfigured callbacks throw
+   * invalid_signature before any entitlement or payout write.
+   */
+  async handleWebhook(rawParams: string) {
+    const verified = verifyVerotelPostback(typeof rawParams === 'string' ? rawParams : '');
+    if (!verified.ok) {
+      const err = new Error(`Billing webhook rejected: ${verified.reason}`);
+      (err as { code?: string; reason?: string }).code = 'invalid_signature';
+      (err as { code?: string; reason?: string }).reason = verified.reason;
+      throw err;
     }
+    return this.applyVerotelEvent(verified.params);
+  },
 
-    const eventType =
-      (typeof body.eventType === 'string' && body.eventType) ||
-      (typeof body.event_type === 'string' && body.event_type) ||
-      'unknown';
-
-    const userId =
-      (typeof body['X-userId'] === 'string' && body['X-userId']) ||
-      (typeof body.userId === 'string' && body.userId) ||
-      (typeof body.custom1 === 'string' && body.custom1) ||
-      null;
-
-    const subscriptionId =
-      (typeof body.subscriptionId === 'string' && body.subscriptionId) ||
-      (typeof body.subscription_id === 'string' && body.subscription_id) ||
-      null;
-
-    const customerId =
-      (typeof body.customerId === 'string' && body.customerId) ||
-      (typeof body.consumerId === 'string' && body.consumerId) ||
-      null;
-
+  /**
+   * Apply a signature-verified Verotel postback. Verotel fields:
+   * event (initial | rebill | extend | cancel | uncancel | expiry | credit |
+   * chargeback | upgrade | downgrade), saleID, custom1 (our user id, passed
+   * through checkout), priceAmount / amount, nextChargeOn / expiresOn.
+   * Not exported to the route: only handleWebhook (after the check) calls it.
+   */
+  async applyVerotelEvent(raw: Record<string, string>) {
+    const eventName = String(raw.event || '').toLowerCase();
+    const custom1 = String(raw.custom1 || '').trim();
+    const userId = UUID_RE.test(custom1) ? custom1 : null;
     const event: PaymentWebhookEvent = {
-      eventType,
+      eventType: eventName || 'unknown',
       userId,
-      subscriptionId,
-      customerId,
-      periodEnd: null,
+      subscriptionId: raw.saleID ? String(raw.saleID) : null,
+      customerId: null,
+      periodEnd: verotelPeriodEnd(raw.nextChargeOn || raw.expiresOn),
       processor: 'verotel',
-      raw,
+      raw: { ...raw },
     };
 
-    const type = event.eventType.toLowerCase();
+    // Replay guard: a captured postback URL replayed later does nothing.
+    // One row per (processor, saleID, event, transaction). The claim and the
+    // Premium writes are ONE transaction: if anything fails or the process
+    // dies before COMMIT, neither the claim nor the writes persist, so
+    // Verotel's retry applies normally. A concurrent duplicate blocks on the
+    // unique key until the first commits (then it is a duplicate) or rolls
+    // back (then it applies).
+    const saleId = String(raw.saleID || '').trim();
+    if (!saleId) return { ok: false, reason: 'missing_sale_id' };
+    const transactionKey = String(raw.transactionID || raw.nextChargeOn || raw.expiresOn || '').trim();
+    const client = await pool.connect();
+    // A dropped connection mid-transaction must not crash the process: the
+    // pending query rejects, we roll back (nothing committed) and discard it.
+    let broken: Error | undefined;
+    const onClientError = (err: Error) => {
+      broken = err;
+      console.error('[premium] webhook DB connection lost:', err.message);
+    };
+    client.on('error', onClientError);
+    const tx: WebhookTx = { db: client, afterCommit: [] };
+    let result: Record<string, unknown>;
+    try {
+      await client.query('BEGIN');
+      const claim = await client.query(
+        `INSERT INTO billing_postback_events (processor, sale_id, event, transaction_key)
+         VALUES ('verotel', $1, $2, $3)
+         ON CONFLICT ON CONSTRAINT billing_postback_events_once DO NOTHING
+         RETURNING id`,
+        [saleId, eventName || 'unknown', transactionKey],
+      );
+      if (claim.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return { ok: true, duplicate: true, eventType: event.eventType };
+      }
+      result = await this.applyVerotelEventOnce(eventName, event, tx);
+      await client.query('COMMIT');
+    } catch (err) {
+      if (!broken) await client.query('ROLLBACK').catch(() => undefined);
+      broken = broken ?? (err instanceof Error ? err : new Error(String(err)));
+      throw err;
+    } finally {
+      client.removeListener('error', onClientError);
+      // Discard the connection after any failure so a half-open session is never reused.
+      client.release(broken);
+    }
+    for (const fn of tx.afterCommit) await fn();
+    return result;
+  },
 
-    if (type.includes('newsale') || type.includes('new_sale')) {
-      return this.activateFromWebhook(event);
+  async applyVerotelEventOnce(
+    eventName: string,
+    event: PaymentWebhookEvent,
+    tx?: WebhookTx,
+  ): Promise<Record<string, unknown>> {
+    switch (eventName) {
+      case 'initial':
+        return this.activateFromWebhook(event, tx);
+      case 'rebill':
+      case 'extend':
+        return this.renewFromWebhook(event, tx);
+      case 'expiry':
+      case 'credit':
+      case 'chargeback':
+        return this.deactivateFromWebhook(event, tx);
+      // cancel only stops future rebills: Premium runs to the end of the paid
+      // period, and Verotel sends "expiry" when it actually ends.
+      default:
+        return { ok: true, ignored: true, eventType: event.eventType };
     }
-    if (type.includes('renewal')) {
-      return this.renewFromWebhook(event);
-    }
-    if (
-      type.includes('cancel') ||
-      type.includes('expir') ||
-      type.includes('refund') ||
-      type.includes('chargeback')
-    ) {
-      return this.deactivateFromWebhook(event);
-    }
-
-    return { ok: true, ignored: true, eventType: event.eventType };
   },
 };

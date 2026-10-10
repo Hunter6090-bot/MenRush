@@ -75,6 +75,8 @@ jobs:
         run: npm run test:veriff
       - name: Hot-spot counts stay rounded for Free (no exact number)
         run: npm run test:hot-spot-free-counts
+      - name: Premium webhook only acts on a Verotel-signed postback
+        run: npm run test:premium-webhook
       - name: No coordinates in URLs (ignored and stripped, reads use the stored location)
         run: npm run test:no-query-coordinates
       - name: Welcome emails use the official mark (no typed wordmark)
@@ -180,6 +182,8 @@ jobs:
         run: npm run test:hot-spot-live-sort-integration
       - name: Pride code holders can register (real PG)
         run: npm run test:pride-invite-register-integration
+      - name: Premium webhook on real PG (signed grants, unsigned changes nothing)
+        run: npm run test:premium-webhook-integration
       - name: Ghost or hidden first event check-in creates no public spot (real PG)
         run: npm run test:events-ghost-first-checkin
       # --if-present: these scripts arrive with their own PRs (#333, #327,
