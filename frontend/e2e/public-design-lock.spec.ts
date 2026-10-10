@@ -18,10 +18,14 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   await expect(headerBrandLink.getByTestId('brand-mark')).toBeVisible();
   await expect(headerBrandLink.locator('img[src*="medallion-transparent"]')).toBeVisible();
 
+  // Sign in lives under Sign up free in the hero (#372), not in the header.
+  await expect(header.getByRole('link', { name: /^Sign in$/i })).toHaveCount(0);
+  const heroSignIn = page.getByTestId('hero-sign-in');
+  await expect(heroSignIn).toBeVisible();
+  await expect(heroSignIn).toContainText(/Already a member\?\s*Sign in/i);
   const signInLink = page.getByRole('link', { name: /^Sign in$/i });
   await expect(signInLink).toHaveCount(1);
-  await expect(signInLink).toHaveAttribute('href', '/login');
-  await expect(header.getByRole('link', { name: /^Sign in$/i })).toBeVisible();
+  await expect(heroSignIn.getByRole('link', { name: /^Sign in$/i })).toHaveAttribute('href', '/login');
 
   const heroHeading = page.getByRole('heading', {
     level: 1,

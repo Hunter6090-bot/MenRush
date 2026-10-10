@@ -24,6 +24,8 @@ export function VerifiedBadge({ size = 'sm', className = '', tone = 'overlay' }:
   const [open, setOpen] = useState(false);
   const descriptionId = useId();
   const icon = size === 'lg' ? 22 : 18;
+  // 44x44 tap target around the tick; negative margins keep the visible layout at the tick size.
+  const hit = size === 'lg' ? 'h-11 w-11 -m-[11px]' : 'h-11 w-11 -m-[13px]';
   return (
     <span className={`inline-flex shrink-0 ${className}`}>
       <button
@@ -35,7 +37,7 @@ export function VerifiedBadge({ size = 'sm', className = '', tone = 'overlay' }:
         onClick={(event) => { event.stopPropagation(); setOpen(!open); }}
         onKeyDown={(event) => { event.stopPropagation(); if (event.key === 'Escape') setOpen(false); }}
         onBlur={() => setOpen(false)}
-        className={`${tone === 'surface' ? 'relative ' : ''}inline-flex items-center justify-center bg-transparent p-0 ${
+        className={`relative ${hit} inline-flex items-center justify-center bg-transparent p-0 ${
           tone === 'surface'
             ? 'text-[var(--nn-accent-text)]'
             : 'text-[#E0A14A] drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]'
@@ -47,7 +49,7 @@ export function VerifiedBadge({ size = 'sm', className = '', tone = 'overlay' }:
         ) : null}
         <svg width={icon} height={icon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
       </button>
-      {open ? createPortal(<span id={descriptionId} role="status" className="fixed bottom-24 left-1/2 z-[200] w-64 max-w-[90vw] -translate-x-1/2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] p-3 text-xs font-medium leading-5 text-[var(--cream)] shadow-lg">Optional ID checked through Veriff. Separate from the signup 18+ selfie age gate.</span>, document.body) : null}
+      {open ? createPortal(<span id={descriptionId} role="status" className="fixed bottom-24 left-1/2 z-[200] w-64 max-w-[90vw] -translate-x-1/2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] p-3 text-[15px] font-medium leading-5 text-[var(--cream)] shadow-lg">Optional ID checked through Veriff. Separate from the signup 18+ selfie age gate.</span>, document.body) : null}
     </span>
   );
 }

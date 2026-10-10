@@ -3,7 +3,7 @@
  * Reads the saved value first and only writes when the member moves the slider,
  * so opening the Menu never changes anyone's saved Discretion.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { profileMetaAPI } from '../api/client';
 import { MAP_PIN_FUZZ_DEFAULT_M, nearestMapPinFuzzStep } from '../lib/mapPinFuzz';
 import { MapDiscretionSlider } from './MapDiscretionSlider';
@@ -32,14 +32,35 @@ export function MenuDiscretion() {
     };
   }, []);
 
+  // Saves are serialised: one request in flight at a time, and only the newest value is sent next.
+  // Quick keyboard steps (80, 120, 160) can no longer land out of order and leave an older value saved.
+  const pendingRef = useRef<number | null>(null);
+  const savingRef = useRef(false);
+  const flushSaves = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    try {
+      while (pendingRef.current !== null) {
+        const meters = pendingRef.current;
+        pendingRef.current = null;
+        try {
+          await profileMetaAPI.setMapPinFuzz(meters);
+        } catch {
+          /* keep optimistic UI; next read corrects */
+        }
+      }
+    } finally {
+      savingRef.current = false;
+    }
+  };
+
   const handleChange = (next: number) => {
     if (!loaded) return;
     const snapped = nearestMapPinFuzzStep(next);
     setValueM(snapped);
     window.dispatchEvent(new CustomEvent<number>(MAP_PIN_FUZZ_EVENT, { detail: snapped }));
-    void profileMetaAPI.setMapPinFuzz(snapped).catch(() => {
-      /* keep optimistic UI; next read corrects */
-    });
+    pendingRef.current = snapped;
+    void flushSaves();
   };
 
   return (
