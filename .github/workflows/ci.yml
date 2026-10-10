@@ -93,6 +93,8 @@ jobs:
         run: npm run test:social-copy-guard
       - name: Member data guard (no real member handles, emails or ids in tracked files)
         run: npm run test:member-data-guard
+      - name: Owner lists startup line (count only, warns when empty)
+        run: npm run test:owner-config
 
   frontend-build:
     name: Frontend build
@@ -208,6 +210,8 @@ jobs:
         run: npm run test:delete-room-creator-integration
       - name: Ghost or hidden first event check-in creates no public spot (real PG)
         run: npm run test:events-ghost-first-checkin
+      - name: Email confirm gate, owner lock, no email in logs (real PG)
+        run: npm run test:email-confirm
       # --if-present: these scripts arrive with their own PRs (#333, #327,
       # #328, Community Ghost). The step is a no-op until the script exists.
       - name: Radius on the fuzzed pin (oracle)

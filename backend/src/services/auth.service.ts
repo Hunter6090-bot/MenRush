@@ -534,7 +534,7 @@ export const authService = {
 
     if (!sendConfirmMail) {
       console.log(
-        `[email-confirm] owner lock — held confirm/welcome mail for ${user!.email}; legacy session issued. First live mails are Al-only until EMAIL_CONFIRM_MAIL_OPEN=true.`,
+        '[email-confirm] owner lock: held confirm and welcome mail for 1 signup; legacy session issued (owner inbox only until EMAIL_CONFIRM_MAIL_OPEN=true).',
       );
       return {
         user: user!,
@@ -582,7 +582,7 @@ export const authService = {
   async sendConfirmEmail(deliverTo: string, rawToken: string): Promise<void> {
     if (!maySendEmailConfirmTransactional(deliverTo)) {
       console.log(
-        `[email-confirm] owner lock — skipped confirm mail to ${deliverTo} (Al-only until EMAIL_CONFIRM_MAIL_OPEN=true)`,
+        '[email-confirm] owner lock: skipped 1 confirm mail (owner inbox only until EMAIL_CONFIRM_MAIL_OPEN=true)',
       );
       return;
     }
@@ -601,7 +601,7 @@ export const authService = {
   async sendWelcomeEmailOnce(userId: string, deliverTo: string): Promise<boolean> {
     if (!maySendEmailConfirmTransactional(deliverTo)) {
       console.log(
-        `[email-confirm] owner lock — skipped welcome mail to ${deliverTo} (Al-only until EMAIL_CONFIRM_MAIL_OPEN=true)`,
+        '[email-confirm] owner lock: skipped 1 welcome mail (owner inbox only until EMAIL_CONFIRM_MAIL_OPEN=true)',
       );
       return false;
     }

@@ -113,6 +113,22 @@ test('owner lock: owner inbox only until EMAIL_CONFIRM_MAIL_OPEN', () => {
   else process.env.EMAIL_CONFIRM_MAIL_OPEN = prevOpen;
 });
 
+test('email-confirm log lines carry no email address', () => {
+  const fs = require('fs') as typeof import('fs');
+  const path = require('path') as typeof import('path');
+  const src = fs.readFileSync(path.join(__dirname, '../src/services/auth.service.ts'), 'utf8');
+  const lines = src.split('\n');
+  let checked = 0;
+  lines.forEach((line, i) => {
+    if (!line.includes('[email-confirm]')) return;
+    checked += 1;
+    // The log call may span lines: look at the call and the line before it.
+    const call = `${lines[i - 1] ?? ''}\n${line}`;
+    assert.ok(!/\$\{[^}]*(email|deliverTo|to\b)[^}]*\}/i.test(call), `no email interpolated: ${line.trim()}`);
+  });
+  assert.ok(checked >= 3, 'found the email-confirm log lines');
+});
+
 async function runDbTests() {
   // Lazy import so pure tests work without JWT_SECRET / DB when unset.
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'email-confirm-check-secret';
@@ -203,12 +219,22 @@ async function runDbTests() {
     process.env.EMAIL_CONFIRM_MAIL_OPEN = 'false';
     const lockedBefore = sent.length;
     const lockedEmail = `locked-${suffix}@test.menrush.local`;
-    const locked = await authService.register({
-      email: lockedEmail,
-      password,
-      name: `Locked_${suffix}`,
-      age: 28,
-    });
+    const logged: string[] = [];
+    const realLog = console.log;
+    console.log = (...args: unknown[]) => { logged.push(args.map(String).join(' ')); };
+    let locked: Awaited<ReturnType<typeof authService.register>>;
+    try {
+      locked = await authService.register({
+        email: lockedEmail,
+        password,
+        name: `Locked_${suffix}`,
+        age: 28,
+      });
+    } finally {
+      console.log = realLog;
+    }
+    assert.ok(logged.some((l) => l.includes('[email-confirm] owner lock')), 'owner lock is logged');
+    assert.ok(!logged.some((l) => l.toLowerCase().includes(lockedEmail)), 'the member email is not logged');
     assert.strictEqual(locked.requiresEmailConfirm, false);
     assert.ok(locked.token, 'legacy session while mail gate locked');
     const lockedRow = await query(`SELECT id, email_confirmed FROM users WHERE LOWER(email) = $1`, [

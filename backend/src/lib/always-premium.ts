@@ -56,3 +56,32 @@ export function isTravelOwnerUserId(
   if (!userId) return false;
   return travelOwnerUserIds(env).includes(String(userId).trim().toLowerCase());
 }
+
+export type OwnerListStatus = { alwaysPremium: number; travelOnly: number; ignored: number };
+
+/** Counts only: valid ids in each list and entries ignored as not-a-UUID. Never the ids. */
+export function ownerListStatus(env: NodeJS.ProcessEnv = process.env): OwnerListStatus {
+  const entries = (raw: string | undefined) => (raw ?? '').split(',').map((p) => p.trim()).filter(Boolean);
+  const premium = alwaysPremiumUserIds(env);
+  const travel = parseUserIdList(env[TRAVEL_OWNER_ENV]).filter((id) => !premium.includes(id));
+  const invalid = [...entries(env[ALWAYS_PREMIUM_ENV]), ...entries(env[TRAVEL_OWNER_ENV])].filter(
+    (p) => !UUID_RE.test(p.toLowerCase()),
+  ).length;
+  return { alwaysPremium: premium.length, travelOnly: travel.length, ignored: invalid };
+}
+
+/**
+ * One startup line, counts only. A warning when ALWAYS_PREMIUM_USER_IDS has no valid id, since
+ * then no owner account is protected from losing Premium.
+ */
+export function ownerListStartupLine(env: NodeJS.ProcessEnv = process.env): { level: 'warn' | 'log'; text: string } {
+  const s = ownerListStatus(env);
+  const counts = `always_premium=${s.alwaysPremium} travel_only=${s.travelOnly} ignored=${s.ignored}`;
+  if (s.alwaysPremium === 0) {
+    return {
+      level: 'warn',
+      text: `[owners] WARNING: ${ALWAYS_PREMIUM_ENV} has no valid user id, so no owner account is protected from losing Premium (${counts}).`,
+    };
+  }
+  return { level: 'log', text: `[owners] ${counts}` };
+}
