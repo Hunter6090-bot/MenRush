@@ -52,7 +52,9 @@ router.post('/:id/check-in', checkInLimiter, async (req: AuthRequest, res: Respo
     const event = await eventService.getEvent(req.params.id);
     if (!event) return res.status(404).json({ error: 'Event not found' });
     const spot = await hotSpotsService.checkInAtEvent(req.userId!, event, body.anonymous);
-    res.json({ ok: true, spot });
+    // spot is null when a Ghost or hidden member is first at a venue with no pin yet:
+    // nothing is created, so their arrival is not revealed.
+    res.json({ ok: true, spot, deferred: spot === null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Check-in failed';
     const status = message === 'Event not found' ? 404 : 400;
