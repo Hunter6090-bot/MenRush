@@ -361,7 +361,8 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>6.3</Strong> We never show your exact location to other members. They
+                  <Strong>6.3</Strong> We never show your exact location to other members unless you
+                  choose to share it yourself in a chat. They
                   see an approximate position, moved by your Discretion setting, and distances
                   rounded to "under 1 mile" or whole miles. Members who choose Ghost or hidden
                   mode don't appear on the map. If you choose to share a place or location

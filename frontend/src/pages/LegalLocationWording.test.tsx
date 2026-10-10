@@ -20,7 +20,7 @@ describe('Legal location wording (Legal, Oct 2026)', () => {
   it('Terms 6.3 uses the plain location lines', () => {
     const text = pageText(<Terms />);
     expect(text).toContain(
-      'We never show your exact location to other members. They see an approximate position, moved by your Discretion setting, and distances rounded to "under 1 mile" or whole miles. Members who choose Ghost or hidden mode don\'t appear on the map.',
+      'We never show your exact location to other members unless you choose to share it yourself in a chat. They see an approximate position, moved by your Discretion setting, and distances rounded to "under 1 mile" or whole miles. Members who choose Ghost or hidden mode don\'t appear on the map.',
     );
     expect(text).toContain(
       'If you choose to share a place or location yourself, for example in a chat or a check-in, other members will see what you share.',
@@ -44,7 +44,7 @@ describe('Legal location wording (Legal, Oct 2026)', () => {
   it('Privacy uses the precise location and rounded distance lines', () => {
     const text = pageText(<Privacy />);
     expect(text).toContain(
-      'Precise location from your device, with your permission, when you use the map and nearby discovery. We use it to work out an approximate position and rounded distance that other members can see. We never show your exact location to other members.',
+      'Precise location from your device, with your permission, when you use the map and nearby discovery. We use it to work out an approximate position and rounded distance that other members can see. We never show your exact location to other members unless you choose to share it yourself in a chat.',
     );
     expect(text).toContain('Distances are shown rounded, as "under 1 mile" or in whole miles.');
     expect(text).not.toContain('privacy-bucketed');
@@ -69,5 +69,26 @@ describe('Legal location wording (Legal, Oct 2026)', () => {
     expect(retention).not.toMatch(/6 months|six months/i);
     unmount();
     expect(pageText(<Privacy />)).not.toMatch(/6 months|six months/i);
+  });
+
+  it('the "never exact" lines carry the chat exception (Send current location sends exact GPS)', () => {
+    const terms = pageText(<Terms />);
+    const privacy = pageText(<Privacy />);
+    for (const text of [terms, privacy]) {
+      expect(text).toContain('We never show your exact location to other members unless you choose to share it yourself in a chat.');
+      // Every "never exact" claim carries the exception; no bare version is left.
+      const claims = text.split('We never show your exact location to other members').length - 1;
+      const withException = text.split('We never show your exact location to other members unless you choose to share it yourself in a chat.').length - 1;
+      expect(claims).toBeGreaterThan(0);
+      expect(withException).toBe(claims);
+    }
+  });
+
+  it('Privacy drops the stale waitlist and launch lines', () => {
+    const text = pageText(<Privacy />);
+    expect(text).not.toMatch(/waitlist/i);
+    expect(text).not.toMatch(/launch readiness/i);
+    expect(text).toContain('To send transactional emails and service notices.');
+    expect(text).toContain('To improve product reliability and performance.');
   });
 });
