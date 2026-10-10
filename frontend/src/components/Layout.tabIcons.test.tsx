@@ -168,12 +168,41 @@ describe('Chat icon is the board\'s round outlined bubble', () => {
     cleanup();
     currentPath = '/discover';
   });
+});
 
-  it('other tabs keep their active fill (Rooms)', () => {
-    currentPath = '/rooms';
+describe('every tab is a copper outline when active, never filled (board)', () => {
+  const TABS = [
+    { testId: 'mobile-nav-home-toggle', path: '/discover' },
+    { testId: 'mobile-nav-conversations', path: '/conversations' },
+    { testId: 'mobile-nav-rooms', path: '/rooms' },
+    { testId: 'mobile-nav-out', path: '/out' },
+    { testId: 'mobile-nav-profile', path: '/profile' },
+  ] as const;
+
+  function expectNoFill(testId: string) {
+    const svg = screen.getByTestId(testId).querySelector('svg');
+    if (!svg) throw new Error(`no svg for ${testId}`);
+    expect(svg.getAttribute('stroke')).toBe('currentColor');
+    expect(svg.querySelector('[fill="currentColor"]')).toBeNull();
+    expect(svg.getAttribute('fill')).not.toBe('currentColor');
+  }
+
+  it.each(['map', 'list'] as const)('idle (%s home): all five tabs render outline only', (view) => {
+    localStorage.setItem(HOME_VIEW_KEY, view);
+    currentPath = '/settings';
     renderShell();
-    const rooms = screen.getByTestId('mobile-nav-rooms').querySelector('svg');
-    expect(rooms?.querySelector('[fill="currentColor"]')).not.toBeNull();
+    for (const { testId } of TABS) expectNoFill(testId);
+    cleanup();
+    currentPath = '/discover';
+    localStorage.removeItem(HOME_VIEW_KEY);
+  });
+
+  it.each(TABS)('active $testId: copper accent, outline only', ({ testId, path }) => {
+    currentPath = path;
+    renderShell();
+    const tab = screen.getByTestId(testId);
+    expect(tab.className).toContain('text-[var(--nn-accent-text)]');
+    expectNoFill(testId);
     cleanup();
     currentPath = '/discover';
   });
