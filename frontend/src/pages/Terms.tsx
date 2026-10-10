@@ -443,9 +443,10 @@ export const Terms = () => {
                   <span className="font-mono tracking-wide">BSF26</span> promo in clause 7.8 or the{' '}
                   <span className="font-mono tracking-wide">MR3FREE</span> promo in clause 7.9. 18+
                   only. UK-first. You will not be billed for this offer. MenRush is not a sponsor of
-                  Southampton Pride or Manchester Village Pride. Duration: if booked before launch,
-                  Premium starts at launch. On-time open 1 October 2026 ends 1 January 2027. If
-                  launch slips, 3 months from the actual open date.
+                  Southampton Pride or Manchester Village Pride. Duration: for a code redeemed before
+                  1 October 2026, Premium runs from 1 October 2026 to 1 January 2027. For a code
+                  redeemed on or after 1 October 2026, Premium runs for 3 months from the day you
+                  register.
                 </>,
               )}
               {para(
