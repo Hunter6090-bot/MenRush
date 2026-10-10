@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import {
   apiClient,
@@ -7,6 +7,7 @@ import {
   hotSpotsAPI,
   mapFeedAPI,
   communityAPI,
+  onLocationSaved,
   roomsAPI,
   resetLocationSyncForTests,
   stripCoordinatesFromRequest,
@@ -100,6 +101,52 @@ describe('no coordinates in /api GET URLs', () => {
     };
     await expect(usersAPI.getNearby(LAT, LNG, 8)).resolves.toBeTruthy();
     expect(gets()).toHaveLength(1);
+  });
+
+  it('hot spots: location_required re-sends the fix (no one-minute skip) and retries once', async () => {
+    let hotSpotGets = 0;
+    apiClient.defaults.adapter = async (config: InternalAxiosRequestConfig) => {
+      const url = apiClient.getUri(config);
+      sent.push({ method: (config.method ?? 'get').toUpperCase(), url, data: config.data });
+      let data: unknown = { success: true };
+      if (config.method === 'get' && url.includes('/hot-spots')) {
+        hotSpotGets += 1;
+        data = hotSpotGets === 1 ? { spots: [], location_required: true } : { spots: [{ id: 's1' }] };
+      }
+      return { data, status: 200, statusText: 'OK', headers: {}, config } as AxiosResponse;
+    };
+    const res = await hotSpotsAPI.listNearby(LAT, LNG, 80);
+    expect(res.data.spots).toEqual([{ id: 's1' }]);
+    expect(sent.map((r) => r.method)).toEqual(['POST', 'GET', 'POST', 'GET']);
+  });
+
+  it('hot spots: retries only once when the location is still missing', async () => {
+    apiClient.defaults.adapter = async (config: InternalAxiosRequestConfig) => {
+      sent.push({ method: (config.method ?? 'get').toUpperCase(), url: apiClient.getUri(config), data: config.data });
+      const data = config.method === 'get' ? { spots: [], location_required: true } : { success: true };
+      return { data, status: 200, statusText: 'OK', headers: {}, config } as AxiosResponse;
+    };
+    const res = await hotSpotsAPI.searchCruising(LAT, LNG, 'park');
+    expect(res.data.location_required).toBe(true);
+    expect(gets()).toHaveLength(2);
+  });
+
+  it('onLocationSaved fires for a stored fix, not for one the server refused', async () => {
+    const saved = vi.fn();
+    onLocationSaved(saved);
+    await usersAPI.updateLocation(LAT, LNG);
+    expect(saved).toHaveBeenCalledTimes(1);
+    apiClient.defaults.adapter = async (config: InternalAxiosRequestConfig) => {
+      sent.push({ method: (config.method ?? 'get').toUpperCase(), url: apiClient.getUri(config), data: config.data });
+      const data = config.method === 'post' ? { success: false, code: 'location_not_accepted' } : {};
+      return { data, status: 200, statusText: 'OK', headers: {}, config } as AxiosResponse;
+    };
+    await usersAPI.updateLocation(LAT, LNG);
+    await usersAPI.getNearby(LAT, LNG, 8);
+    expect(saved).toHaveBeenCalledTimes(1);
+    // A refused fix is not remembered as synced: the next read sends it again.
+    await usersAPI.getNearby(LAT, LNG, 8);
+    expect(sent.filter((r) => r.method === 'POST')).toHaveLength(4);
   });
 
   it('the safety net strips coordinates from any request params and URL', async () => {

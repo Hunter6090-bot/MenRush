@@ -95,9 +95,14 @@ let locationSyncInFlight: Promise<void> | null = null;
  * already sent in the last minute. Never throws: a failed sync must not block
  * the read, which then uses the last stored location.
  */
-export async function syncLocationForRead(lat?: number | null, lng?: number | null): Promise<void> {
+export async function syncLocationForRead(
+  lat?: number | null,
+  lng?: number | null,
+  opts?: { force?: boolean },
+): Promise<void> {
   if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
   const fresh = () =>
+    !opts?.force &&
     lastLocationSync != null &&
     lastLocationSync.lat === lat &&
     lastLocationSync.lng === lng &&
@@ -109,8 +114,12 @@ export async function syncLocationForRead(lat?: number | null, lng?: number | nu
   }
   const run = apiClient
     .post('/users/location', { lat, lng })
-    .then(() => {
+    .then((res) => {
+      // Only a stored fix counts as synced (the server answers success:false
+      // when it refused the fix).
+      if ((res?.data as { success?: boolean } | undefined)?.success === false) return;
       lastLocationSync = { lat, lng, at: Date.now() };
+      notifyLocationSaved();
     })
     .catch(() => undefined)
     .finally(() => {
@@ -120,10 +129,51 @@ export async function syncLocationForRead(lat?: number | null, lng?: number | nu
   await run;
 }
 
+/**
+ * "The server now has a location for me." Fired after any POST /users/location
+ * the server stored (the read sync and the live publisher). A screen whose
+ * last read came back empty for lack of a stored location (a brand-new
+ * member) reloads once on this.
+ */
+const locationSavedListeners = new Set<() => void>();
+export function onLocationSaved(cb: () => void): () => void {
+  locationSavedListeners.add(cb);
+  return () => {
+    locationSavedListeners.delete(cb);
+  };
+}
+function notifyLocationSaved(): void {
+  for (const cb of Array.from(locationSavedListeners)) {
+    try {
+      cb();
+    } catch {
+      /* a listener must not break the save */
+    }
+  }
+}
+
+/**
+ * Hot Spot reads answer { spots: [], location_required: true } when the server
+ * has no stored location yet (the read landed before the first save). Re-send
+ * the fix (bypassing the one-minute skip) and retry once.
+ */
+async function getHotSpotsWithLocationRetry(
+  lat: number,
+  lng: number,
+  params: Record<string, unknown>,
+) {
+  await syncLocationForRead(lat, lng);
+  const res = await apiClient.get<{ spots: HotSpotDTO[]; location_required?: boolean }>('/hot-spots', { params });
+  if (!res.data?.location_required) return res;
+  await syncLocationForRead(lat, lng, { force: true });
+  return apiClient.get<{ spots: HotSpotDTO[]; location_required?: boolean }>('/hot-spots', { params });
+}
+
 /** Tests only. */
 export function resetLocationSyncForTests(): void {
   lastLocationSync = null;
   locationSyncInFlight = null;
+  locationSavedListeners.clear();
 }
 
 /** Paths that legitimately return 401 without meaning "session dead". */
@@ -346,7 +396,10 @@ export const usersAPI = {
       { params: { q, by } },
     ),
   updateLocation: (lat: number, lng: number) =>
-    apiClient.post('/users/location', { lat, lng }),
+    apiClient.post('/users/location', { lat, lng }).then((res) => {
+      if ((res?.data as { success?: boolean } | undefined)?.success !== false) notifyLocationSaved();
+      return res;
+    }),
   updateProfile: (data: {
     name?: string;
     date_of_birth?: string | null;
@@ -1097,32 +1150,26 @@ export const hotSpotsAPI = {
     category?: string,
     options?: { outdoor?: boolean; q?: string; sort?: 'closest' | 'live'; limit?: number },
   ) =>
-    syncLocationForRead(lat, lng).then(() =>
-    apiClient.get<{ spots: HotSpotDTO[] }>('/hot-spots', {
-      params: {
-        radiusKm,
-        category,
-        outdoor: options?.outdoor,
-        q: options?.q,
-        sort: options?.sort,
-        limit: options?.limit,
-      },
-    })),
+    getHotSpotsWithLocationRetry(lat, lng, {
+      radiusKm,
+      category,
+      outdoor: options?.outdoor,
+      q: options?.q,
+      sort: options?.sort,
+      limit: options?.limit,
+    }),
   searchCruising: (
     lat: number,
     lng: number,
     query?: string,
     radiusKm?: number,
   ) =>
-    syncLocationForRead(lat, lng).then(() =>
-    apiClient.get<{ spots: HotSpotDTO[] }>('/hot-spots', {
-      params: {
-        cruising: true,
-        sort: 'closest',
-        q: query?.trim() || undefined,
-        radiusKm: radiusKm || (query?.trim() ? undefined : 100),
-      },
-    })),
+    getHotSpotsWithLocationRetry(lat, lng, {
+      cruising: true,
+      sort: 'closest',
+      q: query?.trim() || undefined,
+      radiusKm: radiusKm || (query?.trim() ? undefined : 100),
+    }),
   getSpot: (id: string) => apiClient.get<{ spot: HotSpotDTO }>(`/hot-spots/${id}`),
   checkIn: (id: string, anonymous = false) =>
     apiClient.post<{ ok: boolean; spot: HotSpotDTO }>(`/hot-spots/${id}/check-in`, { anonymous }),
