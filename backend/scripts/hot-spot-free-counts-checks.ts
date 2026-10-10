@@ -48,6 +48,8 @@ let spotRows: Record<string, unknown>[] = [];
 let lastSpotSql = '';
 // Stub DB: spot selects return fake rows; check-in lookups return a visible spot; writes no-op.
 (db as unknown as { query: unknown }).query = async (text: string) => {
+  // Viewer's stored location (the hot-spot list origin).
+  if (/SELECT lat, lng\s+FROM profiles/.test(text)) return { rows: [{ lat: 51.5, lng: -0.1 }], rowCount: 1 };
   if (text.includes('AS live_count_exact')) {
     lastSpotSql = text;
     return { rows: spotRows, rowCount: spotRows.length };
@@ -216,8 +218,8 @@ async function main() {
   spotRows = [timedRow];
   premium = false;
   const calls: Array<[string, string, unknown?]> = [
-    ['GET', '/api/hot-spots?lat=51.5&lng=-0.1'],
-    ['GET', '/api/hot-spots?lat=51.5&lng=-0.1&sort=live'],
+    ['GET', '/api/hot-spots'],
+    ['GET', '/api/hot-spots?sort=live'],
     ['GET', '/api/hot-spots/spot-0'],
     ['POST', '/api/hot-spots/spot-0/check-in', { anonymous: true }],
     ['POST', '/api/hot-spots/spot-0/reviews', { rating: 4, body: 'Good' }],
@@ -236,15 +238,15 @@ async function main() {
       assert.strictEqual(res.headers.get('cache-control'), 'private, no-store', `${method} ${path}: Cache-Control`);
       const text = await res.text();
       assert.ok(res.status < 500, `${method} ${path}: status ${res.status}`);
-      if (path === '/api/hot-spots?lat=51.5&lng=-0.1' || path === '/api/hot-spots/spot-0') {
+      if (path === '/api/hot-spots' || path === '/api/hot-spots/spot-0') {
         assert.strictEqual(res.status, 200, `${method} ${path}: ${text}`);
         assert.ok(!text.includes('21:52:37'), `${method} ${path}: Free got the exact activity time`);
       }
     }
     // Unauthenticated responses are not stored either.
     for (const [method, path] of [
-      ['GET', '/api/hot-spots?lat=51.5&lng=-0.1'],
-      ['GET', '/api/events/nearby?lat=51.5&lng=-0.1'],
+      ['GET', '/api/hot-spots'],
+      ['GET', '/api/events/nearby'],
       ['POST', '/api/events/e1/check-in'],
     ]) {
       const anon = await fetch(base + path, { method });
