@@ -1,21 +1,14 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { BrandMark } from '../components/BrandMark';
 import { SiteFooter } from '../components/SiteFooter';
 import { trackEventOnce, getAttributionParams } from '../observability/analytics';
 import {
-  publicErrorClass,
-  publicInputClass,
   publicLinkClass,
   publicNavLinkPrimary,
   publicPrimaryButtonClass,
 } from '../lib/publicStyles';
-import {
-  clearStoredPridePromoCode,
-  PRIDE_INVITE_CAMPAIGN_ID,
-} from '../lib/pridePromo';
-
-const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '') || '/api';
+import { clearStoredPridePromoCode } from '../lib/pridePromo';
 
 /** Owner-supplied Pride parade photograph (full-bleed). */
 const PRIDE_BG = '/images/menrush/21-pride-parade-flags.jpeg';
@@ -28,79 +21,18 @@ const PRIDE_WASH =
   'linear-gradient(180deg, rgba(13,10,6,0.10) 0%, rgba(13,10,6,0.22) 32%, rgba(18,12,6,0.38) 62%, rgba(13,10,6,0.60) 85%, #0D0A06 100%), radial-gradient(ellipse 85% 50% at 50% 8%, rgba(196,131,42,0.18) 0%, transparent 55%)';
 
 /**
- * Printed QR → menrush.com/pride.
- * Face: parade photo under wash + short claim + one gold Claim CTA.
- * Grant rules live in Terms. No printed-code CTA. No Offer conditions. No Brighton.
+ * Printed QR goes to menrush.com/pride.
+ * The offer closed on 31 August 2026: no claim form for new visitors.
+ * People who already hold a Pride code can still enter it at register
+ * (Pride invites have no expiry; register checks the code and the email).
+ * Grant rules live in Terms. No Brighton.
  */
 export const Pride = () => {
-  const [claimOpen, setClaimOpen] = useState(false);
-  const [email, setEmail] = useState('');
-  const [adultConfirmed, setAdultConfirmed] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState('');
-  const [formSuccess, setFormSuccess] = useState('');
-
   useEffect(() => {
     trackEventOnce('landing_viewed', { surface: 'pride', ...getAttributionParams() });
     // Never pre-fill a public promo. Unique codes go to the inbox only.
     clearStoredPridePromoCode();
   }, []);
-
-  const onInviteFormSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setFormError('');
-    setFormSuccess('');
-
-    if (!adultConfirmed) {
-      setFormError('Confirm you are 18 or over.');
-      return;
-    }
-    const trimmed = email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setFormError('Enter a valid email address.');
-      return;
-    }
-
-    setSubmitting(true);
-    clearStoredPridePromoCode();
-
-    try {
-      const res = await fetch(`${API_BASE}/campaigns/${PRIDE_INVITE_CAMPAIGN_ID}/signup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: trimmed, adult_confirmed: true }),
-      });
-      const data = (await res.json().catch(() => ({}))) as {
-        ok?: boolean;
-        message?: string;
-        error?: string;
-        code?: string;
-      };
-
-      if (!res.ok) {
-        setFormError(
-          data.error ||
-            (data.code === 'email_send_failed'
-              ? 'We could not send the invite email just now. Please try again in a few minutes.'
-              : 'Something went wrong. Please try again.'),
-        );
-        return;
-      }
-
-      setFormSuccess(
-        data.message ||
-          'Check your inbox. Your Pride code is on its way. Enter it at register on the same email.',
-      );
-      setEmail('');
-      setAdultConfirmed(false);
-    } catch {
-      setFormError(
-        'We could not reach the server to send your code. Please try again. If the email is late, use Support.',
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
@@ -141,96 +73,22 @@ export const Pride = () => {
             className="mr-coming-soon-heading max-w-[920px] text-balance"
             data-testid="pride-headline-lock"
           >
-            3 months{' '}
-            <span className="mr-coming-soon-accent">Premium</span>
-            <br />
-            from launch
+            Our Pride offer <span className="mr-coming-soon-accent">closed</span> on 31 August
           </h1>
 
           <div className="mt-10 w-full max-w-[460px] rounded-[24px] border border-[rgba(240,224,192,0.35)] bg-[#1E1508]/96 p-6 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.6)]" data-testid="pride-invite-path">
-            {!claimOpen ? (
-              <button
-                type="button"
-                className={publicPrimaryButtonClass}
-                data-testid="pride-claim-cta"
-                onClick={() => {
-                  setFormError('');
-                  setFormSuccess('');
-                  setClaimOpen(true);
-                }}
-              >
-                Claim Pride code
-              </button>
-            ) : (
-              <form
-                className="flex flex-col gap-3 text-left"
-                onSubmit={onInviteFormSubmit}
-                data-testid="pride-invite-form"
-              >
-                <label htmlFor="pride-invite-email" className="sr-only">
-                  Email
-                </label>
-                <input
-                  id="pride-invite-email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(ev) => {
-                    setFormError('');
-                    setEmail(ev.target.value);
-                  }}
-                  placeholder="Email"
-                  className={publicInputClass}
-                  data-testid="pride-invite-email"
-                  disabled={submitting}
-                />
-                <label className="flex items-start gap-3 text-[13px] leading-[1.45] text-[var(--cream-muted)]">
-                  <input
-                    type="checkbox"
-                    checked={adultConfirmed}
-                    onChange={(ev) => {
-                      setFormError('');
-                      setAdultConfirmed(ev.target.checked);
-                    }}
-                    className="mt-1 h-4 w-4 accent-[#C4832A]"
-                    data-testid="pride-invite-adult"
-                    disabled={submitting}
-                  />
-                  <span>I confirm I am 18 or over.</span>
-                </label>
-                <button
-                  type="submit"
-                  className={publicPrimaryButtonClass}
-                  disabled={submitting}
-                  data-testid="pride-invite-submit"
-                >
-                  {submitting ? 'Sending…' : 'Email my Pride code'}
-                </button>
-                {formError ? (
-                  <p className={publicErrorClass} data-testid="pride-invite-error" role="alert">
-                    {formError}
-                  </p>
-                ) : null}
-                {formSuccess ? (
-                  <p
-                    className="text-sm font-semibold leading-[1.55] text-[#E0A14A]"
-                    data-testid="pride-invite-success"
-                    role="status"
-                  >
-                    {formSuccess}
-                  </p>
-                ) : null}
-              </form>
-            )}
-
-            <p
-              className="mt-4 text-pretty text-[14px] leading-[1.55] text-[var(--cream-muted)]"
-              data-testid="pride-invite-bargain"
-            >
-              Submitting the form sends the invite. It is not the grant. Enter the code at register.
-              You cannot use Premium before launch.
+            <p className="text-pretty text-[15px] leading-[1.55] text-[#F0E0C0]" data-testid="pride-closed-note">
+              New Pride codes are no longer available.
             </p>
+            <p
+              className="mt-3 text-pretty text-[15px] leading-[1.55] text-[var(--cream-muted)]"
+              data-testid="pride-redeem-note"
+            >
+              Already have a Pride code from your email? Enter it at register with that same email.
+            </p>
+            <Link to="/register" className={`mt-5 ${publicPrimaryButtonClass}`} data-testid="pride-register-cta">
+              Create your account
+            </Link>
           </div>
 
           <p

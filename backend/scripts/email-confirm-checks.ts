@@ -22,6 +22,7 @@ import {
   isEmailConfirmMailOpen,
   maySendEmailConfirmTransactional,
 } from '../src/services/email-confirm.emails';
+import { buildPrideFlaggedInviteEmail } from '../src/services/prideInvite.service';
 
 type Test = { name: string; run: () => void | Promise<void> };
 const tests: Test[] = [];
@@ -51,6 +52,20 @@ test('welcome has exactly six Brand bullets (Verified and 2FA separate)', () => 
   }
   assert.ok(!/rooms|temp profile|albums|Cruise|dating/i.test(text));
   assert.ok(!text.includes('\u2014') && !text.includes('\u2013'), 'no em/en dashes in welcome text');
+  const html = buildWelcomeEmailHtml();
+  for (const body of [text, html]) {
+    assert.ok(!/30 days Premium|before 1 October|beta/i.test(body), 'no expired Premium gift or beta copy in welcome');
+  }
+});
+
+test('Pride invite email copy is true after the offer closed', () => {
+  const mail = buildPrideFlaggedInviteEmail({ to: 'claim@example.com', code: 'MENRUSH-A3F7-B2C1' });
+  assert.ok(!/\bAND\b/.test(mail.text), 'no all-caps AND');
+  assert.strictEqual((mail.text.match(/at register/gi) || []).length, 1, 'register step said once');
+  for (const body of [mail.text, mail.html]) {
+    assert.ok(!/from the day you join|from launch|before launch|resend from \/pride|beta/i.test(body), 'no old or untrue lines');
+    assert.ok(!body.includes('\u2014') && !body.includes('\u2013'), 'no em/en dashes');
+  }
 });
 
 test('confirm email CTA + 24h expiry copy; no em dashes', () => {
