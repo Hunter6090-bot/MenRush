@@ -19,6 +19,7 @@ export function shouldShowMobileBack(pathname: string): boolean {
 export function mobileBackFallback(pathname: string): string {
   if (pathname === '/albums' || pathname === '/premium') return '/profile';
   if (pathname === '/settings' || pathname === '/notifications') return '/profile';
+  if (pathname === '/profile/edit') return '/profile';
   if (pathname.startsWith('/profile/setup')) return APP_HOME;
   if (pathname.startsWith('/profile/')) return APP_HOME;
   if (pathname === '/events' || pathname === '/hot-spots' || pathname === '/stream') {

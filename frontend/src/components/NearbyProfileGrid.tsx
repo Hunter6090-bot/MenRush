@@ -378,7 +378,7 @@ const NearbyGridCard = memo(function NearbyGridCard({
               if (matchDisabled) return;
               void onMatch(user);
             }}
-            className={`w-full rounded-lg py-1.5 text-[15px] font-extrabold tracking-wide transition-colors flex items-center justify-center gap-1.5 md:rounded-xl md:py-2 md:text-[15px] ${
+            className={`flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-lg text-[15px] font-extrabold tracking-wide transition-colors md:rounded-xl ${
               matchState === 'none' || matching ? 'uppercase' : ''
             } ${matchCtaCompactToneClasses(matchState)}`}
           >
@@ -412,22 +412,22 @@ const GridCardFace = memo(function GridCardFace({
     <DiscoveryPhotoFrame
       online={online}
       verified={!!user.is_verified}
-      className="relative aspect-square w-full bg-[var(--bg-elevated)]"
+      className="relative aspect-[4/5] w-full bg-[var(--bg-elevated)] md:aspect-square"
     >
       <GridPhoto name={user.name} photoUrl={user.photo_url} age={user.age} />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent pl-1.5 pr-9 pb-1.5 pt-8 md:pl-2.5 md:pr-10 md:pb-2 md:pt-10">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.8)] to-[rgba(13,10,6,0.62)] px-1.5 pb-1.5 pt-3 md:px-2.5 md:pb-2 md:pt-4" data-testid="nearby-grid-fade">
         <div className="flex items-center gap-0.5 md:gap-1">
-          <span className="truncate text-[15px] font-bold leading-tight text-[#FFF6E6] md:text-[15px] lg:text-[15px]">
+          <span className="min-w-0 break-words text-[15px] font-bold leading-tight text-[#FFF6E6] [overflow-wrap:anywhere] [text-shadow:0_1px_3px_rgba(0,0,0,0.9)] line-clamp-2" data-testid={`nearby-grid-name-${user.id}`}>
             {user.name}{typeof user.age === 'number' ? ` ${user.age}` : ''}
           </span>
 
         </div>
-        <p className="mt-0.5 truncate text-[15px] font-semibold text-[var(--cream)] md:text-[15px]">
+        <p className="mt-0.5 text-[15px] font-semibold leading-tight text-[#FFF6E6] [overflow-wrap:anywhere] [text-shadow:0_1px_3px_rgba(0,0,0,0.9)] line-clamp-2" data-testid={`nearby-grid-meta-${user.id}`}>
           <span data-testid={`nearby-grid-distance-${user.id}`}>{distLabel}</span>
           {metaRest ? ` · ${metaRest}` : ''}
         </p>
         {user.looking_for ? (
-          <p className="mt-0.5 truncate text-[15px] font-bold text-[#E0A14A] md:text-[15px]">{user.looking_for}</p>
+          <p className="mt-0.5 text-[15px] font-bold leading-tight text-[#E0A14A] [overflow-wrap:anywhere] line-clamp-2" data-testid={`nearby-grid-tag-${user.id}`}>{user.looking_for}</p>
         ) : null}
       </div>
     </DiscoveryPhotoFrame>

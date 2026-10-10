@@ -367,6 +367,10 @@ test('Hot Spot sheet: select, check in, check in anonymously, check out, close â
   await expect(sheet).toBeVisible();
   await expect(sheet).toContainText(TEST_HOT_SPOT.name);
   await expect(page).toHaveURL(/\/discover$/);
+  // Same sheet as the Out card: reviews, anonymous check-in, directions and View on map.
+  await expect(sheet.getByTestId('hotspot-reviews-panel')).toBeVisible();
+  await expect(sheet.getByTestId('hotspot-sheet-directions')).toBeVisible();
+  await expect(sheet.getByTestId('hotspot-sheet-view-on-map')).toBeVisible();
 
   // 2. Normal check-in.
   await page.getByTestId('hotspot-sheet-checkin').click();

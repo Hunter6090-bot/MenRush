@@ -66,7 +66,7 @@ export function MoreFiltersDrawer({ value, onChange }: MoreFiltersDrawerProps) {
         data-testid="more-filters-open"
         aria-haspopup="dialog"
         aria-expanded={open}
-        className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-bold transition-colors ${
+        className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[15px] font-bold transition-colors ${
           extraCount > 0
             ? 'border-[var(--copper)] bg-[var(--copper)]/15 text-[var(--copper)]'
             : 'border-[var(--border-default)] bg-[var(--bg-elevated)]/85 text-[var(--cream-soft)] hover:border-[var(--copper)]/40'
@@ -74,7 +74,7 @@ export function MoreFiltersDrawer({ value, onChange }: MoreFiltersDrawerProps) {
       >
         More filters
         {extraCount > 0 ? (
-          <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--copper)] px-1 text-[10px] font-black text-[var(--bg-primary)]">
+          <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--copper)] px-1 text-[15px] font-black text-[var(--bg-primary)]">
             {extraCount}
           </span>
         ) : null}
@@ -101,7 +101,7 @@ export function MoreFiltersDrawer({ value, onChange }: MoreFiltersDrawerProps) {
                     <h2 id={titleId} className="text-lg font-bold text-[var(--cream)]">
                       More filters
                     </h2>
-                    <p className="mt-0.5 text-xs text-[var(--cream-muted)]">
+                    <p className="mt-0.5 text-[15px] text-[var(--cream-muted)]">
                       Vibe, scene and connection — works with Looking for, mood and status.
                     </p>
                   </div>
@@ -110,7 +110,7 @@ export function MoreFiltersDrawer({ value, onChange }: MoreFiltersDrawerProps) {
                       <button
                         type="button"
                         onClick={clearMore}
-                        className="text-sm font-semibold text-[var(--cream-muted)] hover:text-[var(--copper)]"
+                        className="text-[15px] font-semibold text-[var(--cream-muted)] hover:text-[var(--copper)]"
                         data-testid="more-filters-clear"
                       >
                         Clear
@@ -119,7 +119,7 @@ export function MoreFiltersDrawer({ value, onChange }: MoreFiltersDrawerProps) {
                     <button
                       type="button"
                       onClick={() => setOpen(false)}
-                      className="text-sm font-semibold text-[var(--copper)] hover:text-[var(--cream)]"
+                      className="text-[15px] font-semibold text-[var(--copper)] hover:text-[var(--cream)]"
                       data-testid="more-filters-close"
                     >
                       Done
@@ -130,7 +130,7 @@ export function MoreFiltersDrawer({ value, onChange }: MoreFiltersDrawerProps) {
                 <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
                   {categories.map((category) => (
                     <div key={category.id}>
-                      <p className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--cream-muted)]">
+                      <p className="mb-2 text-[15px] font-extrabold uppercase tracking-[0.12em] text-[var(--cream-muted)]">
                         {category.label}
                       </p>
                       <div className="flex flex-wrap gap-1.5" role="group" aria-label={category.label}>

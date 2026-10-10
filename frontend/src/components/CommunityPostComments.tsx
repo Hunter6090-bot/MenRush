@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  CONFIRM_BODY,
+  CONFIRM_BOX,
+  CONFIRM_CANCEL_BTN,
+  CONFIRM_DANGER_BTN,
+  CONFIRM_TITLE,
+} from '../lib/confirmStyles';
+import {
   communityAPI,
   type CommunityCommentDTO,
 } from '../api/client';
@@ -38,7 +45,7 @@ type CommunityPostCommentsProps = {
 };
 
 /**
- * Comments on a Community post — text only, free for all.
+ * Comments on a Community post: text only, free for all.
  */
 export function CommunityPostComments({
   postId,
@@ -168,7 +175,7 @@ export function CommunityPostComments({
         data-testid="community-comments-toggle"
         onClick={handleToggle}
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[12px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-[var(--bg-card)] hover:text-[#C4832A]"
+        className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[15px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-[var(--bg-card)] hover:text-[var(--nn-accent-text)]"
       >
         <CommentBubbleIcon className="h-3.5 w-3.5" />
         {label}
@@ -177,9 +184,9 @@ export function CommunityPostComments({
       {open ? (
         <div className="mt-2 space-y-2.5 border-t border-[var(--border-default)] pt-2.5">
           {loading && !loaded ? (
-            <p className="text-[12px] text-[var(--cream-muted)]">Loading comments…</p>
+            <p className="text-[15px] text-[var(--cream-muted)]">Loading comments…</p>
           ) : loaded && comments.length === 0 ? (
-            <p className="text-[12px] text-[var(--cream-muted)]" data-testid="community-comments-empty">
+            <p className="text-[15px] text-[var(--cream-muted)]" data-testid="community-comments-empty">
               Be the first to comment.
             </p>
           ) : (
@@ -198,11 +205,11 @@ export function CommunityPostComments({
                       <div className="flex flex-wrap items-baseline gap-x-2">
                         <Link
                           to={`/profile/${comment.user_id}`}
-                          className="truncate text-[13px] font-extrabold text-[var(--cream)] hover:text-[#C4832A]"
+                          className="truncate text-[15px] font-extrabold text-[var(--cream)] hover:text-[var(--nn-accent-text)]"
                         >
                           {comment.author_name}
                         </Link>
-                        <span className="text-[11px] text-[var(--cream-muted)]">
+                        <span className="text-[15px] text-[var(--cream-muted)]">
                           {formatRelativeTime(comment.created_at)}
                         </span>
                       </div>
@@ -215,7 +222,7 @@ export function CommunityPostComments({
                                 type="button"
                                 data-testid={`community-comment-edit-${comment.id}`}
                                 onClick={() => startEditComment(comment)}
-                                className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded px-2.5 py-1 text-[11px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-[rgba(196,131,42,0.15)] hover:text-[#E0A14A] active:bg-[rgba(196,131,42,0.25)] touch-manipulation"
+                                className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded px-2.5 py-1 text-[15px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-[rgba(196,131,42,0.15)] hover:text-[#E0A14A] active:bg-[rgba(196,131,42,0.25)] touch-manipulation"
                               >
                                 Edit
                               </button>
@@ -223,7 +230,7 @@ export function CommunityPostComments({
                                 type="button"
                                 data-testid={`community-comment-delete-${comment.id}`}
                                 onClick={() => setDeleteConfirmCommentId(comment.id)}
-                                className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded px-2.5 py-1 text-[11px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-red-500/10 hover:text-red-400 active:bg-red-500/20 touch-manipulation"
+                                className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded px-2.5 py-1 text-[15px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-[var(--bg-card)] hover:text-[var(--nn-danger-text)] touch-manipulation"
                               >
                                 Delete
                               </button>
@@ -236,16 +243,16 @@ export function CommunityPostComments({
                     {deleteConfirmCommentId === comment.id ? (
                       <div
                         data-testid={`community-comment-delete-confirm-${comment.id}`}
-                        className="mt-1.5 rounded-lg border border-red-500/40 bg-red-950/30 p-2 text-[11px] text-[var(--cream)]"
+                        className={`mt-2 ${CONFIRM_BOX}`}
                       >
-                        <p className="font-semibold text-red-300">Delete this comment?</p>
+                        <p className={CONFIRM_TITLE}>Delete this comment?</p>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <button
                             type="button"
                             data-testid={`community-comment-delete-btn-${comment.id}`}
                             disabled={deletingCommentId === comment.id}
                             onClick={() => void handleDeleteComment(comment.id)}
-                            className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full bg-red-600 px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-white transition-colors hover:bg-red-500 active:bg-red-700 disabled:opacity-40 touch-manipulation"
+                            className={CONFIRM_DANGER_BTN}
                           >
                             {deletingCommentId === comment.id ? 'Deleting…' : 'Delete'}
                           </button>
@@ -254,7 +261,7 @@ export function CommunityPostComments({
                             data-testid={`community-comment-delete-cancel-${comment.id}`}
                             disabled={deletingCommentId === comment.id}
                             onClick={() => setDeleteConfirmCommentId(null)}
-                            className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full border border-[var(--border-default)] px-4 py-1.5 text-[11px] font-bold text-[var(--cream-muted)] hover:text-[var(--cream)] active:bg-white/5 touch-manipulation"
+                            className={CONFIRM_CANCEL_BTN}
                           >
                             Cancel
                           </button>
@@ -275,14 +282,14 @@ export function CommunityPostComments({
                           rows={2}
                           maxChars={MAX_CHARS}
                           placeholder="Edit your comment…"
-                          className="w-full resize-none rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-2.5 py-1.5 text-[13px] leading-relaxed text-[var(--cream)] placeholder:text-[var(--cream-muted)] focus:border-[#C4832A] focus:outline-none"
+                          className="w-full resize-none rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-2.5 py-1.5 text-[16px] leading-relaxed text-[var(--cream)] placeholder:text-[var(--cream-muted)] focus:border-[#C4832A] focus:outline-none"
                           autoFocus
                         />
                         <div className="flex items-center justify-between gap-2">
                           <span
-                            className={`text-[10px] font-bold tabular-nums ${
+                            className={`text-[15px] font-bold tabular-nums ${
                               MAX_CHARS - editDraft.length < 20
-                                ? 'text-[#C4832A]'
+                                ? 'text-[var(--nn-accent-text)]'
                                 : 'text-[var(--cream-muted)]'
                             }`}
                           >
@@ -294,7 +301,7 @@ export function CommunityPostComments({
                               data-testid={`community-comment-edit-cancel-${comment.id}`}
                               disabled={savingEdit}
                               onClick={cancelEditComment}
-                              className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full border border-[var(--border-default)] px-3.5 py-1 text-[11px] font-bold text-[var(--cream-muted)] hover:text-[var(--cream)] active:bg-white/5 touch-manipulation"
+                              className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full border border-[var(--border-default)] px-3.5 py-1 text-[15px] font-bold text-[var(--cream-muted)] hover:text-[var(--cream)] active:bg-white/5 touch-manipulation"
                             >
                               Cancel
                             </button>
@@ -303,20 +310,20 @@ export function CommunityPostComments({
                               data-testid={`community-comment-edit-save-${comment.id}`}
                               disabled={savingEdit || editDraft.trim().length === 0}
                               onClick={() => void handleSaveEditComment(comment.id)}
-                              className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full bg-[#C4832A] px-4 py-1 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] active:bg-[#C4832A] disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
+                              className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full bg-[#C4832A] px-4 py-1 text-[15px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] active:bg-[#C4832A] disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
                             >
                               {savingEdit ? 'Saving…' : 'Save'}
                             </button>
                           </div>
                         </div>
                         {editError ? (
-                          <p className="text-[10px] text-[#E0A14A]" role="alert">
+                          <p className="text-[15px] text-[var(--nn-danger-text)]" role="alert">
                             {editError}
                           </p>
                         ) : null}
                       </div>
                     ) : (
-                      <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-[var(--cream-soft)]">
+                      <p className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-[var(--cream-soft)]">
                         {comment.body}
                       </p>
                     )}
@@ -345,8 +352,8 @@ export function CommunityPostComments({
             />
             <div className="mt-1.5 flex items-center justify-between gap-2">
               <span
-                className={`text-[11px] font-bold tabular-nums ${
-                  remaining < 20 ? 'text-[#C4832A]' : 'text-[var(--cream-muted)]'
+                className={`text-[15px] font-bold tabular-nums ${
+                  remaining < 20 ? 'text-[var(--nn-accent-text)]' : 'text-[var(--cream-muted)]'
                 }`}
               >
                 {remaining}
@@ -356,14 +363,14 @@ export function CommunityPostComments({
                 data-testid="community-comment-submit"
                 disabled={posting || draft.trim().length === 0}
                 onClick={() => void handleReply()}
-                className="rounded-full bg-[#C4832A] px-3.5 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-full bg-[#C4832A] px-3.5 py-1.5 text-[15px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {posting ? 'Sending…' : 'Reply'}
               </button>
             </div>
           </div>
           {error ? (
-            <p className="text-[12px] text-[#E0A14A]" role="alert">
+            <p className="text-[15px] text-[var(--nn-danger-text)]" role="alert">
               {error}
             </p>
           ) : null}

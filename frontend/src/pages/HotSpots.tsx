@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { SpotTypeIcon, spotTypeKey } from '../components/icons';
 import { createRoot, type Root } from 'react-dom/client';
 import { Link } from 'react-router-dom';
 import mapboxgl from 'mapbox-gl';
@@ -123,6 +124,8 @@ export const HotSpots = () => {
         id: spot.id,
         name: spot.name,
         category_icon: spot.category_icon,
+        category_slug: spot.category_slug,
+        category_name: spot.category_name,
         live_count_exact: spot.live_count_exact,
         // Server display count (rounded for Free). The pin shows only this.
         live_count: spot.live_count,
@@ -136,7 +139,7 @@ export const HotSpots = () => {
           existing.spot.live_count !== spot.live_count ||
           existing.spot.has_active_checkins !== spot.has_active_checkins ||
           existing.spot.name !== spot.name ||
-          existing.spot.category_icon !== spot.category_icon
+          existing.spot.category_slug !== spot.category_slug
         ) {
           existing.root.render(<HotSpotPin spot={pinData} size={52} />);
         }
@@ -232,7 +235,10 @@ export const HotSpots = () => {
               onClick={() => setCategory(cat.slug)}
               className={category === cat.slug ? 'mr-pill mr-pill-active' : 'mr-pill mr-pill-inactive'}
             >
-              {cat.icon} {cat.name}
+              <span className="inline-flex items-center gap-1.5">
+                <SpotTypeIcon type={spotTypeKey(cat.slug, cat.name)} size={16} />
+                {cat.name}
+              </span>
             </button>
           ))}
         </div>
@@ -303,7 +309,10 @@ export const HotSpots = () => {
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <div>
                     <p className="text-xs font-extrabold tracking-wide text-[#E0A14A]">
-                      {spot.category_icon} {spot.category_name}
+                      <span className="inline-flex items-center gap-1">
+                        <SpotTypeIcon type={spotTypeKey(spot.category_slug, spot.category_name)} size={14} />
+                        {spot.category_name}
+                      </span>
                     </p>
                     <h2 className="text-base font-bold text-[var(--cream)]">{spot.name}</h2>
                     <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-[var(--cream-muted)]">

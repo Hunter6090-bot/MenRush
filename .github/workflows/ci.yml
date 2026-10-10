@@ -73,6 +73,8 @@ jobs:
         run: npm run test:edge-proxy-secret
       - name: Auth and signup rate limits (loose per IP, per-account caps)
         run: npm run test:auth-rate-limits
+      - name: Auth token hardening (session-only verification)
+        run: npm run test:auth-token-hardening
       - name: Veriff checks
         run: npm run test:veriff
       - name: Hot-spot counts stay rounded for Free (no exact number)
@@ -87,6 +89,8 @@ jobs:
         run: npm run test:no-query-coordinates
       - name: Welcome emails use the official mark (no typed wordmark)
         run: npm run test:welcome-email-brand
+      - name: Owner brief for reports has no raw ids
+        run: npm run test:report-owner-brief
       - name: Social drafts say no waitlist, no dating app, no em dashes
         run: npm run test:social-copy-guard
 
@@ -192,6 +196,8 @@ jobs:
         run: npm run test:hot-spot-ghost-live-count
       - name: Pride code holders can register (real PG)
         run: npm run test:pride-invite-register-integration
+      - name: Auth token hardening on protected routes (real PG)
+        run: npm run test:auth-token-hardening-integration
       - name: Referrals grant 1 month Premium every 3 (real PG)
         run: npm run test:referral-grant-integration
       - name: Referral checks (real PG)
@@ -216,12 +222,16 @@ jobs:
         run: npm run --if-present test:prompt-prefs-integration
       - name: Community leaves out Ghost and hidden members
         run: npm run --if-present test:community-ghost-hidden
+      - name: Members delete their own map and Community posts (real PG)
+        run: npm run test:delete-own-posts-integration
       - name: Travel (Look around and Plan a trip)
         run: npm run --if-present test:travel-integration
       - name: Account deletion erases Travel trips, all-or-nothing (real PG)
         run: npm run test:travel-account-deletion-integration
       - name: Reports survive when the reported member deletes their account (real PG)
         run: npm run test:reports-survive-deletion-integration
+      - name: Report evidence snapshot, reporter anonymise, gated purge (real PG)
+        run: npm run test:report-evidence-retention-integration
       - name: Travel trips deleted when ended, and 30 days after they end (real PG)
         run: npm run test:travel-retention-integration
       # Keep last: its fake 2027 clock clears every live location and strips

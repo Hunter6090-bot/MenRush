@@ -205,7 +205,7 @@ test.describe('profile stats field visibility', () => {
     const page = await ctx.newPage();
     await mockApis(page);
 
-    await page.goto('/profile');
+    await page.goto('/profile/edit');
     await expect(page.getByTestId('profile-stats-section')).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId('profile-show-age')).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByTestId('profile-show-height')).toHaveAttribute('aria-checked', 'true');

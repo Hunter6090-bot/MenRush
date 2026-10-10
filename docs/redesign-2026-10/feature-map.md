@@ -32,7 +32,7 @@ Desktop sidebar mirrors the same five + Settings / Notifications where needed. M
 | **Map with pins** (#314 circular + green online) | `/discover` map | **Map** (home) | Cream rim; copper ring when selected |
 | **Cluster (+N)** | map markers | **Map** | Keep existing overlap/cluster logic |
 | **People / Cruise layer toggles** | map chrome | **Map** chrome below top pills (icon+short label) | Stacked under Radius/Filters so all stay tappable at 390px |
-| **Discretion / pin fuzz slider** | map chrome | **Menu** (top-right three-line button), slider at the top (`menu-discretion`) | Moved off the map 8 Oct (Pete). Not on the map or the You page any more. The Menu reads the saved value first and only saves when the slider moves. |
+| **Discretion / pin fuzz slider** | map chrome | **Menu** (top-right three-line button), slider at the top (`menu-discretion`), and the **You** tab Discretion row (`you-row-discretion`), which shows the saved distance and opens the same slider in a sheet (`you-discretion-sheet`) | Moved off the map 8 Oct (Pete). Back on You as a row in the 10 Oct rows rebuild (#385). Both read the saved value first and only save when the slider moves. The You sheet closes on Escape, keeps keyboard focus inside and returns it to the row. |
 | **Map expand / hide / geolocate** | map BR controls | **Map** bottom-right control cluster | Design: bottom-right control |
 | **Cruising search (spots)** | CruisingSearchBar/Sheet on Discover + HotSpots | **Out** (cruising search bar on the Out tab) | Moved off the map 8 Oct (Pete). Not on the map any more; `/hot-spots` keeps its own search |
 | **Profile search (name or town/city)** (#310) | Layout header / ProfileSearchModal | **Menu** (top-right three-line button) **Search** row + **Chat** list Search pill (+ header on desktop) | Same modal. Search pill taken off the map 8 Oct so the map is clean |
@@ -153,4 +153,19 @@ React components use `currentColor`; `filled` for active copper tab state, outli
 | Rooms tab | `IconRooms` outline/filled |
 | Out tab | `IconOut` outline/filled (replaces cruise ship on tab only; Cruise layer keeps `IconHotSpots`) |
 | Menu Discretion slider | `IconDiscretion` outline |
-| Map\|List home toggle | unchanged |
+| Map\|List home toggle | `IconGrid` (List, shown on the map) / `IconMapPin` (Map, shown on the list) |
+
+## Tab icons match the board (10 Oct 2026)
+
+Pete: the bottom tabs use exactly the glyphs on the Claude Design board (MenRush Phone App, 9 states).
+
+| Tab | Icon (`data-icon`) |
+|-----|--------------------|
+| First tab on the map | List, `grid` |
+| First tab on the list | Map, `map-pin` (Pete swap lock) |
+| Chat | `chat-bubble` (was envelope + wax seal) |
+| Rooms | `video-camera` (was camera with two people) |
+| Out | `half-moon` (was pin + star, too close to Map) |
+| You | `person` outline, filled when active (was solid bust) |
+
+Pinned by `frontend/src/components/Layout.tabIcons.test.tsx`.

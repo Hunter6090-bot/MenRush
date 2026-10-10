@@ -129,6 +129,13 @@ function LayoutInner({ children }: LayoutProps) {
     setAccountMenuOpen(false);
   }, [location.pathname]);
 
+  // You tab Sign out row asks for the same confirm as the Menu and sidebar.
+  useEffect(() => {
+    const ask = () => setSignOutConfirmOpen(true);
+    window.addEventListener('menrush:request-sign-out', ask);
+    return () => window.removeEventListener('menrush:request-sign-out', ask);
+  }, []);
+
   useEffect(() => {
     const openSearch = () => setSearchOpen(true);
     window.addEventListener('menrush:open-search', openSearch);
@@ -220,9 +227,9 @@ function LayoutInner({ children }: LayoutProps) {
                 }`}
               >
                 <span className="relative inline-flex shrink-0">
-                  <item.Icon size={22} filled={active} />
+                  <item.Icon size={22} filled={active && item.fillWhenActive !== false} />
                   {badge > 0 ? (
-                    <span className="absolute -right-2 -top-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-nn-copper px-1 text-[11px] font-bold text-nn-on-copper">
+                    <span className="absolute -right-2.5 -top-2.5 flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-nn-copper px-1 text-[15px] font-bold leading-none text-nn-on-copper">
                       {badge > 99 ? '99+' : badge}
                     </span>
                   ) : null}
@@ -311,7 +318,8 @@ function LayoutInner({ children }: LayoutProps) {
                   count={notificationUnread}
                   visible={notificationUnread > 0}
                   data-testid="badge-notifications"
-                  className="-top-0.5 -right-0.5 min-w-[16px] h-4 text-[11px] bg-[var(--copper)] border-[var(--bg-primary)]"
+                  position="top-0 right-0"
+                  className="bg-[var(--copper)] border-[var(--bg-primary)]"
                 />
               </Link>
               <AccountMenuButton open={accountMenuOpen} onClick={() => setAccountMenuOpen(true)} />
@@ -330,7 +338,7 @@ function LayoutInner({ children }: LayoutProps) {
           </button>
           <div className="flex-1" />
           <ThemeToggle variant="header" className="text-nn-muted hover:text-nn-copper" />
-          <div className="flex items-center gap-2 text-[13px] text-nn-muted">
+          <div className="flex items-center gap-2 text-[15px] text-nn-muted" data-testid="header-men-nearby">
             <span className="inline-flex h-2 w-2 rounded-full bg-nn-online" />
             Men nearby
           </div>
@@ -457,7 +465,7 @@ function LayoutInner({ children }: LayoutProps) {
                   }`}
                 >
                   <span className="relative inline-flex">
-                    <item.Icon size={compact ? 20 : 22} filled={active} className={active ? 'scale-110' : ''} />
+                    <item.Icon size={compact ? 20 : 22} filled={active && item.fillWhenActive !== false} className={active ? 'scale-110' : ''} />
                     <NotificationDot
                       count={badge}
                       visible={badge > 0}
@@ -466,7 +474,8 @@ function LayoutInner({ children }: LayoutProps) {
                           ? 'badge-conversations'
                           : `badge-mobile-${item.to.replace(/\//g, '')}`
                       }
-                      className="-top-2 -right-2.5 min-w-[16px] h-[16px] text-[11px] bg-[var(--copper)] border-[var(--bg-elevated)]"
+                      position="-top-2.5 -right-3"
+                      className="bg-[var(--copper)] border-[var(--bg-elevated)]"
                     />
                   </span>
                   <span
@@ -626,7 +635,7 @@ function MobileMoreMenu({
                   : 'text-[var(--cream)] active:bg-[var(--bg-card)]'
               }`}
             >
-              <item.Icon size={20} filled={active} />
+              <item.Icon size={20} filled={active && item.fillWhenActive !== false} />
               {item.label}
             </Link>
           );

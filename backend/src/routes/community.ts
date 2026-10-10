@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { rateLimitKey } from '../lib/clientIp';
 import { z } from 'zod';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { privateNoStore } from '../middleware/noStore';
 import { communityService } from '../services/community.service';
 import { viewerStoredLocation } from '../lib/viewerOrigin';
 import {
@@ -14,7 +15,8 @@ import {
 } from '../types/validation';
 
 const router = Router();
-router.use(authMiddleware, verifiedMiddleware);
+// privateNoStore first so 401s carry Cache-Control too (same as events, #348).
+router.use(privateNoStore, authMiddleware, verifiedMiddleware);
 
 const createLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -112,8 +114,36 @@ router.put('/posts/:id', createLimiter, async (req: AuthRequest, res: Response) 
 });
 
 /**
+ * GET /api/community/posts/mine/count
+ * How many Community posts this member has (any age), for the delete-all confirm.
+ */
+router.get('/posts/mine/count', async (req: AuthRequest, res: Response) => {
+  try {
+    res.json({ count: await communityService.countOwnPosts(req.userId!) });
+  } catch (err: unknown) {
+    console.error('[community] count own posts', err);
+    res.status(500).json({ error: 'Could not count your posts' });
+  }
+});
+
+/**
+ * DELETE /api/community/posts/mine
+ * Delete every Community post this member has made (any age), with their
+ * saved coordinates and comments. Declared before /posts/:id.
+ */
+router.delete('/posts/mine', async (req: AuthRequest, res: Response) => {
+  try {
+    const { deleted } = await communityService.deleteAllOwnPosts(req.userId!);
+    res.json({ ok: true, deleted });
+  } catch (err: unknown) {
+    console.error('[community] delete all own posts', err);
+    res.status(500).json({ error: 'Could not delete your posts' });
+  }
+});
+
+/**
  * DELETE /api/community/posts/:id
- * Delete author's own Community post.
+ * Delete author's own Community post, at any age (not only within 24h).
  */
 router.delete('/posts/:id', async (req: AuthRequest, res: Response) => {
   try {

@@ -20,6 +20,7 @@ import {
 import { clearDeviceTrustToken } from '../lib/deviceTrust';
 import { isGenericAvatarUrl } from '../lib/genericAvatar';
 import { IconBluesky, IconInstagram } from '../components/icons';
+import { DeleteMyPostsRow } from '../components/DeleteMyPostsRow';
 import {
   profileCompletionScore,
   type ProfileEssentialItem,
@@ -112,11 +113,23 @@ export const Settings = () => {
       details?: string | null;
       status: string;
       created_at: string;
-      reporter_name: string;
-      reporter_email: string;
+      reporter_name?: string | null;
+      reporter_email?: string | null;
+      reporter_account_deleted_at?: string | null;
       reported_name?: string | null;
       reported_email?: string | null;
       reported_account_deleted_at?: string | null;
+      evidence_unavailable?: boolean;
+      evidence?: Array<{
+        id?: string;
+        kind: string;
+        body?: string | null;
+        media_type?: string | null;
+        media_ref?: string | null;
+        media_available?: boolean;
+        from_reported?: boolean;
+        sent_at?: string | null;
+      }>;
     }>
   >([]);
   const [reportsLoading, setReportsLoading] = useState(false);
@@ -444,6 +457,25 @@ export const Settings = () => {
     }
   };
 
+  const openEvidenceMedia = async (reportId: string, evidenceId: string) => {
+    // Open first, on the tap. iPhone Safari blocks window.open after an await.
+    const popup = window.open('about:blank', '_blank');
+    if (popup) popup.opener = null;
+    try {
+      const res = await usersAPI.getReportEvidenceMedia(reportId, evidenceId);
+      const url = URL.createObjectURL(res.data as Blob);
+      if (!popup || popup.closed) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      const revoke = () => URL.revokeObjectURL(url);
+      window.setTimeout(revoke, 60_000);
+      popup.location.href = url;
+    } catch {
+      popup?.close();
+    }
+  };
+
   return (
     <Layout>
       <div className="mx-auto min-w-0 max-w-[620px] overflow-x-clip px-4 py-6 sm:px-6" data-testid="settings-shell">
@@ -499,7 +531,7 @@ export const Settings = () => {
                         {completion.missingItems.map((item) => (
                           <Link
                             key={item.id}
-                            to={`/profile#${item.sectionId}`}
+                            to={`/profile/edit#${item.sectionId}`}
                             data-testid={`settings-missing-${item.id}`}
                             className="rounded-full border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.1)] px-2.5 py-1 text-[11px] font-semibold text-[#E0A14A] transition-colors hover:border-[var(--copper)] hover:bg-[rgba(196,131,42,0.18)]"
                           >
@@ -512,8 +544,8 @@ export const Settings = () => {
                   <Link
                     to={
                       completion && completion.missingItems.length > 0
-                        ? `/profile#${completion.missingItems[0].sectionId}`
-                        : '/profile'
+                        ? `/profile/edit#${completion.missingItems[0].sectionId}`
+                        : '/profile/edit'
                     }
                     data-testid="settings-profile-edit"
                     className="shrink-0 rounded-full border border-[rgba(196,131,42,0.4)] px-3.5 py-1.5 text-[12px] font-extrabold uppercase tracking-wide text-[#E0A14A] transition-colors hover:border-[var(--copper)] hover:bg-[rgba(196,131,42,0.1)]"
@@ -537,7 +569,7 @@ export const Settings = () => {
 
               <div className={groupClass}>
                 <Link
-                  to="/profile"
+                  to="/profile/edit"
                   className={rowActionClass}
                 >
                   <div>
@@ -908,7 +940,7 @@ export const Settings = () => {
               </div>
 
               <Link
-                to="/profile"
+                to="/profile/edit#privacy"
                 className={rowActionClass}
               >
                 <div>
@@ -922,6 +954,8 @@ export const Settings = () => {
                   <ChevronRight />
                 </div>
               </Link>
+
+              <DeleteMyPostsRow />
             </div>
           </div>
 
@@ -1067,10 +1101,47 @@ export const Settings = () => {
                             </p>
                           </div>
                           <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
-                            {report.reporter_name} → {report.reported_name ?? (report.reported_account_deleted_at ? 'Deleted account' : 'unknown')}
+                            {report.reporter_name ??
+                              (report.reporter_account_deleted_at ? 'Deleted account' : 'unknown')}{' '}
+                            →{' '}
+                            {report.reported_name ??
+                              (report.reported_account_deleted_at ? 'Deleted account' : 'unknown')}
                           </p>
                           {report.details ? (
                             <p className="mt-1 text-[12px] text-[var(--cream)]">{report.details}</p>
+                          ) : null}
+                          {report.evidence_unavailable ? (
+                            <p className="mt-2 text-[15px] text-[var(--cream-muted)]">Evidence unavailable</p>
+                          ) : null}
+                          {report.evidence && report.evidence.length > 0 ? (
+                            <ul className="mt-2 space-y-1">
+                              {report.evidence.map((item, index) => (
+                                <li
+                                  key={item.id ?? `${report.id}-ev-${index}`}
+                                  className="text-[15px] text-[var(--cream-muted)]"
+                                >
+                                  {item.from_reported !== false ? 'From reported · ' : ''}
+                                  {item.sent_at
+                                    ? `${new Date(item.sent_at).toLocaleString()} · `
+                                    : ''}
+                                  {item.body ||
+                                    (item.media_type
+                                      ? item.media_available
+                                        ? `${item.media_type} (saved for review)`
+                                        : item.media_type
+                                      : 'Media')}
+                                  {item.media_available && item.id ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => void openEvidenceMedia(report.id, item.id as string)}
+                                      className="ml-2 inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-[15px] font-bold text-[var(--nn-accent-text)]"
+                                    >
+                                      Open
+                                    </button>
+                                  ) : null}
+                                </li>
+                              ))}
+                            </ul>
                           ) : null}
                           <div className="mt-2 flex flex-wrap gap-2">
                             {(['reviewing', 'actioned', 'dismissed'] as const).map((status) => (

@@ -1,5 +1,5 @@
 /** Four-square grid: List home-view toggle. */
-export function IconGrid({ size = 24, className = '' }: { size?: number; className?: string }) {
+export function IconGrid({ size = 24, className = '' }: { size?: number; className?: string; filled?: boolean }) {
   return (
     <svg
       width={size}
@@ -12,6 +12,7 @@ export function IconGrid({ size = 24, className = '' }: { size?: number; classNa
       strokeLinejoin="round"
       className={className}
       aria-hidden
+      data-icon="grid"
     >
       <rect x="3" y="3" width="7" height="7" rx="1.2" />
       <rect x="14" y="3" width="7" height="7" rx="1.2" />

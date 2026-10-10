@@ -104,10 +104,10 @@ test.describe('desktop design migration @ 1440px', () => {
       await page.goto(`/messages/${BOB.id}`);
     }
 
-    await expect(page.getByPlaceholder('Say something direct.')).toBeVisible();
+    await expect(page.getByPlaceholder('Message', { exact: true })).toBeVisible();
 
     const probe = `layout probe ${Date.now()}`;
-    await page.getByPlaceholder('Say something direct.').fill(probe);
+    await page.getByPlaceholder('Message', { exact: true }).fill(probe);
     await page.getByRole('button', { name: 'Send message' }).click();
     await expect(page.getByText(probe)).toBeVisible({ timeout: 10_000 });
 
@@ -174,7 +174,7 @@ test.describe('mobile design migration @ 390px', () => {
     await expect(page.locator('nav[aria-label="Primary"]')).toBeVisible();
 
     await page.goto(`/messages/${BOB.id}`);
-    await expect(page.getByPlaceholder('Say something direct.')).toBeVisible();
+    await expect(page.getByPlaceholder('Message', { exact: true })).toBeVisible();
 
     await assertNoHorizontalOverflow(page);
     await ctx.close();

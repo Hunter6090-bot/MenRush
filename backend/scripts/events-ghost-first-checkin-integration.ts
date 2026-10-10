@@ -79,6 +79,9 @@ async function main() {
     // ── Ghost first at a venue with no spot: nothing is created.
     const ev1 = await makeEvent(owner, 'EGFC Night One', LAT);
     assert.strictEqual(await hotSpotsService.checkInAtEvent(ghost, ev1, false), null, 'Ghost first check-in is deferred');
+    assert.strictEqual(await hotSpotsService.isUnseen(ghost), true, 'Ghost member is unseen (route sends unseen: true)');
+    assert.strictEqual(await hotSpotsService.isUnseen(hidden), true, 'hidden member is unseen');
+    assert.strictEqual(await hotSpotsService.isUnseen(visible), false, 'visible member is not unseen');
     assert.deepStrictEqual(await spotsFor(ev1.id), [], 'no spot created for the event');
     assert.strictEqual(await spotsNear(LAT), 0, 'no spot or pin near the venue');
     assert.strictEqual(await checkinsBy(ghost), 0, 'no check-in row written');

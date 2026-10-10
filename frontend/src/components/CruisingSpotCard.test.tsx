@@ -119,7 +119,9 @@ describe('CruisingSpotCard', () => {
 
     expect(screen.getByTestId('cruising-spot-name')).toHaveTextContent('Sweatbox Sauna');
     expect(screen.getByTestId('cruising-category-badge')).toHaveTextContent('Sauna');
-    expect(screen.getByTestId('cruising-category-badge')).toHaveTextContent('🧖');
+    // Brand 10 Oct 2026: copper line icon, not an emoji.
+    expect(screen.getByTestId('cruising-category-badge').querySelector('svg[data-spot-icon="sauna"]')).not.toBeNull();
+    expect(screen.getByTestId('cruising-category-badge').textContent).not.toMatch(/\p{Extended_Pictographic}/u);
   });
 
   it('provides an anonymous check-in button and triggers onCheckIn with anonymous=true', () => {

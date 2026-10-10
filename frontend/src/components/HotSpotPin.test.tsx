@@ -7,6 +7,51 @@ afterEach(() => {
   cleanup();
 });
 
+function lum(hex: string): number {
+  const c = hex.replace('#', '').match(/../g)!.map((h) => parseInt(h, 16) / 255);
+  const [r, g, b] = c.map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function ratio(a: string, b: string): number {
+  const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m);
+  return (x + 0.05) / (y + 0.05);
+}
+function rgbToHex(rgb: string): string {
+  if (rgb.startsWith('#')) return rgb.toUpperCase();
+  const [r, g, b] = rgb.match(/\d+/g)!.map(Number);
+  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+}
+
+describe('HotSpotPin spot-type icons (no emoji)', () => {
+  it.each([
+    ['sauna', 'Sauna', 'sauna'],
+    ['parking-areas', 'Parking areas', 'parking'],
+    ['open-spaces', 'Open spaces', 'open-space'],
+    ['bars', 'Bar', 'bar'],
+  ])('%s pin draws the %s line icon', (slug, name, key) => {
+    render(<HotSpotPin spot={{ id: `s-${slug}`, name: 'Spot', category_icon: '🅿️', category_slug: slug, category_name: name, live_count: 0 }} />);
+    const icon = screen.getByTestId('hotspot-category-icon');
+    expect(icon.getAttribute('data-spot-icon')).toBe(key);
+    expect(screen.getByTestId('hotspot-pin-dim').textContent).not.toMatch(/\p{Extended_Pictographic}/u);
+    cleanup();
+  });
+
+  it.each([
+    ['empty', 0],
+    ['occupied', 6],
+  ])('%s pin icon is >= 3:1 on its disc, so it reads on light and dark maps', (_label, n) => {
+    render(<HotSpotPin spot={{ id: 'c', name: 'Spot', category_slug: 'sauna', category_name: 'Sauna', live_count_exact: n, live_count: n }} />);
+    const disc = screen.getByTestId('hotspot-pin-disc') as HTMLElement;
+    const fg = rgbToHex(disc.style.color);
+    const bg = rgbToHex(disc.style.background || disc.style.backgroundColor);
+    expect(ratio(fg, bg)).toBeGreaterThanOrEqual(3);
+    // Copper rim vs a light map (#F2EFE9) and a dark map (#1A1A1A) stays visible (>= 3:1 on one side, disc on the other).
+    expect(ratio(bg, '#F2EFE9')).toBeGreaterThanOrEqual(3);
+    expect(ratio('#F0E0C0', '#1A1A1A')).toBeGreaterThanOrEqual(3);
+    cleanup();
+  });
+});
+
 describe('HotSpotPin', () => {
   it('shows venue name, approximate count, and category icon when occupied', () => {
     render(
@@ -15,6 +60,8 @@ describe('HotSpotPin', () => {
           id: 'spot-1',
           name: 'Heaven',
           category_icon: '🪩',
+          category_slug: 'nightlife',
+          category_name: 'Nightlife',
           live_count_exact: 6,
           live_count: '5+',
         }}
@@ -24,7 +71,11 @@ describe('HotSpotPin', () => {
     expect(screen.getByTestId('hotspot-pin-solid')).toBeInTheDocument();
     expect(screen.getByTestId('hotspot-pin-name')).toHaveTextContent('Heaven');
     expect(screen.getByTestId('hotspot-pin-count')).toHaveTextContent('5+');
-    expect(screen.getByTestId('hotspot-category-icon')).toHaveTextContent('🪩');
+    const icon = screen.getByTestId('hotspot-category-icon');
+    expect(icon.tagName.toLowerCase()).toBe('svg');
+    expect(icon.getAttribute('data-spot-icon')).toBe('nightlife');
+    // Copper line icon, never the server emoji.
+    expect(screen.getByTestId('hotspot-pin-solid').textContent).not.toContain('🪩');
     expect(screen.queryByTestId('cruise-ship-icon')).not.toBeInTheDocument();
   });
 

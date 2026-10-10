@@ -732,7 +732,7 @@ export const ProfileSetup: React.FC = () => {
 
         <p className={publicMutedCopyClass}>
           You can edit everything later on{' '}
-          <Link to="/profile" className="font-bold text-[#C4832A] hover:text-[#E0A14A]">
+          <Link to="/profile/edit" className="font-bold text-[#C4832A] hover:text-[#E0A14A]">
             Profile
           </Link>
           .

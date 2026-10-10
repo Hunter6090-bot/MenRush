@@ -4,7 +4,7 @@ import { readHomeView } from './homeView';
 import {
   IconChat,
   IconCommunity,
-  IconDiscover,
+  IconMapPin,
   IconEvents,
   IconHotSpots,
   IconMatches,
@@ -27,6 +27,11 @@ export interface NavItem {
   desktopNav?: boolean;
   /** Reachable on mobile via the "More" sheet instead of the primary tab row. */
   mobileMore?: boolean;
+  /**
+   * Fill the icon when the tab is active. Default true for catalog items; every primary
+   * tab (Map/List, Chat, Rooms, Out, You) is outline-only, active = copper outline (board).
+   */
+  fillWhenActive?: boolean;
 }
 
 /**
@@ -40,15 +45,18 @@ export function getNavItems(): NavItem[] {
       to: '/discover',
       label: ROUTE_LABELS.map,
       shortLabel: 'Map',
-      Icon: IconDiscover,
+      // Outline map pin, same as the tabs (desktop sidebar too, Zoul 10 Oct).
+      Icon: IconMapPin,
+      fillWhenActive: false,
       mobileTab: true,
       desktopNav: true,
     },
     {
       to: '/conversations',
-      label: ROUTE_LABELS.messages,
+      label: ROUTE_LABELS.chat,
       shortLabel: 'Chat',
       Icon: IconChat,
+      fillWhenActive: false,
       badgeKey: 'messages',
       mobileTab: true,
       desktopNav: true,
@@ -58,6 +66,7 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.rooms,
       shortLabel: 'Rooms',
       Icon: IconRooms,
+      fillWhenActive: false,
       mobileTab: true,
       desktopNav: true,
     },
@@ -66,6 +75,7 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.out,
       shortLabel: 'Out',
       Icon: IconOut,
+      fillWhenActive: false,
       mobileTab: true,
       desktopNav: true,
     },
@@ -74,6 +84,7 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.you,
       shortLabel: 'You',
       Icon: IconProfile,
+      fillWhenActive: false,
       mobileTab: true,
       desktopNav: true,
     },
@@ -125,7 +136,7 @@ export function isNavActive(pathname: string, path: string): boolean {
     return pathname === '/notifications';
   }
   if (path === '/profile') {
-    return pathname === '/profile';
+    return pathname === '/profile' || pathname === '/profile/edit';
   }
   if (path === '/settings') {
     return pathname === '/settings';
@@ -156,6 +167,7 @@ export function isNavActive(pathname: string, path: string): boolean {
 
 export function mobilePageTitle(pathname: string): string {
   if (pathname.startsWith('/messages/')) return 'Chat';
+  if (pathname === '/profile/edit') return 'Edit profile';
   if (pathname.startsWith('/profile/')) return 'Profile';
   if (pathname.startsWith('/rooms/')) return 'Rooms';
   if (pathname === '/out' || pathname.startsWith('/out/')) return ROUTE_LABELS.out;

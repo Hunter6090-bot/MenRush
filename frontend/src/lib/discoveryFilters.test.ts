@@ -225,7 +225,7 @@ describe('discovery more filters', () => {
 });
 
 describe('discovery age presets and custom range', () => {
-  it('adds 60+ and narrows 50+ to 50–59', () => {
+  it('adds 60+ and narrows 50+ to 50 to 59', () => {
     expect(AGE_PRESETS.map((p) => p.id)).toEqual([
       'any',
       '18-21',
