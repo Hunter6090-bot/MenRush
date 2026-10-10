@@ -1,10 +1,18 @@
 import { SVGProps } from 'react';
 
+export type MenRushIconProps = SVGProps<SVGSVGElement> & {
+  size?: number;
+  filled?: boolean;
+};
+
 /**
- * Community — overlapping speech bubbles (people posting).
- * Not a map pin, not a column, not the MenRush medallion, not a video camera.
+ * Community: people group. Claude Design menrush-icons.
  */
-export function IconCommunity({ size = 24, ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
+export function IconCommunity({
+  size = 24,
+  filled = false,
+  ...props
+}: MenRushIconProps) {
   return (
     <svg
       width={size}
@@ -12,28 +20,32 @@ export function IconCommunity({ size = 24, ...props }: SVGProps<SVGSVGElement> &
       viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
       aria-hidden
       {...props}
     >
-      {/* Back bubble */}
-      <path
-        d="M5.5 5.5h9a3 3 0 0 1 3 3v4.25a3 3 0 0 1-3 3H11l-3.25 2.4V15.75H5.5a3 3 0 0 1-3-3V8.5a3 3 0 0 1 3-3Z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-        opacity="0.55"
-      />
-      {/* Front bubble */}
-      <path
-        d="M9.5 8.75h9a3 3 0 0 1 3 3v4.25a3 3 0 0 1-3 3H15l-3.25 2.4V19H9.5a3 3 0 0 1-3-3v-4.25a3 3 0 0 1 3-3Z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-      {/* Post dots */}
-      <circle cx="12.25" cy="14.1" r="0.9" fill="currentColor" />
-      <circle cx="15" cy="14.1" r="0.9" fill="currentColor" />
-      <circle cx="17.75" cy="14.1" r="0.9" fill="currentColor" />
+      {filled ? (
+        <>
+          <circle cx="12" cy="7.5" r="3" fill="currentColor" />
+          <path d="M6.5 20a5.5 5.5 0 0 1 11 0z" fill="currentColor" />
+          <circle cx="5" cy="9.5" r="2" fill="currentColor" />
+          <circle cx="19" cy="9.5" r="2" fill="currentColor" />
+          <path d="M2 18.5c0-2.2 1.6-3.8 3.6-3.9" />
+          <path d="M22 18.5c0-2.2-1.6-3.8-3.6-3.9" />
+        </>
+      ) : (
+        <>
+          <circle cx="12" cy="7.5" r="3" />
+          <path d="M6.5 20a5.5 5.5 0 0 1 11 0" />
+          <circle cx="5" cy="9.5" r="2" />
+          <circle cx="19" cy="9.5" r="2" />
+          <path d="M2 18.5c0-2.2 1.6-3.8 3.6-3.9" />
+          <path d="M22 18.5c0-2.2-1.6-3.8-3.6-3.9" />
+        </>
+      )}
     </svg>
   );
 }

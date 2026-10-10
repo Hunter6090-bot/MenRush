@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore, useNotificationStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from './UserAvatar';
 import { mobileBackFallback, shouldShowMobileBack } from '../lib/mobileBack';
 import { MobileBackButton } from './MobileBackButton';
-import { IconMapExpand, IconMore, IconNotifications, IconPulse, IconSignOut } from './icons';
+import { IconGrid, IconMapExpand, IconMapPin, IconMore, IconNotifications, IconPulse, IconSignOut } from './icons';
 import { BrandMark } from './BrandMark';
 import { ProfileSearchModal } from './ProfileSearchModal';
 import { NotificationDot } from './NotificationDot';
@@ -14,8 +14,18 @@ import { DiscoveryShellProvider, useDiscoveryShell } from '../context/DiscoveryS
 import { LocationPresenceStrip } from './LocationPresenceStrip';
 import { ProfileDepthStrip } from './ProfileDepthStrip';
 import { ThemeToggle } from './ThemeToggle';
+import { AccountMenu, AccountMenuButton } from './AccountMenu';
+import { MenuDiscretion } from './MenuDiscretion';
 import { PushAlertBanner } from './PushAlertBanner';
 import { readCachedMatches, refreshMatches } from '../lib/tabListCache';
+import {
+  homeToggleLabel,
+  homeToggleTarget,
+  readHomeView,
+  writeHomeView,
+  HOME_VIEW_EVENT,
+  type HomeView,
+} from '../lib/homeView';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -55,8 +65,12 @@ function LayoutInner({ children }: LayoutProps) {
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  // Stable so AccountMenu's open effect never re-runs (and steals focus) on Layout re-renders.
+  const closeAccountMenu = useCallback(() => setAccountMenuOpen(false), []);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   const [matchCount, setMatchCount] = useState(0);
+  const [homeView, setHomeView] = useState<HomeView>(() => readHomeView());
   const [sidebarExpanded, setSidebarExpanded] = useState(readSidebarExpanded);
   const { state: discoveryShell } = useDiscoveryShell();
 
@@ -112,7 +126,23 @@ function LayoutInner({ children }: LayoutProps) {
 
   useEffect(() => {
     setMoreMenuOpen(false);
+    setAccountMenuOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const openSearch = () => setSearchOpen(true);
+    window.addEventListener('menrush:open-search', openSearch);
+    return () => window.removeEventListener('menrush:open-search', openSearch);
+  }, []);
+
+  useEffect(() => {
+    const syncHome = (e?: Event) => {
+      const detail = (e as CustomEvent<HomeView> | undefined)?.detail;
+      setHomeView(detail ?? readHomeView());
+    };
+    window.addEventListener(HOME_VIEW_EVENT, syncHome as EventListener);
+    return () => window.removeEventListener(HOME_VIEW_EVENT, syncHome as EventListener);
+  }, []);
 
   const requestSignOut = () => {
     setSignOutConfirmOpen(true);
@@ -190,7 +220,7 @@ function LayoutInner({ children }: LayoutProps) {
                 }`}
               >
                 <span className="relative inline-flex shrink-0">
-                  <item.Icon size={22} />
+                  <item.Icon size={22} filled={active} />
                   {badge > 0 ? (
                     <span className="absolute -right-2 -top-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-nn-copper px-1 text-[11px] font-bold text-nn-on-copper">
                       {badge > 99 ? '99+' : badge}
@@ -266,7 +296,7 @@ function LayoutInner({ children }: LayoutProps) {
               <button
                 type="button"
                 onClick={() => setSearchOpen(true)}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--cream-soft)] active:bg-[var(--bg-card)]"
+                className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--cream-soft)] active:bg-[var(--bg-card)]"
                 aria-label="Search profiles"
               >
                 <SearchIcon className="w-5 h-5" />
@@ -284,6 +314,7 @@ function LayoutInner({ children }: LayoutProps) {
                   className="-top-0.5 -right-0.5 min-w-[16px] h-4 text-[11px] bg-[var(--copper)] border-[var(--bg-primary)]"
                 />
               </Link>
+              <AccountMenuButton open={accountMenuOpen} onClick={() => setAccountMenuOpen(true)} />
             </div>
           </div>
         </header>
@@ -334,6 +365,11 @@ function LayoutInner({ children }: LayoutProps) {
               data-testid="header-own-avatar"
             />
           </Link>
+          <AccountMenuButton
+            open={accountMenuOpen}
+            onClick={() => setAccountMenuOpen(true)}
+            className="border border-nn-border bg-nn-card text-nn-muted"
+          />
         </div>
 
         {/*
@@ -368,24 +404,60 @@ function LayoutInner({ children }: LayoutProps) {
             }`}
           >
             {mobileTabs.map((item) => {
+              const compact = mobileTabs.length >= 5;
+              const tabClass = `relative flex flex-1 flex-col items-center justify-center gap-0.5 transition-all duration-200 first:rounded-l-[1.25rem] last:rounded-r-[1.25rem] ${
+                compact ? 'py-2' : 'gap-1 py-2.5'
+              }`;
+
+              // First slot = home Map|List toggle (Pete redesign update).
+              if (item.to === '/discover') {
+                const onHome = location.pathname === '/discover';
+                const target = homeToggleTarget(homeView);
+                const label = homeToggleLabel(homeView);
+                const ToggleIcon = target === 'list' ? IconGrid : IconMapPin;
+                return (
+                  <button
+                    key="home-view-toggle"
+                    type="button"
+                    data-testid="mobile-nav-home-toggle"
+                    aria-label={target === 'list' ? 'Show List' : 'Show Map'}
+                    aria-pressed={onHome}
+                    onClick={() => {
+                      writeHomeView(target);
+                      setHomeView(target);
+                      if (!onHome) navigate('/discover');
+                    }}
+                    className={`${tabClass} ${
+                      onHome
+                        ? 'text-[var(--nn-accent-text)] bg-[var(--copper)]/10'
+                        : 'text-[var(--cream-muted)] active:scale-95'
+                    }`}
+                  >
+                    <ToggleIcon size={compact ? 20 : 22} className={onHome ? 'scale-110' : ''} />
+                    <span
+                      className="font-bold leading-none tracking-wide text-[15px]"
+                    >
+                      {label}
+                    </span>
+                  </button>
+                );
+              }
+
               const active = isNavActive(location.pathname, item.to);
               const badge = badgeFor(item, unreadCount, notificationUnread, matchCount);
-              const compact = mobileTabs.length >= 5;
               return (
                 <Link
                   key={item.to}
                   to={item.to}
                   data-testid={`mobile-nav-${item.to.replace(/\//g, '') || 'home'}`}
-                  className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 transition-all duration-200 first:rounded-l-[1.25rem] last:rounded-r-[1.25rem] ${
-                    compact ? 'py-2' : 'gap-1 py-2.5'
-                  } ${
+                  className={`${tabClass} ${
                     active
-                      ? 'text-[var(--copper)] bg-[var(--copper)]/10'
+                      ? 'text-[var(--nn-accent-text)] bg-[var(--copper)]/10'
                       : 'text-[var(--cream-muted)] active:scale-95'
                   }`}
                 >
                   <span className="relative inline-flex">
-                    <item.Icon size={compact ? 20 : 22} className={active ? 'scale-110' : ''} />
+                    <item.Icon size={compact ? 20 : 22} filled={active} className={active ? 'scale-110' : ''} />
                     <NotificationDot
                       count={badge}
                       visible={badge > 0}
@@ -398,9 +470,7 @@ function LayoutInner({ children }: LayoutProps) {
                     />
                   </span>
                   <span
-                    className={`font-bold leading-none tracking-wide ${
-                      compact ? 'text-[11px]' : 'text-xs'
-                    }`}
+                    className="font-bold leading-none tracking-wide text-[15px]"
                   >
                     {item.shortLabel ?? item.label}
                   </span>
@@ -419,7 +489,7 @@ function LayoutInner({ children }: LayoutProps) {
                   mobileTabs.length >= 5 ? 'py-2' : 'gap-1 py-2.5'
                 } ${
                   isMoreActive || moreMenuOpen
-                    ? 'text-[var(--copper)] bg-[var(--copper)]/10'
+                    ? 'text-[var(--nn-accent-text)] bg-[var(--copper)]/10'
                     : 'text-[var(--cream-muted)] active:scale-95'
                 }`}
               >
@@ -428,9 +498,7 @@ function LayoutInner({ children }: LayoutProps) {
                   className={isMoreActive || moreMenuOpen ? 'scale-110' : ''}
                 />
                 <span
-                  className={`font-bold leading-none tracking-wide ${
-                    mobileTabs.length >= 5 ? 'text-[11px]' : 'text-xs'
-                  }`}
+                  className="font-bold leading-none tracking-wide text-[15px]"
                 >
                   More
                 </span>
@@ -447,6 +515,15 @@ function LayoutInner({ children }: LayoutProps) {
       </div>
 
       <ProfileSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
+
+      <AccountMenu
+        open={accountMenuOpen}
+        onClose={closeAccountMenu}
+        onSignOut={requestSignOut}
+        onSearch={() => setSearchOpen(true)}
+      >
+        <MenuDiscretion />
+      </AccountMenu>
 
       {signOutConfirmOpen ? (
         <div
@@ -545,11 +622,11 @@ function MobileMoreMenu({
               onClick={onClose}
               className={`flex items-center gap-3 rounded-2xl px-3.5 py-3 text-[15px] font-bold transition-colors ${
                 active
-                  ? 'text-[var(--copper)] bg-[var(--copper)]/10'
+                  ? 'text-[var(--nn-accent-text)] bg-[var(--copper)]/10'
                   : 'text-[var(--cream)] active:bg-[var(--bg-card)]'
               }`}
             >
-              <item.Icon size={20} />
+              <item.Icon size={20} filled={active} />
               {item.label}
             </Link>
           );
