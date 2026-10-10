@@ -75,6 +75,8 @@ jobs:
         run: npm run test:veriff
       - name: Hot-spot counts stay rounded for Free (no exact number)
         run: npm run test:hot-spot-free-counts
+      - name: Welcome emails use the official mark (no typed wordmark)
+        run: npm run test:welcome-email-brand
 
   frontend-build:
     name: Frontend build
@@ -166,6 +168,8 @@ jobs:
         run: npm run db:migrate
       - name: Map feed leaves out blocked and Ghost members
         run: npm run test:map-feed-blocks
+      - name: Map feed respects Hide my location from (before LIMIT)
+        run: npm run test:map-feed-hide-location
       - name: Hot-spot list on real PG (Free rounded sort, Premium exact)
         run: npm run test:hot-spot-live-sort-integration
       - name: Personal Pride codes end 31 October (real PG)

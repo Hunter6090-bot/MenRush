@@ -64,7 +64,32 @@ describe('ComingSoon homepage', () => {
   it('keeps the sign-up and sign-in routes', () => {
     renderHome();
     expect(screen.getByRole('link', { name: 'Sign up free' })).toHaveAttribute('href', '/register');
-    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
+    // The hero line is the only sign-in entry on the homepage (no header Sign in).
+    const signIns = screen.getAllByRole('link', { name: /sign in/i });
+    expect(signIns).toHaveLength(1);
+    expect(signIns[0]).toHaveAttribute('href', '/login');
+    expect(screen.getByTestId('hero-sign-in')).toContainElement(signIns[0]);
+    expect(screen.getByRole('banner')).not.toHaveTextContent(/sign in/i);
+  });
+
+  it('offers Sign in directly under Sign up free in the hero', () => {
+    renderHome();
+    const hero = screen.getByRole('heading', { level: 1 }).closest('section') as HTMLElement;
+    const signUp = within(hero).getByRole('link', { name: 'Sign up free' });
+    const line = within(hero).getByTestId('hero-sign-in');
+    expect(line).toHaveTextContent('Already a member? Sign in');
+    const signIn = within(line).getByRole('link', { name: 'Sign in' });
+    expect(signIn).toHaveAttribute('href', '/login');
+    // Comes after the Sign up button in document order, in the same CTA block.
+    expect(signUp.compareDocumentPosition(signIn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(signUp.parentElement).toBe(line.parentElement);
+    // 15px text and a 44px tap area; visually secondary (no filled button styling).
+    expect(line.className).toContain('text-[15px]');
+    expect(signIn.className).toContain('min-h-[44px]');
+    expect(signIn.className).not.toMatch(/\bbg-/);
+    // Have a code? stays where it was, outside the hero.
+    expect(within(hero).queryByRole('link', { name: 'Have a code?' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Have a code?' })).toHaveAttribute('href', '/invite');
   });
 });
 
