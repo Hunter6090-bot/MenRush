@@ -48,6 +48,8 @@ function ok(name: string) {
 async function main() {
   const { default: pool, query } = await import('../src/db');
   const { userService } = await import('../src/services/user.service');
+  const { mapFeedService } = await import('../src/services/map-feed.service');
+  const { communityService } = await import('../src/services/community.service');
   const { travelService } = await import('../src/services/travel.service');
   const { premiumService } = await import('../src/services/premium.service');
   const { locationHideService } = await import('../src/services/location-hide.service');
@@ -221,6 +223,25 @@ async function main() {
     await query(`UPDATE profiles SET is_ghost = FALSE WHERE user_id = $1`, [traveller]);
     ok('blocks, the hide list and Ghost are respected in the destination');
 
+    // ── Hidden at home: map feed and Community ──────────────────────────────
+    const feedPost = await mapFeedService.post(traveller, 'tr feed post');
+    const commPost = await communityService.create(traveller, 'tr community post');
+    const feedFor = async (viewer: string) => mapFeedService.listNearby(viewer, { radiusKm: 20 });
+    const commFor = async (viewer: string) => {
+      const loc = await storedLoc(viewer);
+      return communityService.listNearby({ viewerId: viewer, lat: Number(loc.lat), lng: Number(loc.lng), radiusKm: 20 });
+    };
+    assert.ok(!(await feedFor(londoner)).some((m: any) => m.id === feedPost.id), 'map feed: not at the home pin');
+    assert.ok((await feedFor(traveller)).some((m: any) => m.id === feedPost.id), 'map feed: they still see their own');
+    const fanOut = await mapFeedService.nearbyUserIds(51.51, -0.125, 5, traveller);
+    assert.deepStrictEqual(fanOut, [traveller], 'map feed fan-out: only themselves at home');
+    ok('map feed: a live-trip member\'s posts do not show at their home pin');
+    const homeComm = await commFor(londoner);
+    assert.ok(!homeComm.some((p: any) => p.id === commPost.id), 'community: not in the home feed');
+    assert.ok(!homeComm.some((p: any) => p.user_id === traveller && p.distance_label), 'no distance to home');
+    assert.ok((await commFor(traveller)).some((p: any) => p.id === commPost.id), 'author still sees own post');
+    ok('Community: no home-area post or distance for a live-trip member');
+
     // ── End trip ─────────────────────────────────────────────────────────────
     assert.deepStrictEqual(await travelService.endTrip(traveller), { ended: true });
     assert.strictEqual(await travelService.getTrip(traveller), null);
@@ -228,6 +249,10 @@ async function main() {
     assert.ok(find(await nearby(londoner), traveller), 'back home');
     assert.ok(find(await nearby(londoner), traveller).distance_label !== 'Visiting Manchester');
     ok('ending a trip puts the member back at home');
+    assert.ok((await feedFor(londoner)).some((m: any) => m.id === feedPost.id), 'map feed back at home');
+    const backComm = (await commFor(londoner)).find((p: any) => p.id === commPost.id);
+    assert.ok(backComm && backComm.distance_label, 'community back with a distance');
+    ok('after the trip, map feed and Community show them at home again');
 
     // ── Expiry ───────────────────────────────────────────────────────────────
     const again = await travelService.planTrip(traveller, { city: 'Manchester', startsOn: today, endsOn: today });
@@ -243,6 +268,31 @@ async function main() {
     assert.ok(closed.rows[0].ended_at, 'expired trip is closed');
     ok('a trip ends itself after the end date');
 
+    // ── Premium lapses mid-trip: stops showing at once, cleanup ends it ─────
+    const lapsing = await travelService.planTrip(traveller, { city: 'Manchester', startsOn: today, endsOn: addDays(today, 2) });
+    assert.ok(find(await nearby(local), traveller), 'live before the lapse');
+    await query(`UPDATE users SET is_premium = FALSE, premium_tier = 'free', premium_until = NOW() - INTERVAL '1 minute' WHERE id = $1`, [traveller]);
+    assert.ok(!find(await nearby(local), traveller), 'lapsed: gone from the destination at once');
+    assert.ok(find(await nearby(londoner), traveller), 'lapsed: back at home at once');
+    const lapsedProfile: any = await userService.getPublicProfile(londoner, traveller);
+    assert.strictEqual(lapsedProfile.visiting, undefined);
+    assert.ok(!(await travelService.lookAround(looker, 'Manchester')).members.some((m) => m.id === traveller));
+    assert.ok((await feedFor(londoner)).some((m: any) => m.id === feedPost.id), 'lapsed: map feed at home');
+    const ended = await travelService.endExpiredAndLapsedTrips();
+    assert.ok(ended >= 1, 'cleanup ends the lapsed trip');
+    const lapsedRow = await query(`SELECT ended_at FROM travel_trips WHERE id = $1`, [lapsing.id]);
+    assert.ok(lapsedRow.rows[0].ended_at, 'lapsed trip is closed');
+    assert.strictEqual(await travelService.getTrip(traveller), null);
+    await query(`UPDATE users SET is_premium = TRUE, premium_tier = 'premium', premium_until = NOW() + INTERVAL '30 days' WHERE id = $1`, [traveller]);
+    // An always-Premium owner's trip keeps showing even without the flag.
+    await query(`UPDATE users SET name = 'Bigbear25', is_premium = FALSE, premium_until = NULL WHERE id = $1`, [traveller]);
+    await travelService.planTrip(traveller, { city: 'Manchester', startsOn: today, endsOn: today });
+    assert.ok(find(await nearby(local), traveller), 'owner trip still live');
+    assert.strictEqual(await travelService.endExpiredAndLapsedTrips(traveller), 0, 'owner trip not ended by cleanup');
+    await travelService.endTrip(traveller);
+    await query(`UPDATE users SET name = 'TR Traveller', is_premium = TRUE, premium_until = NOW() + INTERVAL '30 days' WHERE id = $1`, [traveller]);
+    ok('a lapsed visitor stops showing at once and cleanup ends the trip; owners are kept');
+
     // ── Lapsed Premium still ends and reads its trip ────────────────────────
     assert.strictEqual(await travelService.getShowInLookAround(free), true);
     ok('settings read for everyone');
@@ -251,6 +301,8 @@ async function main() {
     globalThis.fetch = realFetch;
     if (ids.length) {
       await query(`DELETE FROM travel_trips WHERE user_id = ANY($1::uuid[])`, [ids]);
+      await query(`DELETE FROM map_feed_messages WHERE sender_id = ANY($1::uuid[])`, [ids]);
+      await query(`DELETE FROM community_posts WHERE user_id = ANY($1::uuid[])`, [ids]);
       await query(`DELETE FROM blocks WHERE blocker_id = ANY($1::uuid[]) OR blocked_id = ANY($1::uuid[])`, [ids]);
       await query(`DELETE FROM location_hidden_from WHERE owner_id = ANY($1::uuid[]) OR hidden_user_id = ANY($1::uuid[])`, [ids]);
       await query(`DELETE FROM users WHERE id = ANY($1::uuid[])`, [ids]);

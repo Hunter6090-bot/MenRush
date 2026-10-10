@@ -12,8 +12,14 @@ export function LookAroundBar({ city, onNearMe }: { city: string; onNearMe: () =
       <span className="text-[var(--nn-accent-text)]">
         <IconPlane size={20} />
       </span>
-      <p className="min-w-0 flex-1 truncate text-[15px] font-bold text-[var(--nn-text)]" data-testid="look-around-label">
-        {lookingAroundLabel(city)}
+      {/* Wraps instead of cutting off: a long city name drops to a second line at 360px. */}
+      <p
+        className="min-w-0 flex-1 whitespace-normal break-words text-[15px] font-bold leading-snug text-[var(--nn-text)]"
+        data-testid="look-around-label"
+        aria-label={lookingAroundLabel(city)}
+      >
+        <span>Looking around: </span>
+        <span className="[overflow-wrap:anywhere]">{city}</span>
       </p>
       <button
         type="button"

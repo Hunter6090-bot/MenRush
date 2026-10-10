@@ -45,7 +45,7 @@ export type TravelTrip = {
 export const TRAVEL_COPY = {
   title: 'Travel',
   intro: 'Look around another town or city, or plan a visit.',
-  lookAroundHelp: 'Browse members, Cruise spots and events there. Your own pin stays where you are.',
+  lookAroundHelp: "Looking around doesn't move your pin.",
   planHelp: `Pick dates up to ${TRAVEL_MAX_TRIP_DAYS} days long, starting within ${TRAVEL_MAX_LEAD_DAYS} days. During your dates, members there see you as Visiting.`,
   premiumTitle: 'Travel is part of Premium',
   premiumBody: 'Look around any UK or Ireland town or city, and plan a visit so you show as Visiting there during your dates.',

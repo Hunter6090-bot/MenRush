@@ -149,7 +149,39 @@ export function tripStatus(trip: TripWindow, nowMs: number = Date.now()): TripSt
   return isTripLive(trip, nowMs) ? 'live' : 'planned';
 }
 
-/** SQL: member `${userExpr}` has a live trip. Alias `tt`-free so it nests. */
+/**
+ * "Premium is included for everyone" switch, read at query-build time so a
+ * change applies at once. premium.service registers its own check on load
+ * (no import from here to the service, so no cycle). Default: not included.
+ */
+let premiumIncludedNow: () => boolean = () => false;
+export function registerTravelPremiumIncluded(fn: () => boolean): void {
+  premiumIncludedNow = fn;
+}
+
+/** Owner accounts that never lose Premium (lower-case), same as lib/always-premium. */
+const ALWAYS_PREMIUM_SQL_LIST = "('boa90', 'bigbear25', 'hantsbear')";
+
+/**
+ * SQL: member `${userExpr}` has Premium right now. Same rule as
+ * premiumService.getStatus (is_premium, started, not expired), plus the
+ * always-Premium owners. A lapsed member's trip stops showing immediately.
+ */
+export function travelPremiumSql(userExpr: string): string {
+  if (premiumIncludedNow()) return 'TRUE';
+  return `EXISTS (
+          SELECT 1 FROM users tpu
+          WHERE tpu.id = ${userExpr}
+            AND (
+              (COALESCE(tpu.is_premium, FALSE)
+                AND (tpu.premium_starts_at IS NULL OR tpu.premium_starts_at <= NOW())
+                AND (tpu.premium_until IS NULL OR tpu.premium_until > NOW()))
+              OR LOWER(TRIM(tpu.name)) IN ${ALWAYS_PREMIUM_SQL_LIST}
+            )
+        )`;
+}
+
+/** SQL: member `${userExpr}` has a live trip (inside its dates, not ended, Premium now). */
 export function liveTripExistsSql(userExpr: string): string {
   return `EXISTS (
           SELECT 1 FROM travel_trips ltt
@@ -157,12 +189,17 @@ export function liveTripExistsSql(userExpr: string): string {
             AND ltt.ended_at IS NULL
             AND ltt.starts_at <= NOW()
             AND ltt.ends_at > NOW()
+            AND ${travelPremiumSql('ltt.user_id')}
         )`;
 }
 
-export const LIVE_TRIP_JOIN_SQL = `
+/** JOIN alias `tt` on the member's live trip (needs users alias `u`). */
+export function liveTripJoinSql(): string {
+  return `
       JOIN travel_trips tt
         ON tt.user_id = u.id
        AND tt.ended_at IS NULL
        AND tt.starts_at <= NOW()
-       AND tt.ends_at > NOW()`;
+       AND tt.ends_at > NOW()
+       AND ${travelPremiumSql('tt.user_id')}`;
+}

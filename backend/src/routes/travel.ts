@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { rateLimitKey } from '../lib/clientIp';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { privateNoStore } from '../middleware/noStore';
 import { PlaceLookupError, PLACE_LOOKUP_FAILED_MESSAGE } from '../lib/ukIePlace';
 import { TRAVEL_ERROR_COPY, TravelError } from '../lib/travel';
 import { travelService } from '../services/travel.service';
@@ -17,7 +18,8 @@ import { travelService } from '../services/travel.service';
  * No endpoint takes the caller's lat/lng: Travel never moves anyone's location.
  */
 const router = Router();
-router.use(authMiddleware, verifiedMiddleware);
+// Ahead of auth so 401s are not stored either (same as events and hot-spots).
+router.use(privateNoStore, authMiddleware, verifiedMiddleware);
 
 // Place lookups hit OpenStreetMap; keep them gentle.
 const lookLimiter = rateLimit({

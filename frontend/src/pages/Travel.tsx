@@ -9,6 +9,9 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { eventsAPI, hotSpotsAPI, travelAPI, type EventDTO, type HotSpotDTO } from '../api/client';
 import { Layout } from '../components/Layout';
 import { LookAroundBar } from '../components/LookAroundBar';
+import { VerifiedBadge } from '../components/VerifiedBadge';
+import { IconGrid, IconMapPin } from '../components/icons';
+import { homeToggleLabel, homeToggleTarget, readHomeView, type HomeView } from '../lib/homeView';
 import { TravelPremiumGate } from '../components/TravelPremiumGate';
 import { TravelSheet } from '../components/TravelSheet';
 import { useAuthStore } from '../hooks/store';
@@ -39,24 +42,45 @@ function MemberTile({ m, city }: { m: LookAroundMember; city: string }) {
   const photo = resolveAssetUrl(m.photo_url) ?? undefined;
   const label = lookAroundMemberLabel(m, city);
   return (
-    <Link
-      to={`/profile/${encodeURIComponent(m.id)}`}
+    <div
+      className="relative overflow-hidden rounded-[var(--nn-radius-lg)] border border-[var(--nn-border)] bg-[var(--nn-card)]"
       data-testid={`look-member-${m.id}`}
-      className="group block min-h-[44px] overflow-hidden rounded-[var(--nn-radius-lg)] border border-[var(--nn-border)] bg-[var(--nn-card)]"
     >
-      <div className="aspect-square w-full bg-[var(--nn-elevated)]">
-        {photo ? <img src={photo} alt="" loading="lazy" className="h-full w-full object-cover" /> : null}
-      </div>
-      <div className="px-2.5 py-2">
-        <p className="truncate text-[15px] font-bold text-[var(--nn-text)]">
-          {m.name}
-          {m.age != null ? `, ${m.age}` : ''}
-        </p>
-        <p className="truncate text-[15px] text-[var(--nn-muted)]" data-testid="look-member-label">
-          {label}
-        </p>
-      </div>
-    </Link>
+      <Link to={`/profile/${encodeURIComponent(m.id)}`} className="group block min-h-[44px]">
+        <div className="aspect-square w-full bg-[var(--nn-elevated)]">
+          {photo ? <img src={photo} alt="" loading="lazy" className="h-full w-full object-cover" /> : null}
+        </div>
+        <div className="px-2.5 py-2">
+          <p className="truncate text-[15px] font-bold text-[var(--nn-text)]">
+            {m.name}
+            {m.age != null ? `, ${m.age}` : ''}
+          </p>
+          <p className="truncate text-[15px] text-[var(--nn-muted)]" data-testid="look-member-label">
+            {label}
+          </p>
+        </div>
+      </Link>
+      {/* Same tick as the Nearby grid (ProfileCard), outside the link so it stays its own button. */}
+      {m.is_verified ? <VerifiedBadge compact className="absolute right-2 top-2 z-10" /> : null}
+    </div>
+  );
+}
+
+/** Map or List, one at a time (Pete lock). Same icons as the home swap. */
+function LookAroundViewToggle({ view, onChange }: { view: HomeView; onChange: (v: HomeView) => void }) {
+  const target = homeToggleTarget(view);
+  const Icon = target === 'list' ? IconGrid : IconMapPin;
+  return (
+    <button
+      type="button"
+      data-testid="look-around-view-toggle"
+      aria-label={target === 'list' ? 'Show List' : 'Show Map'}
+      onClick={() => onChange(target)}
+      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-full border border-[var(--nn-border)] bg-[var(--nn-card)] px-4 text-[15px] font-extrabold text-[var(--nn-accent-text)]"
+    >
+      <Icon size={18} />
+      <span>{homeToggleLabel(view)}</span>
+    </button>
   );
 }
 
@@ -134,7 +158,7 @@ function LookAroundMap({
     <div
       ref={ref}
       data-testid="look-around-map"
-      className="h-[45vh] min-h-[260px] w-full overflow-hidden rounded-[var(--nn-radius-lg)] border border-[var(--nn-border)]"
+      className="h-[65vh] min-h-[320px] w-full overflow-hidden rounded-[var(--nn-radius-lg)] border border-[var(--nn-border)]"
     />
   );
 }
@@ -151,6 +175,11 @@ export function LookAroundPage() {
   const [events, setEvents] = useState<EventDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const mapToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
+  const canMap = Boolean(mapToken) && mapToken !== '__SET_ME__';
+  // Starts on the member's home choice; without a map token it can only be List.
+  const [view, setView] = useState<HomeView>(() => (canMap ? readHomeView() : 'list'));
+  const showMap = canMap && view === 'map';
 
   useEffect(() => {
     setGated(!hasTravelAccess(user));
@@ -217,60 +246,70 @@ export function LookAroundPage() {
 
         {!gated && place ? (
           <>
-            <LookAroundMap place={place} members={members} spots={spots} />
+            {canMap ? (
+              <div className="flex justify-end">
+                <LookAroundViewToggle view={view} onChange={setView} />
+              </div>
+            ) : null}
 
-            <section aria-labelledby="look-members">
-              <h2 id="look-members" className="mb-2 text-[17px] font-extrabold text-[var(--nn-text)]">
-                Members in {city}
-              </h2>
-              {members.length === 0 ? (
-                <p className="text-[15px] text-[var(--nn-muted)]" data-testid="look-around-empty">
-                  Nobody to show in {city} right now.
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 gap-2 min-[560px]:grid-cols-3 lg:grid-cols-5">
-                  {[...visitors, ...locals].map((m) => (
-                    <MemberTile key={m.id} m={m} city={city} />
-                  ))}
-                </div>
-              )}
-            </section>
+            {showMap ? (
+              <LookAroundMap place={place} members={members} spots={spots} />
+            ) : (
+              <>
+                <section aria-labelledby="look-members">
+                  <h2 id="look-members" className="mb-2 text-[17px] font-extrabold text-[var(--nn-text)]">
+                    Members in {city}
+                  </h2>
+                  {members.length === 0 ? (
+                    <p className="text-[15px] text-[var(--nn-muted)]" data-testid="look-around-empty">
+                      Nobody to show in {city} right now.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 min-[560px]:grid-cols-3 lg:grid-cols-5">
+                      {[...visitors, ...locals].map((m) => (
+                        <MemberTile key={m.id} m={m} city={city} />
+                      ))}
+                    </div>
+                  )}
+                </section>
 
-            <section aria-labelledby="look-spots">
-              <h2 id="look-spots" className="mb-2 text-[17px] font-extrabold text-[var(--nn-text)]">
-                Cruise spots
-              </h2>
-              {spots.length === 0 ? (
-                <p className="text-[15px] text-[var(--nn-muted)]">No Cruise spots listed here yet.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {spots.slice(0, 20).map((s) => (
-                    <li key={s.id} className="rounded-[var(--nn-radius-md)] border border-[var(--nn-border)] bg-[var(--nn-card)] px-3 py-2.5">
-                      <p className="text-[15px] font-bold text-[var(--nn-text)]">{s.name}</p>
-                      <p className="text-[15px] text-[var(--nn-muted)]">{s.category_name}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+                <section aria-labelledby="look-spots">
+                  <h2 id="look-spots" className="mb-2 text-[17px] font-extrabold text-[var(--nn-text)]">
+                    Cruise spots
+                  </h2>
+                  {spots.length === 0 ? (
+                    <p className="text-[15px] text-[var(--nn-muted)]">No Cruise spots listed here yet.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {spots.slice(0, 20).map((s) => (
+                        <li key={s.id} className="rounded-[var(--nn-radius-md)] border border-[var(--nn-border)] bg-[var(--nn-card)] px-3 py-2.5">
+                          <p className="text-[15px] font-bold text-[var(--nn-text)]">{s.name}</p>
+                          <p className="text-[15px] text-[var(--nn-muted)]">{s.category_name}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
 
-            <section aria-labelledby="look-events">
-              <h2 id="look-events" className="mb-2 text-[17px] font-extrabold text-[var(--nn-text)]">
-                Events
-              </h2>
-              {events.length === 0 ? (
-                <p className="text-[15px] text-[var(--nn-muted)]">No events listed here yet.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {events.slice(0, 20).map((ev) => (
-                    <li key={ev.id} className="rounded-[var(--nn-radius-md)] border border-[var(--nn-border)] bg-[var(--nn-card)] px-3 py-2.5">
-                      <p className="text-[15px] font-bold text-[var(--nn-text)]">{ev.name}</p>
-                      {ev.venue_name ? <p className="text-[15px] text-[var(--nn-muted)]">{ev.venue_name}</p> : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+                <section aria-labelledby="look-events">
+                  <h2 id="look-events" className="mb-2 text-[17px] font-extrabold text-[var(--nn-text)]">
+                    Events
+                  </h2>
+                  {events.length === 0 ? (
+                    <p className="text-[15px] text-[var(--nn-muted)]">No events listed here yet.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {events.slice(0, 20).map((ev) => (
+                        <li key={ev.id} className="rounded-[var(--nn-radius-md)] border border-[var(--nn-border)] bg-[var(--nn-card)] px-3 py-2.5">
+                          <p className="text-[15px] font-bold text-[var(--nn-text)]">{ev.name}</p>
+                          {ev.venue_name ? <p className="text-[15px] text-[var(--nn-muted)]">{ev.venue_name}</p> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              </>
+            )}
 
             <Link to="/travel" className="inline-flex min-h-[44px] items-center text-[15px] font-bold text-[var(--nn-accent-text)] underline">
               Pick another city or plan a trip

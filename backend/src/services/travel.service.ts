@@ -21,13 +21,14 @@ import { notLocationHiddenFromViewerSql } from '../lib/locationHiddenSql';
 import { PRESENCE_LIVE_SQL } from '../lib/presence';
 import { lookupUkIePlace, placeContainsPoint, type UkIePlace } from '../lib/ukIePlace';
 import {
-  LIVE_TRIP_JOIN_SQL,
+  liveTripJoinSql,
   TRAVEL_PREMIUM_FEATURE,
   TRAVEL_TIME_ZONE,
   TravelError,
   coarseCityCentre,
   liveTripExistsSql,
   shortCityName,
+  travelPremiumSql,
   tripStatus,
   validateTripDates,
   visitingLabel,
@@ -200,7 +201,7 @@ export const travelService = {
               tt.starts_at AS visit_starts_at, tt.ends_at AS visit_ends_at
          FROM users u
          JOIN profiles p ON p.user_id = u.id
-         ${LIVE_TRIP_JOIN_SQL}
+         ${liveTripJoinSql()}
         WHERE ${lookAroundBaseWhere('$1')}
           AND tt.centre_lat BETWEEN $2 AND $3
           AND tt.centre_lng BETWEEN $4 AND $5
@@ -250,13 +251,31 @@ export const travelService = {
     return { place, members: [...visitors, ...locals].slice(0, LOOK_AROUND_LIMIT) };
   },
 
-  /** The member's open trip (planned or live), or null. Closes a trip whose end date passed. */
-  async getTrip(userId: string): Promise<TravelTrip | null> {
-    await query(
-      `UPDATE travel_trips SET ended_at = ends_at
-        WHERE user_id = $1 AND ended_at IS NULL AND ends_at <= NOW()`,
-      [userId],
+  /**
+   * Cleanup: end open trips whose end date passed, and trips of members whose
+   * Premium lapsed. Queries already stop showing both at once; this tidies rows.
+   * Pass userId to tidy one member. Returns how many trips were ended.
+   */
+  async endExpiredAndLapsedTrips(userId?: string): Promise<number> {
+    const values: unknown[] = [];
+    let only = '';
+    if (userId) {
+      values.push(userId);
+      only = 'AND t.user_id = $1';
+    }
+    const res = await query(
+      `UPDATE travel_trips t
+          SET ended_at = CASE WHEN t.ends_at <= NOW() THEN t.ends_at ELSE NOW() END
+        WHERE t.ended_at IS NULL ${only}
+          AND (t.ends_at <= NOW() OR NOT ${travelPremiumSql('t.user_id')})`,
+      values,
     );
+    return res.rowCount ?? 0;
+  },
+
+  /** The member's open trip (planned or live), or null. Tidies expired and lapsed trips first. */
+  async getTrip(userId: string): Promise<TravelTrip | null> {
+    await this.endExpiredAndLapsedTrips(userId);
     const res = await query(
       `SELECT ${TRIP_COLUMNS} FROM travel_trips
         WHERE user_id = $1 AND ended_at IS NULL AND ends_at > NOW()
@@ -343,3 +362,18 @@ export const travelService = {
     return value;
   },
 };
+
+const TRAVEL_CLEANUP_MS = 15 * 60 * 1000;
+
+/** Every 15 minutes: end expired trips and trips whose member lost Premium. */
+export function startTravelCleanupCron(): NodeJS.Timeout {
+  const run = () =>
+    travelService
+      .endExpiredAndLapsedTrips()
+      .then((n) => {
+        if (n > 0) console.log(`[travel] ended ${n} trip(s) (expired or Premium lapsed)`);
+      })
+      .catch((err) => console.error('[travel] cleanup failed:', err instanceof Error ? err.message : 'error'));
+  run();
+  return setInterval(run, TRAVEL_CLEANUP_MS);
+}

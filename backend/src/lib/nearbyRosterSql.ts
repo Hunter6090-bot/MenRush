@@ -3,7 +3,7 @@ import { notLocationHiddenFromViewerSql } from './locationHiddenSql';
 import { MAP_PIN_FUZZ_DEFAULT_M } from './mapPinFuzz';
 import { PRESENCE_LIVE_SQL } from './presence';
 import { nearbyLocationPredicate } from './ukIrelandBounds';
-import { LIVE_TRIP_JOIN_SQL, TRAVEL_VISIBLE_RADIUS_M, liveTripExistsSql } from './travel';
+import { liveTripJoinSql, TRAVEL_VISIBLE_RADIUS_M, liveTripExistsSql } from './travel';
 
 export type DiscoveryScope = 'radius' | 'uk_ie';
 
@@ -73,7 +73,7 @@ export function visitorLocationPredicate(scope: DiscoveryScope): string {
 /**
  * `home` (default): members at their stored location. A member with a live trip
  * is left out here, so they show in one place only (the destination).
- * `visitors`: members with a live trip near the viewer (needs LIVE_TRIP_JOIN_SQL).
+ * `visitors`: members with a live trip near the viewer (needs liveTripJoinSql()).
  */
 export function nearbyRosterWhereSql(
   scope: DiscoveryScope,
@@ -152,7 +152,7 @@ export function nearbyVisitorsListSql(whereClause: string, limitIndex: number): 
   );
   return `
       ${select}
-      ${LIVE_TRIP_JOIN_SQL}
+      ${liveTripJoinSql()}
       ${whereClause}
       ORDER BY ${PRESENCE_LIVE_SQL} DESC, p.last_seen DESC NULLS LAST
       LIMIT $${limitIndex}
@@ -164,7 +164,7 @@ export function nearbyVisitorsCountSql(whereClause: string): string {
       SELECT COUNT(*)::int AS total
       FROM users u
       JOIN profiles p ON u.id = p.user_id
-      ${LIVE_TRIP_JOIN_SQL}
+      ${liveTripJoinSql()}
       ${whereClause}
     `;
 }

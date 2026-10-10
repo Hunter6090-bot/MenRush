@@ -139,4 +139,9 @@ describe('TravelSheet', () => {
     }
     expect(contrast(screen.getByRole('heading', { name: 'Travel' }), theme)).toBeGreaterThanOrEqual(4.5);
   });
+
+  it("Look around help reads exactly: Looking around doesn't move your pin.", async () => {
+    const { TRAVEL_COPY } = await import('../lib/travel');
+    expect(TRAVEL_COPY.lookAroundHelp).toBe("Looking around doesn't move your pin.");
+  });
 });

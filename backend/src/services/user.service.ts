@@ -24,7 +24,7 @@ import {
   nearbyVisitorsCountSql,
   nearbyVisitorsListSql,
 } from '../lib/nearbyRosterSql';
-import { liveTripExistsSql, visitingLabel } from '../lib/travel';
+import { liveTripExistsSql, travelPremiumSql, visitingLabel } from '../lib/travel';
 import { PRESENCE_LIVE_SQL, PRESENCE_WINDOW_SQL } from '../lib/presence';
 import { lookupUkIePlace, placeContainsPoint } from '../lib/ukIePlace';
 import { notLocationHiddenFromViewerSql } from '../lib/locationHiddenSql';
@@ -512,6 +512,7 @@ export const userService = {
            FROM travel_trips t
           WHERE t.user_id = u.id AND t.ended_at IS NULL
             AND t.starts_at <= NOW() AND t.ends_at > NOW()
+            AND ${travelPremiumSql('t.user_id')}
           LIMIT 1
        ) trip ON TRUE
        WHERE u.id = $1`,

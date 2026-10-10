@@ -39,6 +39,7 @@ import communityRoutes from './routes/community';
 import mediaDisplayRoutes from './routes/media-display';
 import { startPulseExpiryCron } from './services/pulse.service';
 import { startRoomMessagePurgeCron, startRoomTempIdentityPurgeCron } from './services/room.service';
+import { startTravelCleanupCron } from './services/travel.service';
 import { noteRoomEnter, noteRoomExit } from './services/room-presence';
 import {
   hasWelcomeBeenSent,
@@ -972,5 +973,6 @@ server.listen(PORT, () => {
   startPulseExpiryCron();
   startRoomTempIdentityPurgeCron();
   startRoomMessagePurgeCron();
+  startTravelCleanupCron();
   startVerificationRetentionWorker();
 });

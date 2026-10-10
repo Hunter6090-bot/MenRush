@@ -19,6 +19,8 @@ vi.mock('../components/Layout', () => ({ Layout: ({ children }: { children: unkn
 vi.mock('../hooks/store', () => ({
   useAuthStore: (sel: (s: { user: typeof mocks.user }) => unknown) => sel({ user: mocks.user }),
 }));
+// The map never really loads in tests; we only check which view is on screen.
+vi.mock('../lib/mapboxLazy', () => ({ loadMapbox: () => new Promise(() => {}) }));
 vi.mock('../api/client', () => ({
   travelAPI: { lookAround: mocks.lookAround },
   hotSpotsAPI: { listNearby: mocks.hotSpots },
@@ -108,5 +110,43 @@ describe('Look around', () => {
     expect(contrast(screen.getByTestId('look-around-label'), theme)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(screen.getByTestId('look-around-near-me'), theme)).toBeGreaterThanOrEqual(4.5);
     expect(screen.getByTestId('look-around-near-me').className).toMatch(/min-h-\[44px\]/);
+  });
+
+  it('Map or List, one at a time, with the home swap icon (Pete lock)', async () => {
+    vi.stubEnv('VITE_MAPBOX_TOKEN', 'pk.test');
+    localStorage.removeItem('menrush_home_view');
+    localStorage.removeItem('menrush_nearby_view');
+    try {
+      renderPage();
+      const toggle = await screen.findByTestId('look-around-view-toggle');
+      expect(screen.getByTestId('look-around-map')).toBeInTheDocument();
+      expect(screen.queryByTestId('look-member-v1')).toBeNull();
+      expect(toggle).toHaveAccessibleName('Show List');
+      expect(toggle.className).toMatch(/min-h-\[44px\]/);
+      fireEvent.click(toggle);
+      expect(await screen.findByTestId('look-member-v1')).toBeInTheDocument();
+      expect(screen.queryByTestId('look-around-map')).toBeNull();
+      expect(screen.getByTestId('look-around-view-toggle')).toHaveAccessibleName('Show Map');
+      fireEvent.click(screen.getByTestId('look-around-view-toggle'));
+      expect(screen.getByTestId('look-around-map')).toBeInTheDocument();
+      expect(screen.queryByTestId('look-member-v1')).toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('verified members get the same tick as the Nearby grid', async () => {
+    renderPage();
+    const verified = await screen.findByTestId('look-member-l1');
+    expect(within(verified).getByRole('button', { name: /verified/i })).toBeInTheDocument();
+    expect(within(screen.getByTestId('look-member-v1')).queryByRole('button', { name: /verified/i })).toBeNull();
+  });
+
+  it('a long city name wraps instead of being cut off', async () => {
+    renderPage('Newcastle upon Tyne');
+    const label = await screen.findByTestId('look-around-label');
+    expect(label.className).not.toMatch(/\btruncate\b/);
+    expect(label.className).toMatch(/whitespace-normal/);
+    expect(label.className).toMatch(/text-\[15px\]/);
   });
 });

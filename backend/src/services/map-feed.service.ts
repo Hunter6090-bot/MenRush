@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { MAP_PIN_FUZZ_DEFAULT_M, privateMapPointAround } from '../lib/mapPinFuzz';
 import { clampRadiusKm, PIN_PREFILTER_BUFFER_M, publicPinSql } from '../lib/mapPinSql';
 import { viewerStoredLocation } from '../lib/viewerOrigin';
+import { liveTripExistsSql } from '../lib/travel';
 
 /** Sender's public pin for a post (seed map:<senderId>, sender's Discretion). */
 const SENDER_PIN = publicPinSql('mf.lat', 'mf.lng', 'mf.sender_id', 'sp.map_pin_fuzz_m');
@@ -57,6 +58,9 @@ export const mapFeedService = {
            WHERE (b.blocker_id = $5 AND b.blocked_id = mf.sender_id)
               OR (b.blocker_id = mf.sender_id AND b.blocked_id = $5)
          )
+         -- Travel: a member on a live trip is not at home, so their posts do
+         -- not show at their home pin (same rule as Nearby). They still see their own.
+         AND (mf.sender_id = $5 OR NOT ${liveTripExistsSql('mf.sender_id')})
        ORDER BY mf.created_at DESC
        LIMIT 200`,
       [origin.lat, origin.lng, fifteenMinsAgo, radiusMeters, userId],
@@ -115,7 +119,7 @@ export const mapFeedService = {
   /**
    * Socket fan-out targets for a new post. With senderId, anyone the sender
    * blocked or who blocked the sender is left out (same block lookup as Nearby),
-   * and a ghost / hidden sender only reaches themselves.
+   * and a ghost / hidden sender, or one on a live Travel trip, only reaches themselves.
    */
   async nearbyUserIds(
     lat: number,
@@ -136,6 +140,8 @@ export const mapFeedService = {
                SELECT 1 FROM profiles sp
                WHERE sp.user_id = $4::uuid AND sp.is_visible = TRUE AND sp.is_ghost = FALSE
              )
+             -- Travel: a sender on a live trip reaches only themselves at home.
+             AND NOT ${liveTripExistsSql('$4::uuid')}
              AND NOT EXISTS (
                SELECT 1 FROM blocks b
                WHERE (b.blocker_id = $4::uuid AND b.blocked_id = profiles.user_id)
