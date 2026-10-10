@@ -180,7 +180,7 @@ for (const vp of PHONE_VIEWPORTS) {
           await expect(
             page.getByRole('heading', {
               level: 1,
-              name: /Real men\.\s*Verified profiles\.\s*Total discretion\./i,
+              name: /See who's around\.\s*On the map\./i,
             }),
           ).toBeVisible({ timeout: 20_000 });
         } else if (typeof route.ready === 'string') {
