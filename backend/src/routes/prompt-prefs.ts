@@ -1,5 +1,7 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
+import { accountLimiter, userAccountKey } from '../lib/authRateLimits';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { privateNoStore } from '../middleware/noStore';
 import { isPromptKey, promptPrefsService } from '../services/prompt-prefs.service';
@@ -22,18 +24,26 @@ import { isPromptKey, promptPrefsService } from '../services/prompt-prefs.servic
 const router = Router();
 router.use(privateNoStore, authMiddleware);
 
-/** Per member, not per IP: members behind one carrier IP do not share a budget. */
-export function promptPrefsRateKey(req: AuthRequest): string {
-  return `prompt-prefs:${req.userId}`;
-}
+/**
+ * Changes are capped per member (QC P2 on #357), so members behind one carrier
+ * or Vercel egress IP do not share a budget. A loose per-IP ceiling stays on
+ * top, the same pattern as sign in.
+ */
+export const PROMPT_PREFS_MEMBER_MAX = 30;
 
-const changeLimiter = rateLimit({
+const changeIpLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
-  max: 30,
+  max: 300,
   message: { error: 'Too many changes. Try again in a few minutes.' },
-  keyGenerator: (req) => promptPrefsRateKey(req as AuthRequest),
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
+});
+
+const changeMemberLimiter = accountLimiter({
+  max: PROMPT_PREFS_MEMBER_MAX,
+  key: userAccountKey,
+  message: 'Too many changes. Try again in a few minutes.',
 });
 
 router.get('/', async (req: AuthRequest, res: Response) => {
@@ -45,7 +55,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.put('/:prompt/never', changeLimiter, async (req: AuthRequest, res: Response) => {
+router.put('/:prompt/never', changeIpLimiter, changeMemberLimiter, async (req: AuthRequest, res: Response) => {
   const { prompt } = req.params;
   if (!isPromptKey(prompt)) {
     return res.status(400).json({ error: 'unknown_prompt' });
