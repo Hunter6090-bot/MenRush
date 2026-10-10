@@ -9,6 +9,7 @@ import {
   type ProfileSetupSnapshot,
 } from '../lib/profileSetup';
 import { usePromptDismissal } from '../lib/promptDismissal';
+import { usePromptSlot } from '../lib/promptSlot';
 import { PromptDismissControls } from './PromptDismissControls';
 
 const BLOCKER_COPY: Record<ReturnType<typeof activationBlockers>[number], string> = {
@@ -37,7 +38,7 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
   const locationOnly = isLocationOnlyGap(profile);
   const fieldsComplete = isProfileSetupComplete(profile);
   const profileDismissal = usePromptDismissal('profile');
-  if (blockers.length === 0 && !needsLocation) return null;
+  const nothingMissing = blockers.length === 0 && !needsLocation;
 
   const progress = profileSetupProgress(profile);
   const primary = blockers[0];
@@ -57,10 +58,19 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
   // Missing GPS is not "finish profile" — never dump a fields-complete user onto the wizard.
   const showFinishProfileCta = !showLocationCta && fieldGaps.length > 0;
 
-  // Finish-profile mode honours "Don't remind me again". A complete profile never
+  // Finish-profile mode honours "Don't show again". A complete profile never
   // reaches this mode; the location prompt is separate and unchanged.
-  const finishProfileMode = !fieldsComplete && !showLocationCta;
-  if (finishProfileMode && profileDismissal.hidden) return null;
+  const finishProfileMode = !nothingMissing && !fieldsComplete && !showLocationCta;
+
+  // One prompt at a time: in Finish profile mode this waits behind Get the app
+  // and alerts. The location prompt is not part of that order.
+  const finishOnTop = usePromptSlot(
+    'profile',
+    finishProfileMode && !profileDismissal.hidden ? 'want' : 'none',
+  );
+
+  if (nothingMissing) return null;
+  if (finishProfileMode && (profileDismissal.hidden || !finishOnTop)) return null;
 
   return (
     <div
@@ -91,7 +101,7 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
               type="button"
               onClick={onEnableLocation}
               data-testid="activation-enable-location"
-              className="rounded-full bg-[#C4832A] px-4 py-2 text-sm font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+              className="inline-flex min-h-[44px] items-center rounded-full bg-[#C4832A] px-4 py-2 text-[15px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
             >
               Allow location
             </button>
@@ -99,7 +109,7 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
             <Link
               to="/profile/setup"
               data-testid="activation-finish-profile"
-              className="rounded-full bg-[#C4832A] px-4 py-2 text-sm font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+              className="inline-flex min-h-[44px] items-center rounded-full bg-[#C4832A] px-4 py-2 text-[15px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
             >
               Finish profile
             </Link>
@@ -108,7 +118,7 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
             <Link
               to="/settings"
               data-testid="activation-location-settings"
-              className="rounded-full border border-[rgba(196,131,42,0.5)] px-4 py-2 text-sm font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+              className="inline-flex min-h-[44px] items-center rounded-full border border-[var(--nn-accent-text)] px-4 py-2 text-[15px] font-extrabold uppercase tracking-wide text-[var(--nn-accent-text)] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
             >
               Settings
             </Link>

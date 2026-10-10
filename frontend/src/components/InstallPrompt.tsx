@@ -4,8 +4,8 @@ import {
   clearDeferredInstallPrompt,
   useDeferredInstallPrompt,
 } from '../lib/installPromptStore';
-import { useEffect, useState } from 'react';
 import { usePromptDismissal } from '../lib/promptDismissal';
+import { usePromptSlot } from '../lib/promptSlot';
 import { PromptDismissControls } from './PromptDismissControls';
 
 function isStandalone() {
@@ -23,8 +23,7 @@ function isIos() {
 export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
   const location = useLocation();
   const deferred = useDeferredInstallPrompt();
-  const [hidden, setHidden] = useState(true);
-  // One "Don't remind me again" rule for every phone (owner ask, 10 Oct 2026).
+  // One "Don't show again" rule for every phone (owner ask, 10 Oct 2026).
   const dismissal = usePromptDismissal('install');
 
   // Never cover chat/room composers or Settings Sign out — sheet sits at z-60.
@@ -34,28 +33,22 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
     location.pathname.startsWith('/settings') ||
     /^\/rooms\/[^/]+/.test(location.pathname);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!isPhoneDevice()) {
-      setHidden(true);
-      return;
-    }
-    if (isStandalone()) {
-      setHidden(true);
-      return;
-    }
-    if (location.pathname === '/get-the-app' || location.pathname === '/install') {
-      setHidden(true);
-      return;
-    }
-    if (blocksChrome) {
-      setHidden(true);
-      return;
-    }
-    setHidden(false);
-  }, [location.pathname, variant, blocksChrome]);
+  // Worked out during render (not in an effect) so the prompt order knows on the
+  // first paint whether the sheet wants to show.
+  const eligible =
+    typeof window !== 'undefined' &&
+    isPhoneDevice() &&
+    !isStandalone() &&
+    location.pathname !== '/get-the-app' &&
+    location.pathname !== '/install' &&
+    !blocksChrome;
 
-  if (hidden || blocksChrome || dismissal.hidden) return null;
+  // One prompt at a time: the Get the app sheet comes first, then alerts, then
+  // Finish profile. The sign in page card has nothing to share the screen with.
+  const wants = eligible && !dismissal.hidden;
+  const onTop = usePromptSlot('install-sheet', variant === 'sheet' && wants ? 'want' : 'none');
+
+  if (!wants || (variant === 'sheet' && !onTop)) return null;
 
   // Android Chrome can one-tap install when we still hold the deferred event.
   // iPhone / Safari cannot — keep Show me how. Android without a prompt falls
@@ -79,7 +72,12 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
 
   return (
     <aside className={wrap} role="dialog" aria-label="Install MenRush">
-      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--nn-accent-text)]">Get the app</p>
+      <p
+        className="text-[15px] font-bold uppercase tracking-[0.12em] text-[var(--nn-accent-text)]"
+        data-testid="install-prompt-label"
+      >
+        Get the app
+      </p>
       <p className="mt-1 text-[17px] font-extrabold leading-tight text-[var(--cream)]">Put MenRush on your Home Screen.</p>
       <p className="mt-1 text-[15px] leading-snug text-[var(--cream-muted)]">
         {isIos()
@@ -91,14 +89,16 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
           <button
             type="button"
             onClick={() => void install()}
-            className="flex-1 rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3 text-[14px] font-bold text-[#FFF6E6]"
+            data-testid="install-prompt-install"
+            className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full bg-[var(--copper)] px-4 py-3 text-[15px] font-bold text-[var(--nn-on-copper)]"
           >
             Install app
           </button>
         ) : (
           <Link
             to="/get-the-app"
-            className="flex-1 rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3 text-center text-[14px] font-bold text-[#FFF6E6]"
+            data-testid="install-prompt-how"
+            className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full bg-[var(--copper)] px-4 py-3 text-center text-[15px] font-bold text-[var(--nn-on-copper)]"
           >
             Show me how
           </Link>

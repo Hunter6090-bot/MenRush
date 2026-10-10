@@ -43,7 +43,7 @@ function renderStrip() {
   );
 }
 
-describe("Finish your profile: Don't remind me again", () => {
+describe("Finish your profile: Don't show again", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -64,7 +64,7 @@ describe("Finish your profile: Don't remind me again", () => {
 
     const first = renderStrip();
     expect(await screen.findByTestId('profile-depth-strip')).toBeInTheDocument();
-    await user.click(screen.getByLabelText("Don't remind me again"));
+    await user.click(screen.getByLabelText("Don't show again"));
     await user.click(screen.getByTestId('profile-prompt-close'));
     expect(screen.queryByTestId('profile-depth-strip')).toBeNull();
     first.unmount();
@@ -85,7 +85,7 @@ describe("Finish your profile: Don't remind me again", () => {
     const user = userEvent.setup();
     const first = renderStrip();
     await screen.findByTestId('profile-depth-strip');
-    await user.click(screen.getByLabelText("Don't remind me again"));
+    await user.click(screen.getByLabelText("Don't show again"));
     await user.click(screen.getByTestId('profile-prompt-close'));
     first.unmount();
 
@@ -114,7 +114,7 @@ describe("Finish your profile: Don't remind me again", () => {
       </MemoryRouter>,
     );
     expect(screen.getByTestId('activation-finish-profile')).toBeInTheDocument();
-    await user.click(screen.getByLabelText("Don't remind me again"));
+    await user.click(screen.getByLabelText("Don't show again"));
     await user.click(screen.getByTestId('profile-prompt-close'));
     expect(screen.queryByTestId('activation-banner')).toBeNull();
     first.unmount();

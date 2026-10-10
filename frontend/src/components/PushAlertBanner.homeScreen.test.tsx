@@ -24,7 +24,7 @@ describe('Add MenRush to Home Screen card', () => {
     useAuthStore.setState({ user: { id: 'member-a', name: 'Member' } as never, token: 't' });
   });
 
-  it("shows a Don't remind me again tick box and Close, no Later", async () => {
+  it("shows a Don't show again tick box and Close, no Later", async () => {
     render(<PushAlertBanner />);
     expect(await screen.findByText('Add MenRush to Home Screen')).toBeInTheDocument();
     expect(screen.getByTestId('install-prompt-never')).not.toBeChecked();

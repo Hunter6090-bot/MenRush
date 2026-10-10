@@ -24,7 +24,7 @@ function newSession() {
 }
 
 async function tickAndClose(user: ReturnType<typeof userEvent.setup>, prefix: string) {
-  await user.click(screen.getByLabelText("Don't remind me again"));
+  await user.click(screen.getByLabelText("Don't show again"));
   await user.click(screen.getByTestId(`${prefix}-close`));
 }
 
@@ -52,7 +52,7 @@ const variants = [
   },
 ];
 
-describe("PushAlertBanner: Don't remind me again", () => {
+describe("PushAlertBanner: Don't show again", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
