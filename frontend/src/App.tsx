@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ComponentType, type ReactElement, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { LegacyInviteRedirect } from './components/LegacyInviteRedirect';
 import { useEffect } from 'react';
 import { RequireProfileSetup } from './components/RequireProfileSetup';
 import { useAuthStore } from './hooks/store';
@@ -71,6 +72,7 @@ const RoomsRoute = lazyNamed(() => import('./components/RoomsRoute'), 'RoomsRout
 const Premium = lazyNamed(() => import('./pages/Premium'), 'Premium');
 const Events = lazyNamed(() => import('./pages/Events'), 'Events');
 const HotSpots = lazyNamed(() => import('./pages/HotSpots'), 'HotSpots');
+const Out = lazyNamed(() => import('./pages/Out'), 'Out');
 const AdminVenueClaims = lazyNamed(() => import('./pages/AdminVenueClaims'), 'AdminVenueClaims');
 const Settings = lazyNamed(() => import('./pages/Settings'), 'Settings');
 const Notifications = lazyNamed(() => import('./pages/Notifications'), 'Notifications');
@@ -259,7 +261,9 @@ function AppShell() {
           <Route path="/brightonpride" element={<Navigate to="/pride" replace />} />
           <Route path="/brightonpride26" element={<Navigate to="/pride" replace />} />
           <Route path="/pride" element={<Pride />} />
-          <Route path="/beta" element={<BetaAccess />} />
+          <Route path="/invite" element={<BetaAccess />} />
+          {/* Old preview address: goes home (an ?invite= code still goes to /invite). */}
+          <Route path="/beta" element={<LegacyInviteRedirect />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/register/underage" element={<RegisterUnderage />} />
@@ -314,6 +318,14 @@ function AppShell() {
             element={
               <RequireVerified>
                 <Events />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/out"
+            element={
+              <RequireVerified>
+                <Out />
               </RequireVerified>
             }
           />

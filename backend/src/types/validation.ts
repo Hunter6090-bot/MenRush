@@ -130,6 +130,7 @@ export const ProfileSchema = z.object({
   show_height: z.boolean().optional(),
   show_weight: z.boolean().optional(),
   show_relationship: z.boolean().optional(),
+  show_distance: z.boolean().optional(),
 });
 
 export const DeleteAccountSchema = z.object({
@@ -151,6 +152,14 @@ export const CommunityCreatePostSchema = z.object({
     .max(280, 'Post must be 280 characters or fewer'),
 });
 
+export const CommunityUpdatePostSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Post cannot be empty')
+    .max(280, 'Post must be 280 characters or fewer'),
+});
+
 /** Comment on a Community post — same text-only 280 cap. Free for all. */
 export const CommunityCreateCommentSchema = z.object({
   body: z
@@ -158,6 +167,19 @@ export const CommunityCreateCommentSchema = z.object({
     .trim()
     .min(1, 'Comment cannot be empty')
     .max(280, 'Comment must be 280 characters or fewer'),
+});
+
+export const CommunityUpdateCommentSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Comment cannot be empty')
+    .max(280, 'Comment must be 280 characters or fewer'),
+});
+
+export const CommunityMentionSuggestionsQuerySchema = z.object({
+  q: z.string().default('').transform((val) => val.trim()),
+  limit: z.coerce.number().int().min(1).max(20).optional().default(10),
 });
 
 export const MessageSchema = z.object({
@@ -322,7 +344,10 @@ export type ProfileInput = z.infer<typeof ProfileSchema>;
 export type DeleteAccountInput = z.infer<typeof DeleteAccountSchema>;
 export type LocationInput = z.infer<typeof LocationSchema>;
 export type CommunityCreatePostInput = z.infer<typeof CommunityCreatePostSchema>;
+export type CommunityUpdatePostInput = z.infer<typeof CommunityUpdatePostSchema>;
 export type CommunityCreateCommentInput = z.infer<typeof CommunityCreateCommentSchema>;
+export type CommunityUpdateCommentInput = z.infer<typeof CommunityUpdateCommentSchema>;
+export type CommunityMentionSuggestionsQueryInput = z.infer<typeof CommunityMentionSuggestionsQuerySchema>;
 export type MessageInput = z.infer<typeof MessageSchema>;
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
 export type RoomMessageInput = z.infer<typeof RoomMessageSchema>;

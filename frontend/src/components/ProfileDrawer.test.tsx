@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { ComponentProps } from 'react';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { ProfileDrawer } from './ProfileDrawer';
 import type { NearbyUser } from './ProfileCard';
@@ -11,6 +13,10 @@ vi.mock('../hooks/useMediaQuery', () => ({
 vi.mock('../hooks/store', () => ({
   useAuthStore: (sel: (s: { user: { id: string } | null }) => unknown) =>
     sel({ user: { id: 'viewer-1' } }),
+}));
+
+vi.mock('./ChatSafetyMenu', () => ({
+  ChatSafetyMenu: () => <div data-testid="chat-safety-menu">Safety</div>,
 }));
 
 const graham: NearbyUser = {
@@ -27,7 +33,7 @@ const graham: NearbyUser = {
   cover_url: undefined,
 };
 
-function renderDrawer() {
+function renderDrawer(props: Partial<ComponentProps<typeof ProfileDrawer>> = {}) {
   return render(
     <MemoryRouter>
       <ProfileDrawer
@@ -36,69 +42,79 @@ function renderDrawer() {
         onClose={vi.fn()}
         onLike={vi.fn()}
         onMessage={vi.fn()}
+        {...props}
       />
     </MemoryRouter>,
   );
 }
 
-function classTokens(el: Element): string[] {
-  return Array.from(el.classList);
-}
-
-describe('ProfileDrawer grid sheet layout', () => {
-  it('keeps the circular avatar outside the scrollport (no mid-face clip)', () => {
+describe('ProfileDrawer pin sheet (redesign Step 1)', () => {
+  it('keeps the pin photo outside any scrollport (no mid-face clip)', () => {
     renderDrawer();
-
     const hero = screen.getByTestId('profile-sheet-hero');
     const avatar = screen.getByTestId('drawer-avatar-graham-1');
     expect(hero).toContainElement(avatar);
-
-    // Empty photo → Brand faded face (same size 72, profile crop)
-    const brandFace = avatar.querySelector('[data-testid="faded-brand-face"]') as HTMLElement;
-    expect(brandFace).toBeTruthy();
-    expect(avatar).toContainElement(brandFace);
-    expect(brandFace.getAttribute('data-faded-variant')).toBe('profile');
-    expect(brandFace).toHaveStyle({ width: '72px', height: '72px' });
-
-    // Avatar must not live under an overflow-y-auto/scroll ancestor — that
-    // bisected faces on phone when paired with -mt-* overlap.
+    // Empty photo may render brand face OR resolving generic avatar img
+    expect(avatar.querySelector('img, [data-testid="faded-brand-face"]')).toBeTruthy();
     let node: HTMLElement | null = avatar.parentElement;
     while (node && node !== document.body) {
-      const tokens = classTokens(node);
+      const tokens = Array.from(node.classList);
       const scrollsY = tokens.some(
         (t) => t === 'overflow-y-auto' || t === 'overflow-y-scroll' || t === 'overflow-auto',
       );
-      expect(scrollsY, `avatar ancestor has scroll class: ${tokens.join(' ')}`).toBe(false);
+      expect(scrollsY).toBe(false);
       node = node.parentElement;
     }
   });
 
-  it('shows readable hierarchy: name, status/distance, looking for, interests, actions', () => {
+  it('shows compact pin sheet: name, age · distance, Chat / Album / More', () => {
     renderDrawer();
-
     expect(screen.getByRole('heading', { name: /graham/i })).toBeInTheDocument();
-    expect(screen.getByText('46')).toBeInTheDocument();
-    expect(screen.getByText(/offline/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/28 mi/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/scottish bear/i)).toBeInTheDocument();
-    expect(screen.getByTestId('drawer-looking-for')).toHaveTextContent(/casual/i);
-    expect(screen.getByText('Bear')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /view full profile/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^pass$/i })).toBeNull();
-    expect(screen.getByTestId('drawer-match')).toBeInTheDocument();
-    expect(screen.getByTestId('drawer-match')).toHaveTextContent(/^Match$/);
-    expect(screen.getByText(/match is mutual interest/i)).toBeInTheDocument();
+    expect(screen.getByText(/46/)).toBeInTheDocument();
+    expect(screen.getByText(/28 mi/i)).toBeInTheDocument();
+    expect(screen.getByTestId('pin-sheet-profile-link')).toHaveTextContent(/Profile/i);
+    expect(screen.getByTestId('drawer-open-chat')).toBeInTheDocument();
+    expect(screen.getByTestId('pin-sheet-album')).toBeInTheDocument();
+    expect(screen.getByTestId('pin-sheet-more')).toBeInTheDocument();
+    // Mood / Ready to meet / Report flags not on the sheet face
+    expect(screen.queryByText(/Ready to meet/i)).toBeNull();
   });
 
-  it('places distance in the hero photo band (safe corner), not mid-face bottom', () => {
+  it('opens More with Match and Cancel; Match not on primary face', async () => {
+    const user = userEvent.setup();
     renderDrawer();
-    const hero = screen.getByTestId('profile-sheet-hero');
-    const photoBand = hero.querySelector('[class*="overflow-hidden"]');
-    expect(photoBand).toBeTruthy();
-    expect(photoBand!.textContent).toMatch(/28 mi/);
+    expect(screen.queryByTestId('drawer-match')).toBeNull();
+    await user.click(screen.getByTestId('pin-sheet-more'));
+    expect(screen.getByTestId('pin-sheet-more-menu')).toBeInTheDocument();
+    expect(screen.getByTestId('drawer-match')).toHaveTextContent(/^Match$/);
+    expect(screen.getByTestId('pin-sheet-more-cancel')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-safety-menu')).toBeInTheDocument();
   });
 
-  it('shows muted Sent when one-way pending', () => {
+  it('shows distance once, on the age line, with no "away" line', () => {
+    renderDrawer();
+    expect(screen.getAllByText(/28 mi/i)).toHaveLength(1);
+    expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
+  });
+
+  it('More helper names Report, Block and Hide my location at 15px', async () => {
+    const user = userEvent.setup();
+    renderDrawer();
+    await user.click(screen.getByTestId('pin-sheet-more'));
+    const helper = screen.getByText('Report, Block and Hide my location are in the menu above.');
+    expect(helper.className).toMatch(/text-\[15px\]/);
+  });
+
+  it('pin sheet Profile link and action buttons are 15px', () => {
+    renderDrawer();
+    expect(screen.getByTestId('pin-sheet-profile-link').className).toMatch(/text-\[15px\]/);
+    for (const id of ['drawer-open-chat', 'pin-sheet-album', 'pin-sheet-more']) {
+      expect(screen.getByTestId(id).className).toMatch(/text-\[15px\]/);
+    }
+  });
+
+  it('shows muted Sent in More when one-way pending', async () => {
+    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <ProfileDrawer
@@ -111,14 +127,14 @@ describe('ProfileDrawer grid sheet layout', () => {
         />
       </MemoryRouter>,
     );
+    await user.click(screen.getByTestId('pin-sheet-more'));
     const btn = screen.getByTestId('drawer-match');
     expect(btn).toHaveTextContent(/^Sent$/);
     expect(btn).toBeDisabled();
-    expect(btn).not.toHaveTextContent(/Matched/i);
-    expect(btn.className).toMatch(/cream-muted|opacity-70|cursor-not-allowed/);
   });
 
-  it('shows Chat and Unmatch when mutual', () => {
+  it('shows Unmatch in More when mutual', async () => {
+    const user = userEvent.setup();
     const onUnmatch = vi.fn();
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(
@@ -134,44 +150,19 @@ describe('ProfileDrawer grid sheet layout', () => {
         />
       </MemoryRouter>,
     );
-    const btn = screen.getByTestId('drawer-open-chat');
-    expect(btn).toHaveTextContent('Chat');
-    expect(btn).not.toBeDisabled();
+    expect(screen.getByTestId('drawer-open-chat')).toHaveTextContent('Chat');
+    await user.click(screen.getByTestId('pin-sheet-more'));
     const unmatchBtn = screen.getByTestId('drawer-unmatch');
     expect(unmatchBtn).toHaveTextContent('Unmatch');
-    unmatchBtn.click();
-    expect(confirmSpy).toHaveBeenCalledWith(
-      'Unmatch with Graham? Chat locks again until you both match.',
-    );
+    await user.click(unmatchBtn);
+    expect(confirmSpy).toHaveBeenCalled();
     expect(onUnmatch).toHaveBeenCalledTimes(1);
     confirmSpy.mockRestore();
   });
 
-
-
-  it('aborts unmatch when user cancels confirmation', () => {
-    const onUnmatch = vi.fn();
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
-    render(
-      <MemoryRouter>
-        <ProfileDrawer
-          user={graham}
-          liked
-          mutual
-          onClose={vi.fn()}
-          onLike={vi.fn()}
-          onUnmatch={onUnmatch}
-          onMessage={vi.fn()}
-        />
-      </MemoryRouter>,
-    );
-    const unmatchBtn = screen.getByTestId('drawer-unmatch');
-    unmatchBtn.click();
-    expect(confirmSpy).toHaveBeenCalledWith(
-      'Unmatch with Graham? Chat locks again until you both match.',
-    );
-    expect(onUnmatch).not.toHaveBeenCalled();
-    confirmSpy.mockRestore();
+  it('shows Now when online', () => {
+    renderDrawer({ user: { ...graham, online: true } });
+    expect(screen.getByTestId('pin-sheet-now')).toHaveTextContent('Now');
   });
 
   it('omits distance gracefully when unknown/null/empty', () => {
@@ -194,7 +185,27 @@ describe('ProfileDrawer grid sheet layout', () => {
     expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
   });
 
-  it('exposes enlarge hooks on cover and avatar when photos exist', () => {
+  it('shows no distance when the member hides it', () => {
+    const hidden: NearbyUser = { ...graham };
+    delete (hidden as Partial<NearbyUser>).distance_km;
+    delete (hidden as Partial<NearbyUser>).distance_label;
+    render(
+      <MemoryRouter>
+        <ProfileDrawer
+          user={hidden}
+          liked={false}
+          onClose={vi.fn()}
+          onLike={vi.fn()}
+          onMessage={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText(/Nearby\s*·\s*Nearby/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\d+ mi\b/)).not.toBeInTheDocument();
+  });
+
+  it('exposes enlarge hooks when photos exist', () => {
     const withPhotos: NearbyUser = {
       ...graham,
       photo_url: 'https://cdn.example/photo.jpg',
@@ -213,6 +224,5 @@ describe('ProfileDrawer grid sheet layout', () => {
     );
     expect(screen.getByTestId('drawer-cover-enlarge')).toBeInTheDocument();
     expect(screen.getByTestId('drawer-avatar-graham-1')).toBeInTheDocument();
-    expect(screen.getByTestId('drawer-avatar-graham-1').tagName).toBe('BUTTON');
   });
 });

@@ -1,15 +1,17 @@
 import { createRoot, type Root } from 'react-dom/client';
 import { IconCruise } from './icons';
 import { CRUISE_PIN_LABEL } from '../lib/cruiseCopy';
+import { hotSpotCountLabel, isHotSpotActive } from '../lib/hotSpotCounts';
 
 export type HotSpotPinData = {
   id: string;
   name: string;
   category_icon?: string;
-  /** Exact live check-in count (anonymous + profile). */
-  live_count_exact: number;
-  /** Approximate display count (may be rounded for Free). */
-  live_count?: number | string;
+  /** Exact live check-in count. Premium only (null for Free); used for occupancy, never as a label. */
+  live_count_exact?: number | null;
+  /** Server display count (rounded for Free). The only number the pin shows. */
+  live_count?: number | string | null;
+  has_active_checkins?: boolean;
 };
 
 interface HotSpotPinProps {
@@ -20,28 +22,27 @@ interface HotSpotPinProps {
 }
 
 /**
- * Always-visible Cruise marker on the Nearby map — cruise-ship icon at a glance.
+ * Always-visible Cruise marker on the Nearby map — shows the spot's category icon
+ * (park, parking, sauna, bar…); falls back to the cruise-ship icon if none is set.
  * Pin label is Brand "Cruise". Chip on the map chrome is "Hot Spots".
  * Empty: solid copper pin (slightly quieter, never near-invisible).
  * Occupied: larger glow + pulse + venue name + approximate check-in count.
  * Does not invent venues or occupancy — only renders existing check-in data.
  */
 export function HotSpotPin({ spot, size = 48, showLabel = true }: HotSpotPinProps) {
-  const occupied = spot.live_count_exact > 0;
+  const occupied = isHotSpotActive(spot);
   const pinSize = occupied ? size : Math.round(size * 0.92);
-  const countLabel =
-    spot.live_count != null
-      ? String(spot.live_count)
-      : spot.live_count_exact > 9
-        ? '9+'
-        : String(spot.live_count_exact);
+  // Server value only (Free is already rounded). Never derive a number from live_count_exact.
+  const countLabel = hotSpotCountLabel(spot);
 
   return (
     <div
       className="hotspot-pin"
       title={
         occupied
-          ? `${spot.name} · ${countLabel} checked in`
+          ? countLabel
+            ? `${spot.name} · ${countLabel} checked in`
+            : `${spot.name} · Active now`
           : `${spot.name} · ${CRUISE_PIN_LABEL}`
       }
       style={{
@@ -99,12 +100,26 @@ export function HotSpotPin({ spot, size = 48, showLabel = true }: HotSpotPinProp
           color: '#FFF6E6',
         }}
       >
-        <IconCruise
-          size={Math.round(pinSize * 0.52)}
-          aria-hidden
-          data-testid="cruise-ship-icon"
-          style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.45))' }}
-        />
+        {spot.category_icon ? (
+          <span
+            aria-hidden
+            data-testid="hotspot-category-icon"
+            style={{
+              fontSize: Math.round(pinSize * 0.48),
+              lineHeight: 1,
+              filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.45))',
+            }}
+          >
+            {spot.category_icon}
+          </span>
+        ) : (
+          <IconCruise
+            size={Math.round(pinSize * 0.52)}
+            aria-hidden
+            data-testid="cruise-ship-icon"
+            style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.45))' }}
+          />
+        )}
       </div>
       {occupied ? (
         <span
@@ -186,7 +201,7 @@ export function createHotSpotPinElement(
   showLabel = true,
 ): { element: HTMLDivElement; root: Root } {
   const el = document.createElement('div');
-  const occupied = spot.live_count_exact > 0;
+  const occupied = isHotSpotActive(spot);
   // Tighter footprint when labels are off — reduces unpressable piles over people.
   const labelPad = showLabel ? 28 : 4;
   const widthPad = showLabel ? (occupied ? 104 : 72) : size;

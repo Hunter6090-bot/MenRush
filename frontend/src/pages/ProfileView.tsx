@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { usersAPI } from '../api/client';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
@@ -7,6 +7,7 @@ import { UserAvatar, getPhotoUrl } from '../components/UserAvatar';
 import { FadedBrandFace, isNearbyPlaceholderFace } from '../components/FadedBrandFace';
 import { CoverBanner, normalizeCoverFrame } from '../components/CoverBanner';
 import { ProfilePhotoViewer } from '../components/ProfilePhotoViewer';
+import { realAvatarUrl } from '../lib/avatarFallback';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { DistancePill } from '../components/DistancePill';
@@ -14,7 +15,7 @@ import { ProfileAlbumsSection } from '../components/ProfileAlbumsSection';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { IconMatches, IconChat, IconUnmatch } from '../components/icons';
 import { formatHeight, formatWeight } from '../lib/age';
-import { formatDistanceFromKm } from '../lib/localeUnits';
+import { getDistanceLabel } from '../lib/discovery';
 import {
   matchCtaAriaLabel,
   matchCtaDisabled,
@@ -96,6 +97,7 @@ export function normalizeProfilePayload(raw: unknown): ViewableUser | null {
 export const ProfileView = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const authUserId = useAuthStore((s) => s.user?.id);
   const locationLat = useLocationStore((s) => s.lat);
   const locationLng = useLocationStore((s) => s.lng);
@@ -110,6 +112,14 @@ export const ProfileView = () => {
     null,
   );
   const [viewer, setViewer] = useState<{ src: string; alt: string } | null>(null);
+
+  useEffect(() => {
+    if (location.hash !== '#albums') return;
+    const t = window.setTimeout(() => {
+      document.getElementById('albums')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [location.hash, user?.id]);
 
   useEffect(() => {
     if (!id) {
@@ -242,20 +252,13 @@ export const ProfileView = () => {
   }
 
   const matchState = matchInterestState({ liked, mutual });
-  const coverSrc = user.cover_url ? getPhotoUrl(user.cover_url) : undefined;
-  const photoSrc = user.photo_url ? getPhotoUrl(user.photo_url) : undefined;
-  const distanceKmVal =
-    user.distance_km != null && user.distance_km !== ''
-      ? parseFloat(String(user.distance_km))
-      : user.distance_label != null && user.distance_label.trim() !== ''
-        ? parseFloat(user.distance_label.replace(/[^0-9.]/g, ''))
-        : null;
-  const distLabel =
-    distanceKmVal != null && Number.isFinite(distanceKmVal)
-      ? formatDistanceFromKm(distanceKmVal)
-      : user.distance_label != null && user.distance_label.trim() !== ''
-        ? user.distance_label
-        : null;
+  // Legacy defaults are never "photos" — no enlarge, Brand placeholder instead.
+  const realCover = realAvatarUrl(user.cover_url);
+  const realPhoto = realAvatarUrl(user.photo_url);
+  const coverSrc = realCover ? getPhotoUrl(realCover) : undefined;
+  const photoSrc = realPhoto ? getPhotoUrl(realPhoto) : undefined;
+  // Coarse, Discretion-fuzzed label from the server. None reads "Nearby".
+  const distLabel = getDistanceLabel(user);
 
   return (
     <Layout>
@@ -286,7 +289,7 @@ export const ProfileView = () => {
               onClick={() => setViewer({ src: coverSrc, alt: `${user.name}'s cover` })}
             >
               <CoverBanner
-                coverUrl={user.cover_url!}
+                coverUrl={realCover!}
                 frame={normalizeCoverFrame(
                   user.cover_position_x,
                   user.cover_position_y,
@@ -346,6 +349,7 @@ export const ProfileView = () => {
                   <ChatSafetyMenu
                     peerId={user.id}
                     peerName={user.name}
+                    showHideLocation
                     onNotice={(msg, tone) => {
                       setSafetyNotice({ msg, tone: tone ?? 'success' });
                       window.setTimeout(() => setSafetyNotice(null), 4000);
@@ -362,8 +366,9 @@ export const ProfileView = () => {
               )}
               {distLabel && (
                 <DistancePill
-                  km={distanceKmVal ?? 0}
+                  km={0}
                   label={distLabel}
+                  testId="profile-distance"
                   className="bg-black/40 text-[var(--cream)]/90"
                 />
               )}

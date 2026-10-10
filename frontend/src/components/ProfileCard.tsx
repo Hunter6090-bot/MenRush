@@ -28,9 +28,10 @@ export interface NearbyUser {
   cover_url?: string;
   interests?: string[];
   online: boolean;
-  distance_km: string | number;
-  /** Bucketed/privacy-safe distance label produced by the backend, e.g. "< 300 m", "1.5 km". */
-  distance_label?: string;
+  /** Coarse bucket (sorting). Absent when the member hides distance. */
+  distance_km?: string | number | null;
+  /** Coarse, Discretion-fuzzed label from the backend, e.g. "<1 mi", "3 mi". */
+  distance_label?: string | null;
   last_seen?: string;
   lat?: number;
   lng?: number;
@@ -228,7 +229,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           </p>
         ) : null}
 
-        {user.mood ? (
+        {/* redesign cut mood on cards */ false && user.mood ? (
           <div className="mb-1.5">
             <MoodBadge mood={user.mood} small />
           </div>

@@ -7,9 +7,12 @@ import { useAuthStore, useUnreadStore } from '../hooks/store';
 import { useSocket } from '../hooks/useSocket';
 import {
   readCachedInbox,
+  readCachedMatches,
   refreshInbox,
+  refreshMatches,
   type InboxConversationRow,
 } from '../lib/tabListCache';
+import { IconMatches } from './icons';
 
 export type ConversationRow = InboxConversationRow;
 
@@ -44,6 +47,15 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   const [loading, setLoading] = useState(() => cached === undefined);
   const [loadError, setLoadError] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
+  const [chatListFilter, setChatListFilter] = useState<'all' | 'matches' | 'unread'>('all');
+  const [matchIds, setMatchIds] = useState<Set<string>>(() => {
+    const cached = readCachedMatches();
+    return new Set((cached?.matches ?? []).map((m: { id: string }) => m.id));
+  });
+  const [matchCount, setMatchCount] = useState<number>(() => {
+    const cached = readCachedMatches();
+    return cached?.matches.length ?? 0;
+  });
   const navigate = useNavigate();
   const unreadBySender = useUnreadStore((s) => s.unreadBySender);
   const selfId = useAuthStore((s) => s.user?.id);
@@ -79,6 +91,27 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     void fetchConversations();
   }, [fetchConversations]);
 
+  useEffect(() => {
+    let cancelled = false;
+    refreshMatches()
+      .then((snap) => {
+        if (!cancelled) {
+          setMatchIds(new Set(snap.matches.map((m) => m.id)));
+          setMatchCount(snap.matches.length);
+        }
+      })
+      .catch(() => {
+        const cached = readCachedMatches();
+        if (!cancelled && cached) {
+          setMatchIds(new Set(cached.matches.map((m) => m.id)));
+          setMatchCount(cached.matches.length);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Cold start hang: do not leave blank skeletons forever.
   useEffect(() => {
     if (!loading) return;
@@ -112,6 +145,15 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     };
   }, [socket, fetchConversations]);
 
+  const filtered = convs.filter((c) => {
+    if (chatListFilter === 'unread') {
+      const unread = c.unread_count ?? unreadBySender[c.other_user_id] ?? 0;
+      return unread > 0;
+    }
+    if (chatListFilter === 'matches') return matchIds.has(c.other_user_id);
+    return true;
+  });
+
   return (
     <div className={`flex min-h-0 flex-col ${className}`}>
       {showHeader && (
@@ -124,10 +166,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             <h2 className="text-xl font-bold text-[var(--cream)]">Messages</h2>
           ) : (
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
                 Inbox
               </p>
-              <p className="text-sm font-semibold text-[var(--cream)]">Direct messages</p>
+              <p className="text-base font-semibold text-[var(--cream)]">Direct messages</p>
             </div>
           )}
           {FEATURES.chatRooms && (
@@ -161,6 +203,74 @@ export const ConversationList: React.FC<ConversationListProps> = ({
         </div>
       )}
 
+
+      <div className={`shrink-0 ${isSidebar ? 'px-3 pb-2' : 'mb-3'}`}>
+        <button
+          type="button"
+          data-testid="chat-matches-entry"
+          onClick={() => navigate('/matches')}
+          aria-label={matchCount > 0 ? `Matches, ${matchCount}` : 'Matches'}
+          className="flex min-h-[48px] w-full items-center gap-3 rounded-2xl border border-[var(--copper)]/40 bg-[rgba(196,131,42,0.12)] px-3.5 text-left transition-colors hover:border-[var(--copper)] hover:bg-[rgba(196,131,42,0.18)]"
+        >
+          <span
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-[rgba(196,131,42,0.2)] text-[var(--copper)]"
+            data-testid="matches-entry-icon"
+            aria-hidden
+          >
+            <IconMatches size={20} />
+          </span>
+          <span className="min-w-0 flex-1 text-[15px] font-extrabold text-[var(--cream)]">Matches</span>
+          {matchCount > 0 ? (
+            <span
+              data-testid="chat-matches-count"
+              className="inline-flex min-h-[24px] min-w-[24px] items-center justify-center rounded-full bg-[var(--copper)] px-2 text-[12px] font-extrabold text-[#1A0E03]"
+            >
+              {matchCount > 99 ? '99+' : matchCount}
+            </span>
+          ) : null}
+        </button>
+      </div>
+
+      <div
+        className={`flex shrink-0 gap-2 overflow-x-auto ${isSidebar ? 'px-3 pb-2' : 'mb-3'}`}
+        data-testid="chat-filter-chips"
+        role="tablist"
+        aria-label="Chat filters"
+      >
+        {([
+          ['all', 'All'],
+          ['matches', 'Matches'],
+          ['unread', 'Unread'],
+        ] as const).map(([id, label]) => {
+          const active = chatListFilter === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              data-testid={`chat-filter-${id}`}
+              onClick={() => setChatListFilter(id)}
+              className={`inline-flex min-h-[44px] shrink-0 items-center rounded-full px-3.5 text-[12px] font-extrabold ${
+                active
+                  ? 'bg-[var(--copper)] text-[#1A0E03]'
+                  : 'border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream)]'
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          data-testid="chat-search-pill"
+          onClick={() => window.dispatchEvent(new Event('menrush:open-search'))}
+          className="ml-auto inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--copper)_45%,transparent)] bg-[color-mix(in_srgb,var(--copper)_8%,transparent)] px-3 text-[15px] font-extrabold text-[var(--nn-accent-text)]"
+          aria-label="Search"
+        >
+          Search
+        </button>
+      </div>
       <div className={`min-h-0 flex-1 overflow-y-auto ${isSidebar ? 'px-2 py-3' : ''}`}>
         {loading ? (
           <div className="space-y-2" data-testid="conversations-skeleton">
@@ -192,7 +302,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               Try again
             </button>
           </div>
-        ) : convs.length === 0 ? (
+        ) : filtered.length === 0 && convs.length === 0 ? (
           <div
             className={`text-center animate-fade-in ${isSidebar ? 'px-4 py-14' : 'py-16'}`}
             data-testid="conversations-empty"
@@ -201,8 +311,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               <ChatIcon className="h-8 w-8 text-[#C4832A]/60" />
             </div>
             <p className="mb-1 text-[15px] font-extrabold text-[var(--cream)]">No conversations yet</p>
-            <p className="mx-auto mb-5 max-w-xs text-sm leading-relaxed text-nn-muted">
-              Match someone nearby, then open chat. Be direct. Consent first.
+            <p className="mx-auto mb-5 max-w-xs text-base leading-relaxed text-nn-muted">
+              Open Nearby. Be direct. Consent first.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-2">
               <button
@@ -236,7 +346,13 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             className={`animate-fade-in ${isSidebar ? 'space-y-1' : 'space-y-2'}`}
             data-testid="conversations-list"
           >
-            {convs.map((c) => (
+            {filtered.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-[var(--cream-muted)]" data-testid="chat-filter-empty">
+                Nothing in this filter.
+              </p>
+            ) : null}
+            {filtered.map((c) => (
+
               <ConversationItem
                 key={c.other_user_id}
                 userId={c.other_user_id}

@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  fallbackAvatarForAge,
   resolveAssetUrl,
   resolveDisplayThumbCandidates,
   resolveUploadUrlCandidates,
 } from '../lib/assetUrl';
 import { profilePathForUser } from '../lib/profileLinks';
 import { useAuthStore } from '../hooks/store';
+import { realAvatarUrl } from '../lib/avatarFallback';
+import { FadedBrandFace } from './FadedBrandFace';
 
 type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
@@ -46,49 +47,47 @@ export type ResolvingPhotoOptions = {
 };
 
 /**
- * Walk upload URL candidates (API host ↔ same-origin rewrite) before generic fallback.
+ * Walk upload URL candidates (API host ↔ same-origin rewrite) before giving up.
  * Keeps real /uploads photos visible when Vercel rewrite and VITE_API_URL disagree.
+ *
+ * Empty / legacy default (generic `/avatars/*`, logo plates) → `src` undefined.
+ * Every candidate failed → `src` undefined. Callers then render the ONE Brand
+ * placeholder (`FadedBrandFace`). No generic SVG / initials fallback (Pete lock).
+ * Media lock: the stored photo path is never rewritten — this is display-only.
  */
 export function useResolvingPhotoSrc(
   photoUrl?: string | null,
-  age?: number,
+  _age?: number,
   options?: ResolvingPhotoOptions,
 ): { src: string | undefined; onError: () => void } {
   const [candidateIdx, setCandidateIdx] = useState(0);
-  const [phase, setPhase] = useState<'candidates' | 'generic' | 'empty'>('candidates');
+  const [failed, setFailed] = useState(false);
   const displayWidth = options?.displayWidth;
+  const realUrl = realAvatarUrl(photoUrl);
 
   const candidates =
-    displayWidth != null
-      ? resolveDisplayThumbCandidates(photoUrl, displayWidth)
-      : resolveUploadUrlCandidates(photoUrl);
+    realUrl == null
+      ? []
+      : displayWidth != null
+        ? resolveDisplayThumbCandidates(realUrl, displayWidth)
+        : resolveUploadUrlCandidates(realUrl);
 
   useEffect(() => {
     setCandidateIdx(0);
-    setPhase('candidates');
-  }, [photoUrl, displayWidth]);
+    setFailed(false);
+  }, [realUrl, displayWidth]);
 
   let src: string | undefined;
-  if (phase === 'empty') src = undefined;
-  else if (phase === 'generic') src = resolveAssetUrl(fallbackAvatarForAge(age));
-  else src = candidates[candidateIdx] ?? resolveAssetUrl(photoUrl);
+  if (failed || realUrl == null) src = undefined;
+  else src = candidates[candidateIdx] ?? resolveAssetUrl(realUrl);
 
   const onError = () => {
-    if (phase === 'candidates' && candidateIdx + 1 < candidates.length) {
+    if (candidateIdx + 1 < candidates.length) {
       setCandidateIdx((i) => i + 1);
       return;
     }
-    // Broken /uploads (volume wipe, 404) → age-based generic face so the map
-    // and list still show a person pin, not a blank hole.
-    if (phase === 'candidates' && photoUrl) {
-      setPhase('generic');
-      return;
-    }
-    if (phase === 'generic') {
-      setPhase('empty');
-      return;
-    }
-    setPhase('empty');
+    // Broken /uploads (volume wipe, 404) → Brand placeholder, never a legacy default.
+    setFailed(true);
   };
 
   return { src, onError };
@@ -115,7 +114,6 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   'data-testid': testId,
 }) => {
   const s = sizes[size];
-  const initial = name?.[0]?.toUpperCase() ?? '?';
   const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
   const href = useProfilePhotoHref(userId);
   const shouldLink = Boolean(href) && linkToProfile !== false;
@@ -136,7 +134,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
             loading="lazy"
           />
         ) : (
-          <span className={s.text}>{initial}</span>
+          <FadedBrandFace variant="profile" label={name || 'MenRush'} />
         )}
       </div>
       {showStatus && online !== undefined && (

@@ -1,6 +1,7 @@
 import { query } from '../db';
 import { v4 as uuidv4 } from 'uuid';
 import { premiumService, PremiumRequiredError } from './premium.service';
+import { notLocationHiddenFromViewerSql } from '../lib/locationHiddenSql';
 import { accessControl } from '../security/access';
 import {
   ROOM_TEMP_IDENTITY_TTL_DAYS,
@@ -9,6 +10,11 @@ import {
   roomUsingTempIdentitySql,
   sanitizeRoomPresence,
 } from './room-temp-identity';
+import { applyLiveRoomCounts, liveRoomCount } from './room-presence';
+
+/** Room chat is not a saved history. Messages older than this are deleted. */
+export const ROOM_MESSAGE_TTL_DAYS = 2;
+const ROOM_MESSAGE_PURGE_MS = 60 * 60 * 1000;
 
 export {
   ROOM_TEMP_IDENTITY_TTL_DAYS,
@@ -143,6 +149,7 @@ export const roomService = {
     }
 
     const room = roomResult.rows[0];
+    room.member_count = liveRoomCount(roomId);
 
     const roleResult = await query(
       `SELECT role FROM room_members WHERE room_id = $1 AND user_id = $2`,
@@ -208,18 +215,20 @@ export const roomService = {
            AND COALESCE(r.is_official, false) = false
            AND r.id != ALL($5::uuid[])
            AND ST_DWithin(r.location, ST_MakePoint($2, $1)::geography, $3)
+           -- Hide my location from: a nearby room pins where its creator was.
+           AND (r.created_by IS NULL OR ${notLocationHiddenFromViewerSql('r.created_by', '$6')})
          GROUP BY r.id
          ORDER BY distance_m ASC
          LIMIT $4`,
-        [options.lat, options.lng, radiusMeters, limit, excludeIds]
+        [options.lat, options.lng, radiusMeters, limit, excludeIds, userId]
       );
       nearbyRooms = nearbyResult.rows;
     }
 
     return {
-      member_rooms: memberRooms.rows,
-      nearby_rooms: nearbyRooms,
-      official_rooms: officialRooms.rows,
+      member_rooms: applyLiveRoomCounts(memberRooms.rows),
+      nearby_rooms: applyLiveRoomCounts(nearbyRooms),
+      official_rooms: applyLiveRoomCounts(officialRooms.rows),
     };
   },
 
@@ -245,7 +254,7 @@ export const roomService = {
       throw new Error('This group is invite-only. Ask the owner to add you.');
     }
 
-    if (room.member_count >= room.max_members) {
+    if (liveRoomCount(roomId) >= room.max_members) {
       throw new Error('Room is full');
     }
 
@@ -288,7 +297,7 @@ export const roomService = {
       throw new Error('Only the group owner can add members');
     }
 
-    if (room.member_count >= room.max_members) {
+    if (liveRoomCount(roomId) >= room.max_members) {
       throw new Error('Group is full');
     }
 
@@ -416,6 +425,7 @@ export const roomService = {
        LEFT JOIN room_temp_identities ti
          ON ti.user_id = rm.sender_id AND ti.room_id = rm.room_id
        WHERE rm.room_id = $1
+         AND rm.created_at > NOW() - INTERVAL '${ROOM_MESSAGE_TTL_DAYS} days'
          ${cursorClause}
        ORDER BY rm.created_at DESC
        LIMIT $2`,
@@ -616,34 +626,30 @@ export const roomService = {
   },
 
   /**
-   * Session exit (socket leave / disconnect): wipe unsaved temp identity and,
-   * for open-join rooms (official / location), drop DB membership so leavers
-   * leave no roster trace. Private invite groups keep membership.
+   * Session exit: wipe unsaved temp identity and drop this account from the room.
+   * Occupancy is who is inside now. Owner rows stay so a private room still has an owner,
+   * but they do not count as present once they leave.
    */
   async exitRoomSession(userId: string, roomId: string): Promise<void> {
     await this.clearTempIdentityOnLeave(userId, roomId);
-    const roomRes = await query(
-      `SELECT COALESCE(is_official, false) AS is_official,
-              COALESCE(is_location_based, false) AS is_location_based
-         FROM rooms WHERE id = $1`,
-      [roomId],
-    );
-    const room = roomRes.rows[0];
-    if (!room) return;
-    if (!room.is_official && !room.is_location_based) return;
-
     const roleRes = await query(
       `SELECT role FROM room_members WHERE room_id = $1 AND user_id = $2`,
       [roomId, userId],
     );
     if (roleRes.rows.length === 0) return;
-    // Official/location catalog rooms: drop membership on leave (no ghost roster).
-    // Skip owner rows if any (system catalog should not use personal owners).
     if (roleRes.rows[0].role === 'owner') return;
     await query(`DELETE FROM room_members WHERE room_id = $1 AND user_id = $2`, [
       roomId,
       userId,
     ]);
+  },
+
+  async purgeExpiredRoomMessages(): Promise<number> {
+    const result = await query(
+      `DELETE FROM room_messages
+        WHERE created_at < NOW() - INTERVAL '${ROOM_MESSAGE_TTL_DAYS} days'`,
+    );
+    return result.rowCount ?? 0;
   },
 
   async deleteRoom(userId: string, roomId: string) {
@@ -669,4 +675,20 @@ export function startRoomTempIdentityPurgeCron(): NodeJS.Timeout {
 
   run();
   return setInterval(run, ROOM_TEMP_IDENTITY_PURGE_MS);
+}
+
+export function startRoomMessagePurgeCron(): NodeJS.Timeout {
+  const run = () =>
+    roomService.purgeExpiredRoomMessages()
+      .then((deleted) => {
+        if (deleted > 0) {
+          console.log(`[room-messages] purged ${deleted} message(s) older than ${ROOM_MESSAGE_TTL_DAYS} days`);
+        }
+      })
+      .catch((err) => {
+        console.error('[room-messages] purge failed:', err);
+      });
+
+  run();
+  return setInterval(run, ROOM_MESSAGE_PURGE_MS);
 }

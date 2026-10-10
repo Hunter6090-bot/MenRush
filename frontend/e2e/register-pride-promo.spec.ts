@@ -27,11 +27,8 @@ test.describe('Register promo field', () => {
     await expect(page.getByText(/PRIDE 3MONTH FREE or PRIDE-XXXX-XXXX/i)).toHaveCount(0);
     await expect(page.getByText(/You're in/i)).toHaveCount(0);
 
-    const gift = page.getByTestId('register-gift-note');
-    await expect(gift).toContainText(/Sign up before 1 October 2026/i);
-    await expect(gift).toContainText(/30 days of Premium free/i);
-    await expect(gift).toContainText(/A promo replaces that gift and does not stack/i);
-    await expect(gift).not.toContainText(/—|–|BSF26|BearScots|Pride/i);
+    await expect(page.getByTestId('register-gift-note')).toHaveCount(0);
+    await expect(page.getByText(/Sign up before 1 October 2026/i)).toHaveCount(0);
 
     await page.getByTestId('register-promo-clear').click();
     await expect(promo).toHaveValue('');

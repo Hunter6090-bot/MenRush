@@ -25,7 +25,7 @@ export const RoomsHub = () => {
                 <IconRooms size={36} className="text-[var(--copper)]/50" />
               </div>
               <h2 className="text-lg font-bold text-[var(--cream)]">Open a room</h2>
-              <p className="mt-2 max-w-sm text-sm text-[var(--cream-muted)]">
+              <p className="mt-2 max-w-sm text-[15px] text-[var(--cream-muted)]">
                 Select a group from {ROUTE_LABELS.rooms} to join, or create a new Premium group.
               </p>
             </div>

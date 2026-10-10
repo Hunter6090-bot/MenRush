@@ -55,19 +55,20 @@ test('MR3FREE code: case-insensitive, no spaces, exact match', () => {
   assert.strictEqual(SHARED_MR3FREE_MONTHS_FREE, 3);
 });
 
-test('MR3FREE validity window: live 17 Sep 2026 until 23:59 Europe/London 5 Oct 2026', () => {
+test('MR3FREE validity window: live 17 Sep 2026 until 23:59 Europe/London 31 Oct 2026', () => {
   // Live from 17 Sep 2026 00:00 London (BST = UTC+1: 2026-09-16T23:00:00Z)
   assert.strictEqual(SHARED_MR3FREE_LIVE_FROM.toISOString(), '2026-09-16T23:00:00.000Z');
   assert.strictEqual(isMr3FreeEnterOpen(new Date('2026-09-16T22:59:59Z')), false);
   assert.strictEqual(isMr3FreeEnterOpen(new Date('2026-09-17T00:00:00Z')), true);
   assert.strictEqual(isMr3FreeEnterOpen(new Date('2026-09-17T12:00:00Z')), true);
 
-  // Claim-by: end of 5 Oct 2026 Europe/London inclusive (23:59:59 BST = 2026-10-05T22:59:59Z)
-  assert.strictEqual(SHARED_MR3FREE_ENTER_BY.toISOString(), '2026-10-05T22:59:59.000Z');
-  assert.strictEqual(isMr3FreeEnterOpen(new Date('2026-10-05T22:59:59Z')), true);
-  assert.strictEqual(isMr3FreeEnterOpen(new Date('2026-10-05T23:00:00Z')), false);
-  assert.strictEqual(isMr3FreeEnterOpen(new Date('2026-10-06T00:00:00Z')), false);
-  assert.match(SHARED_MR3FREE_EXPIRED_MESSAGE, /5 October 2026/);
+  // Claim-by: end of 31 Oct 2026 Europe/London inclusive (GMT after BST ends 25 Oct: 23:59:59 = 2026-10-31T23:59:59Z)
+  assert.strictEqual(SHARED_MR3FREE_ENTER_BY.toISOString(), '2026-10-31T23:59:59.000Z');
+  assert.strictEqual(isMr3FreeEnterOpen(new Date('2026-10-06T00:00:00Z')), true);
+  assert.strictEqual(isMr3FreeEnterOpen(new Date('2026-10-08T12:00:00Z')), true);
+  assert.strictEqual(isMr3FreeEnterOpen(new Date('2026-10-31T23:59:59Z')), true);
+  assert.strictEqual(isMr3FreeEnterOpen(new Date('2026-11-01T00:00:00Z')), false);
+  assert.match(SHARED_MR3FREE_EXPIRED_MESSAGE, /31 October 2026/);
 });
 
 test('MR3FREE Premium window: unlocked from day one for 3 months', () => {

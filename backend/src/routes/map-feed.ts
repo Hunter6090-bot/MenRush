@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 import { z } from 'zod';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { mapFeedService } from '../services/map-feed.service';
@@ -11,6 +12,7 @@ const postLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 20,
   message: { error: 'Too many map feed posts. Try again in a minute.' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -27,6 +29,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const radiusKm =
       req.query.radius !== undefined ? parseFloat(req.query.radius as string) : undefined;
 
+    // Blocks, Ghost and "Hide my location from" are all applied in SQL before LIMIT.
     const messages = await mapFeedService.listNearby(req.userId!, { lat, lng, radiusKm });
     res.json({ messages });
   } catch (err: unknown) {
@@ -47,7 +50,10 @@ router.post('/', postLimiter, async (req: AuthRequest, res: Response) => {
     if (io) {
       const lat = Number(saved.lat);
       const lng = Number(saved.lng);
-      const nearbyIds = await mapFeedService.nearbyUserIds(lat, lng, 5);
+      // Fan-out radius is fixed on the server at 5 km (no client input), and the
+      // centre is the sender's public (fuzzed) pin from saved.lat / saved.lng.
+      // Leaves out blocks both ways and anyone the poster hides their location from (in SQL).
+      const nearbyIds = await mapFeedService.nearbyUserIds(lat, lng, 5, req.userId!);
       // Include the poster: Discover dock does not optimistically render until this
       // event (or the HTTP body) lands — skipping self made own posts look undelivered.
       for (const uid of nearbyIds) {

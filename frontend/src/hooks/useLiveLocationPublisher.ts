@@ -6,7 +6,7 @@ import { useAuthStore, useLocationStore } from './store';
 
 const MIN_PUSH_MS = 20_000;
 const MIN_MOVE_METERS = 40;
-/** Keep last_seen fresh while the app is open so Nearby "Active now" stays honest (20m window). */
+/** Keep last_seen fresh while the app is open so Nearby "Active now" stays honest (1h window). */
 const HEARTBEAT_MS = 8 * 60 * 1000;
 /** Re-try when first fix fails (permission prompt, cold GPS). */
 const RETRY_MS = 12_000;

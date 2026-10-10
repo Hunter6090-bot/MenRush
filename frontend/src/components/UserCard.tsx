@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
+import { BrandAvatar } from './BrandAvatar';
 import { DistancePill } from './DistancePill';
 import { StatusBadge } from './StatusBadge';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
@@ -37,7 +38,13 @@ export const UserCard: React.FC<UserCardProps> = ({ user }) => {
             <FadedBrandFace variant="tile" label={user.name} />
           </div>
         ) : (
-          <img src={user.photo_url} alt={user.name} className="w-full h-full object-cover" />
+          <BrandAvatar
+            photoUrl={user.photo_url}
+            name={user.name}
+            alt={user.name}
+            variant="tile"
+            imgClassName="w-full h-full object-cover"
+          />
         )}
         <div className="pointer-events-none absolute top-3 right-3">
           <StatusBadge online={user.online} lastSeen={user.last_seen} size="xs" />

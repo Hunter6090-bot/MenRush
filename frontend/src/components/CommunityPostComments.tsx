@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { communityAPI, type CommunityCommentDTO } from '../api/client';
+import {
+  communityAPI,
+  type CommunityCommentDTO,
+} from '../api/client';
 import { formatRelativeTime } from '../lib/notifications';
+import { useAuthStore } from '../hooks/store';
+import { MentionTextarea } from './MentionTextarea';
 import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
 import { useResolvingPhotoSrc } from './UserAvatar';
 
@@ -40,6 +45,8 @@ export function CommunityPostComments({
   commentCount = 0,
   onCountChange,
 }: CommunityPostCommentsProps) {
+  const currentUserId = useAuthStore((s) => s.user?.id);
+
   const [open, setOpen] = useState(false);
   const [comments, setComments] = useState<CommunityCommentDTO[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -47,6 +54,64 @@ export function CommunityPostComments({
   const [draft, setDraft] = useState('');
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState('');
+
+  // Editing state for comments
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
+
+  // Deleting state for comments
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  const [deleteConfirmCommentId, setDeleteConfirmCommentId] = useState<string | null>(null);
+
+  const startEditComment = (comment: CommunityCommentDTO) => {
+    setEditingCommentId(comment.id);
+    setEditDraft(comment.body);
+    setEditError('');
+    setDeleteConfirmCommentId(null);
+  };
+
+  const cancelEditComment = () => {
+    setEditingCommentId(null);
+    setEditDraft('');
+    setEditError('');
+  };
+
+  const handleSaveEditComment = async (commentId: string) => {
+    const trimmed = editDraft.trim();
+    if (!trimmed || trimmed.length > MAX_CHARS || savingEdit) return;
+    setSavingEdit(true);
+    setEditError('');
+    try {
+      const res = await communityAPI.updateComment(postId, commentId, trimmed);
+      const updated = res.data.comment;
+      setComments((prev) => prev.map((c) => (c.id === commentId ? updated : c)));
+      setEditingCommentId(null);
+      setEditDraft('');
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { error?: string } } };
+      setEditError(ax.response?.data?.error || 'Could not update comment.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    setDeletingCommentId(commentId);
+    try {
+      await communityAPI.deleteComment(postId, commentId);
+      const next = comments.filter((c) => c.id !== commentId);
+      setComments(next);
+      setDeleteConfirmCommentId(null);
+      onCountChange?.(next.length);
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { error?: string } } };
+      alert(ax.response?.data?.error || 'Could not delete comment.');
+    } finally {
+      setDeletingCommentId(null);
+    }
+  };
 
   const count = loaded ? comments.length : commentCount;
   const remaining = MAX_CHARS - draft.length;
@@ -129,38 +194,153 @@ export function CommunityPostComments({
                     <CommentAvatar name={comment.author_name} photoUrl={comment.author_photo_url} />
                   </Link>
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-baseline gap-x-2">
-                      <Link
-                        to={`/profile/${comment.user_id}`}
-                        className="truncate text-[13px] font-extrabold text-[var(--cream)] hover:text-[#C4832A]"
-                      >
-                        {comment.author_name}
-                      </Link>
-                      <span className="text-[11px] text-[var(--cream-muted)]">
-                        {formatRelativeTime(comment.created_at)}
-                      </span>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <Link
+                          to={`/profile/${comment.user_id}`}
+                          className="truncate text-[13px] font-extrabold text-[var(--cream)] hover:text-[#C4832A]"
+                        >
+                          {comment.author_name}
+                        </Link>
+                        <span className="text-[11px] text-[var(--cream-muted)]">
+                          {formatRelativeTime(comment.created_at)}
+                        </span>
+                      </div>
+
+                      {currentUserId && currentUserId === comment.user_id ? (
+                        <div className="flex items-center gap-1 shrink-0">
+                          {editingCommentId !== comment.id ? (
+                            <>
+                              <button
+                                type="button"
+                                data-testid={`community-comment-edit-${comment.id}`}
+                                onClick={() => startEditComment(comment)}
+                                className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded px-2.5 py-1 text-[11px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-[rgba(196,131,42,0.15)] hover:text-[#E0A14A] active:bg-[rgba(196,131,42,0.25)] touch-manipulation"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                data-testid={`community-comment-delete-${comment.id}`}
+                                onClick={() => setDeleteConfirmCommentId(comment.id)}
+                                className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded px-2.5 py-1 text-[11px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-red-500/10 hover:text-red-400 active:bg-red-500/20 touch-manipulation"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
-                    <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-[var(--cream-soft)]">
-                      {comment.body}
-                    </p>
+
+                    {deleteConfirmCommentId === comment.id ? (
+                      <div
+                        data-testid={`community-comment-delete-confirm-${comment.id}`}
+                        className="mt-1.5 rounded-lg border border-red-500/40 bg-red-950/30 p-2 text-[11px] text-[var(--cream)]"
+                      >
+                        <p className="font-semibold text-red-300">Delete this comment?</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            data-testid={`community-comment-delete-btn-${comment.id}`}
+                            disabled={deletingCommentId === comment.id}
+                            onClick={() => void handleDeleteComment(comment.id)}
+                            className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full bg-red-600 px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-white transition-colors hover:bg-red-500 active:bg-red-700 disabled:opacity-40 touch-manipulation"
+                          >
+                            {deletingCommentId === comment.id ? 'Deleting…' : 'Delete'}
+                          </button>
+                          <button
+                            type="button"
+                            data-testid={`community-comment-delete-cancel-${comment.id}`}
+                            disabled={deletingCommentId === comment.id}
+                            onClick={() => setDeleteConfirmCommentId(null)}
+                            className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full border border-[var(--border-default)] px-4 py-1.5 text-[11px] font-bold text-[var(--cream-muted)] hover:text-[var(--cream)] active:bg-white/5 touch-manipulation"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {editingCommentId === comment.id ? (
+                      <div
+                        data-testid={`community-comment-edit-box-${comment.id}`}
+                        className="mt-1.5 space-y-1.5 rounded-xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.06)] p-2"
+                      >
+                        <MentionTextarea
+                          id={`edit-comment-${comment.id}`}
+                          data-testid={`community-comment-edit-input-${comment.id}`}
+                          value={editDraft}
+                          onChange={setEditDraft}
+                          rows={2}
+                          maxChars={MAX_CHARS}
+                          placeholder="Edit your comment…"
+                          className="w-full resize-none rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-2.5 py-1.5 text-[13px] leading-relaxed text-[var(--cream)] placeholder:text-[var(--cream-muted)] focus:border-[#C4832A] focus:outline-none"
+                          autoFocus
+                        />
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className={`text-[10px] font-bold tabular-nums ${
+                              MAX_CHARS - editDraft.length < 20
+                                ? 'text-[#C4832A]'
+                                : 'text-[var(--cream-muted)]'
+                            }`}
+                          >
+                            {MAX_CHARS - editDraft.length}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              data-testid={`community-comment-edit-cancel-${comment.id}`}
+                              disabled={savingEdit}
+                              onClick={cancelEditComment}
+                              className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full border border-[var(--border-default)] px-3.5 py-1 text-[11px] font-bold text-[var(--cream-muted)] hover:text-[var(--cream)] active:bg-white/5 touch-manipulation"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              data-testid={`community-comment-edit-save-${comment.id}`}
+                              disabled={savingEdit || editDraft.trim().length === 0}
+                              onClick={() => void handleSaveEditComment(comment.id)}
+                              className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full bg-[#C4832A] px-4 py-1 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] active:bg-[#C4832A] disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
+                            >
+                              {savingEdit ? 'Saving…' : 'Save'}
+                            </button>
+                          </div>
+                        </div>
+                        {editError ? (
+                          <p className="text-[10px] text-[#E0A14A]" role="alert">
+                            {editError}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-[var(--cream-soft)]">
+                        {comment.body}
+                      </p>
+                    )}
                   </div>
                 </li>
               ))}
             </ul>
           )}
 
-          <div data-testid="community-comment-composer">
+          <div
+            className="relative"
+            data-testid="community-comment-composer"
+          >
             <label htmlFor={`community-comment-${postId}`} className="sr-only">
               Write a comment
             </label>
-            <textarea
+            <MentionTextarea
               id={`community-comment-${postId}`}
               data-testid="community-comment-input"
               value={draft}
-              onChange={(e) => setDraft(e.target.value.slice(0, MAX_CHARS))}
-              maxLength={MAX_CHARS}
+              onChange={setDraft}
               rows={2}
-              placeholder="Write a comment…"
+              maxChars={MAX_CHARS}
+              placeholder="Write a comment… Type @ to mention"
               className="w-full resize-none rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2 text-[16px] leading-relaxed text-[var(--cream)] placeholder:text-[var(--cream-muted)] focus:border-[#C4832A] focus:outline-none"
             />
             <div className="mt-1.5 flex items-center justify-between gap-2">

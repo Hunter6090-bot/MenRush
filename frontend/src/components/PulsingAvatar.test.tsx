@@ -14,6 +14,35 @@ describe('PulsingAvatar identity badge', () => {
     // size 44 → max(16, round(44*0.38)) = 17
     expect(badge.style.width).toBe('17px');
     expect(badge.style.height).toBe('17px');
+    expect(badge.className).not.toMatch(/rounded-full/);
+    expect(badge.style.background).toBe('');
+    expect(badge.style.border).toBe('');
+  });
+
+  it('clips circle avatars (map pins) with rounded-full by default', () => {
+    render(
+      <PulsingAvatar isPulsing={false} size={44}>
+        <span>face</span>
+      </PulsingAvatar>,
+    );
+    const root = screen.getByText('face').closest('[data-avatar-shape]');
+    expect(root).toHaveAttribute('data-avatar-shape', 'circle');
+    const clip = root?.querySelector('.relative.z-10');
+    expect(clip?.className).toMatch(/rounded-full/);
+    expect(clip?.className).toMatch(/overflow-hidden/);
+  });
+
+  it('still supports an opt-in square clip', () => {
+    render(
+      <PulsingAvatar isPulsing={false} size={44} shape="square">
+        <span>face</span>
+      </PulsingAvatar>,
+    );
+    const root = screen.getByText('face').closest('[data-avatar-shape]');
+    expect(root).toHaveAttribute('data-avatar-shape', 'square');
+    const clip = root?.querySelector('.relative.z-10');
+    expect(clip?.className).toMatch(/overflow-hidden/);
+    expect(clip?.className).not.toMatch(/rounded-full/);
   });
 
   it('hides the mark when not verified', () => {

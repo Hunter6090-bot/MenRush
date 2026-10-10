@@ -3,6 +3,7 @@ import { mapFeedAPI, MapFeedMessage } from '../api/client';
 import { useSocket } from '../hooks/useSocket';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { IconClose } from './icons';
+import { FadedBrandFace } from './FadedBrandFace';
 
 const DOCK_STORAGE_KEY = 'menrush_discover_chat_dock';
 const MAX_VISIBLE = 6;
@@ -228,24 +229,21 @@ export function DiscoverChatDock({
                   className={`flex gap-2 ${isMine ? 'flex-row-reverse' : ''}`}
                   style={{ opacity }}
                 >
-                  {/* Avatar initial */}
+                  {/* Map-feed has no photos — ONE Brand placeholder face (no initials). */}
                   <div
-                    className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-bold"
-                    style={{
-                      background: 'rgba(196,131,42,0.2)',
-                      border: '1px solid rgba(196,131,42,0.3)',
-                      color: '#C4832A',
-                    }}
+                    className="mt-0.5 h-8 w-8 shrink-0 overflow-hidden rounded-full"
+                    style={{ border: '1px solid rgba(196,131,42,0.3)' }}
+                    data-testid="map-feed-brand-face"
                   >
-                    {(msg.display_name?.[0] ?? '?').toUpperCase()}
+                    <FadedBrandFace variant="profile" size={30} label={msg.display_name || 'MenRush'} />
                   </div>
                   <div className={`flex max-w-[78%] flex-col ${isMine ? 'items-end' : 'items-start'}`}>
-                    <span className="mb-0.5 text-[9px] font-semibold text-[#A89070]">
+                    <span className="mb-0.5 text-xs font-semibold text-[#A89070]">
                       {isMine ? 'You' : msg.display_name}
                       {msg.distance_label ? ` · ${msg.distance_label}` : ''}
                     </span>
                     <div
-                      className="rounded-2xl px-3 py-1.5 text-[12px] leading-snug"
+                      className="rounded-2xl px-3 py-1.5 text-base leading-snug"
                       style={
                         isMine
                           ? {
@@ -263,7 +261,7 @@ export function DiscoverChatDock({
                     >
                       {msg.message}
                     </div>
-                    <span className="mt-0.5 text-[9px] text-[#4A3520]">{formatTime(msg.created_at)}</span>
+                    <span className="mt-0.5 text-xs text-[#4A3520]">{formatTime(msg.created_at)}</span>
                   </div>
                 </div>
               );
@@ -289,7 +287,7 @@ export function DiscoverChatDock({
             }}
             placeholder="Say something nearby…"
             maxLength={200}
-            className="flex-1 rounded-full bg-[rgba(255,255,255,0.06)] px-3.5 py-2 text-[12px] text-[#F0DFC0] placeholder-[#4A3520] outline-none focus:ring-1 focus:ring-[rgba(196,131,42,0.4)]"
+            className="flex-1 rounded-full bg-[rgba(255,255,255,0.06)] px-3.5 py-2 text-[16px] text-[#F0DFC0] placeholder-[#4A3520] outline-none focus:ring-1 focus:ring-[rgba(196,131,42,0.4)]"
             style={{ border: '1px solid rgba(196,131,42,0.22)' }}
           />
           <button

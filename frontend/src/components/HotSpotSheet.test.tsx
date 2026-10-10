@@ -78,4 +78,31 @@ describe('HotSpotSheet', () => {
     fireEvent.click(checkInAnon);
     expect(onCheckIn).toHaveBeenCalledWith(mockSpot, true);
   });
+
+  const renderSheet = (spot: HotSpotDTO) =>
+    render(
+      <MemoryRouter>
+        <HotSpotSheet spot={spot} isPremium={false} acting={false} error="" onClose={vi.fn()} onCheckIn={vi.fn()} />
+      </MemoryRouter>,
+    );
+
+  it('check-in line is 15px and shows the count, including 1', () => {
+    renderSheet({ ...mockSpot, has_active_checkins: true, live_count: 1, live_count_exact: null });
+    const line = screen.getByTestId('hotspot-sheet-activity');
+    expect(line).toHaveTextContent('1 checked in');
+    expect(line).not.toHaveTextContent('Active now');
+    expect(line.querySelector('p')).toHaveClass('text-[15px]');
+  });
+
+  it('Free 5+ reads "5+ checked in"', () => {
+    renderSheet({ ...mockSpot, has_active_checkins: true, live_count: '5+', live_count_exact: null });
+    expect(screen.getByTestId('hotspot-sheet-activity')).toHaveTextContent('5+ checked in');
+  });
+
+  it('says "Active now" only when there is no count', () => {
+    renderSheet({ ...mockSpot, has_active_checkins: true, live_count: null as unknown as number, live_count_exact: null });
+    const line = screen.getByTestId('hotspot-sheet-activity');
+    expect(line).toHaveTextContent('Active now');
+    expect(line).not.toHaveTextContent(/null|undefined/);
+  });
 });

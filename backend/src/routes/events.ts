@@ -1,18 +1,22 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 import { z } from 'zod';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { privateNoStore } from '../middleware/noStore';
 import { eventService } from '../services/event.service';
 import { hotSpotsService } from '../services/hot-spots.service';
 import { LocationSchema } from '../types/validation';
 
 const router = Router();
-router.use(authMiddleware, verifiedMiddleware);
+// Ahead of auth so 401s are not stored either; covers nearby and check-in.
+router.use(privateNoStore, authMiddleware, verifiedMiddleware);
 
 const checkInLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   message: { error: 'Too many check-ins. Try again in a minute.' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });

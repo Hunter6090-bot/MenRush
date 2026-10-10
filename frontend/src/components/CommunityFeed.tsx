@@ -1,13 +1,20 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { communityAPI, type CommunityPostDTO, usersAPI } from '../api/client';
-import { formatDistanceFromKm } from '../lib/localeUnits';
+import {
+  communityAPI,
+  type CommunityPostDTO,
+  usersAPI,
+} from '../api/client';
+import { getDistanceLabel } from '../lib/discovery';
 import { formatRelativeTime } from '../lib/notifications';
 import { ROUTE_LABELS } from '../lib/routeLabels';
+import { useAuthStore } from '../hooks/store';
+import { MentionTextarea } from './MentionTextarea';
 import { CommunityPostComments } from './CommunityPostComments';
 import { PulseRing } from './PulseRing';
 import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
 import { useResolvingPhotoSrc } from './UserAvatar';
+import { isCommunityPostFresh } from '../lib/communityExpiry';
 
 const MAX_CHARS = 280;
 
@@ -39,9 +46,9 @@ function PostAvatar({ name, photoUrl }: { name: string; photoUrl: string | null 
 }
 
 function distanceDisplay(post: CommunityPostDTO): string {
-  const km = Number(post.distance_km);
-  if (Number.isFinite(km)) return formatDistanceFromKm(km);
-  return post.distance_label || 'Nearby';
+  // Server sends a coarse, Discretion-fuzzed label. None (author hides
+  // distance) reads "Nearby".
+  return getDistanceLabel(post);
 }
 
 /**
@@ -53,6 +60,8 @@ export function CommunityFeed({
   compact = false,
   className = '',
 }: CommunityFeedProps) {
+  const currentUserId = useAuthStore((s) => s.user?.id);
+
   const [posts, setPosts] = useState<CommunityPostDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -63,10 +72,67 @@ export function CommunityFeed({
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState('');
 
+  // Editing state for posts
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
+
+  // Deleting state for posts
+  const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
+  const [deleteConfirmPostId, setDeleteConfirmPostId] = useState<string | null>(null);
+
+  const startEditPost = (post: CommunityPostDTO) => {
+    setEditingPostId(post.id);
+    setEditDraft(post.body);
+    setEditError('');
+    setDeleteConfirmPostId(null);
+  };
+
+  const cancelEditPost = () => {
+    setEditingPostId(null);
+    setEditDraft('');
+    setEditError('');
+  };
+
+  const handleSaveEditPost = async (postId: string) => {
+    const trimmed = editDraft.trim();
+    if (!trimmed || trimmed.length > MAX_CHARS || savingEdit) return;
+    setSavingEdit(true);
+    setEditError('');
+    try {
+      const res = await communityAPI.updatePost(postId, trimmed);
+      const updated = res.data.post;
+      setPosts((prev) => prev.map((p) => (p.id === postId ? updated : p)));
+      setEditingPostId(null);
+      setEditDraft('');
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { error?: string } } };
+      setEditError(ax.response?.data?.error || 'Could not update post.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    setDeletingPostId(postId);
+    try {
+      await communityAPI.deletePost(postId);
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+      setDeleteConfirmPostId(null);
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { error?: string } } };
+      alert(ax.response?.data?.error || 'Could not delete post.');
+    } finally {
+      setDeletingPostId(null);
+    }
+  };
+
   const loadFeed = useCallback(
     async (lat: number, lng: number) => {
       const res = await communityAPI.listPosts(lat, lng, radiusKm);
-      setPosts(res.data.posts ?? []);
+      const rawPosts = res.data.posts ?? [];
+      setPosts(rawPosts.filter((p) => isCommunityPostFresh(p.created_at)));
       setError('');
       setNeedsLocation(false);
       setViewerLat(lat);
@@ -172,14 +238,14 @@ export function CommunityFeed({
           <label htmlFor="community-post-body" className="sr-only">
             Community post
           </label>
-          <textarea
+          <MentionTextarea
             id="community-post-body"
             data-testid="community-post-input"
             value={draft}
-            onChange={(e) => setDraft(e.target.value.slice(0, MAX_CHARS))}
+            onChange={setDraft}
             maxLength={MAX_CHARS}
             rows={compact ? 2 : 3}
-            placeholder="What's happening nearby?"
+            placeholder="What's happening nearby? Type @ to mention a Hot Spot or Match"
             className="w-full resize-none rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2.5 text-[16px] leading-relaxed text-[var(--cream)] placeholder:text-[var(--cream-muted)] focus:border-[#C4832A] focus:outline-none"
           />
           <div className="mt-2 flex items-center justify-between gap-2">
@@ -239,7 +305,7 @@ export function CommunityFeed({
         <div className="rounded-2xl border border-[#A45E18]/40 bg-[var(--bg-card)] p-5 text-sm text-[var(--cream)]">
           {error}
         </div>
-      ) : posts.length === 0 ? (
+      ) : posts.filter((post) => isCommunityPostFresh(post.created_at)).length === 0 ? (
         <div
           className="rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.08)] px-6 py-10 text-center"
           data-testid="community-empty"
@@ -251,7 +317,9 @@ export function CommunityFeed({
         </div>
       ) : (
         <ul className="space-y-3" data-testid="community-post-list">
-          {posts.map((post) => (
+          {posts
+            .filter((post) => isCommunityPostFresh(post.created_at))
+            .map((post) => (
             <li
               key={post.id}
               data-testid="community-post"
@@ -262,23 +330,139 @@ export function CommunityFeed({
                   <PostAvatar name={post.author_name} photoUrl={post.author_photo_url} />
                 </Link>
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <Link
-                      to={`/profile/${post.user_id}`}
-                      className="truncate text-[14px] font-extrabold text-[var(--cream)] hover:text-[#C4832A]"
-                    >
-                      {post.author_name}
-                    </Link>
-                    <span className="text-[11px] font-bold text-[var(--copper)]">
-                      {distanceDisplay(post)}
-                    </span>
-                    <span className="text-[11px] text-[var(--cream-muted)]">
-                      {formatRelativeTime(post.created_at)}
-                    </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <Link
+                        to={`/profile/${post.user_id}`}
+                        className="truncate text-[14px] font-extrabold text-[var(--cream)] hover:text-[#C4832A]"
+                      >
+                        {post.author_name}
+                      </Link>
+                      <span className="text-[11px] font-bold text-[var(--copper)]">
+                        {distanceDisplay(post)}
+                      </span>
+                      <span className="text-[11px] text-[var(--cream-muted)]">
+                        {formatRelativeTime(post.created_at)}
+                      </span>
+                    </div>
+
+                    {currentUserId && currentUserId === post.user_id ? (
+                      <div className="flex items-center gap-1 shrink-0">
+                        {editingPostId !== post.id ? (
+                          <>
+                            <button
+                              type="button"
+                              data-testid={`community-post-edit-${post.id}`}
+                              onClick={() => startEditPost(post)}
+                              className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg px-2.5 py-1 text-[12px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-[rgba(196,131,42,0.15)] hover:text-[#E0A14A] active:bg-[rgba(196,131,42,0.25)] touch-manipulation"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              data-testid={`community-post-delete-${post.id}`}
+                              onClick={() => setDeleteConfirmPostId(post.id)}
+                              className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg px-2.5 py-1 text-[12px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-red-500/10 hover:text-red-400 active:bg-red-500/20 touch-manipulation"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
-                  <p className="mt-1.5 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-[var(--cream-soft)]">
-                    {post.body}
-                  </p>
+
+                  {deleteConfirmPostId === post.id ? (
+                    <div
+                      data-testid={`community-post-delete-confirm-${post.id}`}
+                      className="mt-2 rounded-xl border border-red-500/40 bg-red-950/30 p-2.5 text-[12px] text-[var(--cream)]"
+                    >
+                      <p className="font-semibold text-red-300">Delete this post?</p>
+                      <p className="mt-0.5 text-[11px] text-[var(--cream-muted)]">
+                        This cannot be undone. Its comments will be removed too.
+                      </p>
+                      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          data-testid={`community-post-delete-btn-${post.id}`}
+                          disabled={deletingPostId === post.id}
+                          onClick={() => void handleDeletePost(post.id)}
+                          className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full bg-red-600 px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-white transition-colors hover:bg-red-500 active:bg-red-700 disabled:opacity-40 touch-manipulation"
+                        >
+                          {deletingPostId === post.id ? 'Deleting…' : 'Delete post'}
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`community-post-delete-cancel-${post.id}`}
+                          disabled={deletingPostId === post.id}
+                          onClick={() => setDeleteConfirmPostId(null)}
+                          className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full border border-[var(--border-default)] px-4 py-2 text-[12px] font-bold text-[var(--cream-muted)] hover:text-[var(--cream)] active:bg-white/5 touch-manipulation"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {editingPostId === post.id ? (
+                    <div
+                      data-testid={`community-post-edit-box-${post.id}`}
+                      className="mt-2 space-y-2 rounded-xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.06)] p-2.5"
+                    >
+                      <MentionTextarea
+                        id={`edit-post-${post.id}`}
+                        data-testid={`community-post-edit-input-${post.id}`}
+                        value={editDraft}
+                        onChange={setEditDraft}
+                        rows={2}
+                        maxChars={MAX_CHARS}
+                        placeholder="Edit your post…"
+                        className="w-full resize-none rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2 text-[14px] leading-relaxed text-[var(--cream)] placeholder:text-[var(--cream-muted)] focus:border-[#C4832A] focus:outline-none"
+                        autoFocus
+                      />
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={`text-[11px] font-bold tabular-nums ${
+                            MAX_CHARS - editDraft.length < 20
+                              ? 'text-[#C4832A]'
+                              : 'text-[var(--cream-muted)]'
+                          }`}
+                        >
+                          {MAX_CHARS - editDraft.length}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            data-testid={`community-post-edit-cancel-${post.id}`}
+                            disabled={savingEdit}
+                            onClick={cancelEditPost}
+                            className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full border border-[var(--border-default)] px-4 py-2 text-[12px] font-bold text-[var(--cream-muted)] hover:text-[var(--cream)] active:bg-white/5 touch-manipulation"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            data-testid={`community-post-edit-save-${post.id}`}
+                            disabled={savingEdit || editDraft.trim().length === 0}
+                            onClick={() => void handleSaveEditPost(post.id)}
+                            className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full bg-[#C4832A] px-5 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] active:bg-[#C4832A] disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
+                          >
+                            {savingEdit ? 'Saving…' : 'Save'}
+                          </button>
+                        </div>
+                      </div>
+                      {editError ? (
+                        <p className="text-[11px] text-[#E0A14A]" role="alert">
+                          {editError}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="mt-1.5 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-[var(--cream-soft)]">
+                      {post.body}
+                    </p>
+                  )}
+
                   <CommunityPostComments
                     postId={post.id}
                     commentCount={post.comment_count ?? 0}

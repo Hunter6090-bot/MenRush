@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 import { runDripBatch, getDripStats, unsubscribeByToken } from '../services/drip.service';
 
 const router = Router();
@@ -12,6 +13,7 @@ const router = Router();
 const unsubLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 120,
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
