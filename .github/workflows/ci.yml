@@ -71,6 +71,8 @@ jobs:
         run: npm run test:veriff
       - name: Hot-spot counts stay rounded for Free (no exact number)
         run: npm run test:hot-spot-free-counts
+      - name: Welcome emails use the official mark (no typed wordmark)
+        run: npm run test:welcome-email-brand
 
   frontend-build:
     name: Frontend build

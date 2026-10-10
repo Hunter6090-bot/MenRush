@@ -47,6 +47,8 @@
     "test:mr3free": "ts-node scripts/mr3free-promo-checks.ts",
     "test:open-signup": "ts-node scripts/open-signup-checks.ts",
     "test:email-confirm": "ts-node scripts/email-confirm-checks.ts",
+    "test:welcome-email-brand": "ts-node scripts/welcome-email-brand-checks.ts",
+    "render:welcome-emails": "ts-node scripts/render-welcome-emails.ts",
     "test:referrals": "ts-node scripts/referral-checks.ts",
     "test:room-inroom-dm": "ts-node --transpile-only scripts/room-inroom-dm-checks.ts",
     "test:official-rooms": "ts-node scripts/official-rooms-checks.ts",
