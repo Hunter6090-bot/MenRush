@@ -4,6 +4,8 @@
  * register, and books 3 months of Premium. The holder's own code is never
  * counted against them by the no-stack check. A different, earlier 3-month
  * grant on the same email is still refused, and the code cannot be reused.
+ * Two unused invites for one email do not block each other: one redeems and
+ * the other is revoked.
  * Needs a migrated DATABASE_URL (schema.sql + migrations). Skips without one.
  *   DATABASE_URL=postgresql://menrush:menrush@localhost:5432/menrush_ci \
  *   npm run test:pride-invite-register-integration
@@ -118,6 +120,36 @@ async function main() {
     assert.strictEqual(await userExists(otherEmail), false, 'reuse attempt created no account');
     assert.strictEqual(await useCount(holderInvite.id), 1, 'use_count still 1');
     console.log('ok  - used code cannot be reused');
+
+    // 4. Two unused Pride invites for one email: neither blocks the other.
+    //    Redeeming one succeeds and the other ends up revoked.
+    const twoEmail = `pride-two-${suffix}@test.menrush.local`;
+    const first = await mintLikeClaimForm(twoEmail);
+    const second = await mintLikeClaimForm(twoEmail);
+    const twoRes = await authService.register({
+      ...base,
+      name: `Pride Two ${suffix}`,
+      email: twoEmail,
+      invite_code: second.code,
+    });
+    const twoUser = (twoRes as { user?: Record<string, unknown> }).user;
+    assert.ok(twoUser && twoUser.id, 'holder of two invites registers');
+    userIds.push(String(twoUser.id));
+    assert.strictEqual(twoUser.is_premium, true, 'Premium granted');
+    assert.strictEqual(await useCount(second.id), 1, 'redeemed invite used once');
+    const firstRow = await query(
+      `SELECT use_count, revoked_at FROM beta_invite_codes WHERE id = $1`,
+      [first.id],
+    );
+    assert.strictEqual(Number(firstRow.rows[0].use_count), 0, 'other invite not used');
+    assert.ok(firstRow.rows[0].revoked_at, 'other invite revoked');
+    assert.deepStrictEqual(await inviteCodeService.validate(first.code), { valid: false });
+    console.log('ok  - two invites for one email: one redeems, the other is revoked');
+
+    // 5. Invites for other emails are left alone.
+    const bystander = await mintLikeClaimForm(`pride-bystander-${suffix}@test.menrush.local`);
+    const bystanderRow = await query(`SELECT revoked_at FROM beta_invite_codes WHERE id = $1`, [bystander.id]);
+    assert.strictEqual(bystanderRow.rows[0].revoked_at, null, 'other email untouched');
 
     console.log('\npride-invite-register-integration: all checks passed');
   } finally {
