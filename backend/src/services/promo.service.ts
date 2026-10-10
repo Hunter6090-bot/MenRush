@@ -12,6 +12,12 @@ export interface ThreeMonthCheckOptions {
   client?: Queryable;
   /** Pride invite being redeemed right now: never counted against its own holder. */
   excludeInviteId?: string;
+  /**
+   * Redeeming a Pride invite for this email: the holder's other UNUSED Pride
+   * invites for the same email are theirs too, so they do not block. They are
+   * revoked once this one is redeemed (one grant per person).
+   */
+  excludeOwnPendingPrideInvites?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -460,6 +466,9 @@ export const promoService = {
    * that transaction, which a separate pool connection cannot see).
    */
   async emailHasPendingPrideInvite(email: string, opts: ThreeMonthCheckOptions = {}): Promise<boolean> {
+    // Every row this query can find is issued to this same email, so when the
+    // holder is redeeming one of their own Pride invites none of them count.
+    if (opts.excludeOwnPendingPrideInvites) return false;
     const db: Queryable = opts.client ?? pool;
     const normalised = email.trim().toLowerCase();
     const pendingInvite = await db.query(
@@ -622,7 +631,13 @@ export const promoService = {
     const db: Queryable = client ?? pool;
     const emailHash = hashEmail(email);
 
-    if (await this.emailHasAnyThreeMonthPromo(email, { client: db, excludeInviteId: redeemingInviteId })) {
+    if (
+      await this.emailHasAnyThreeMonthPromo(email, {
+        client: db,
+        excludeInviteId: redeemingInviteId,
+        excludeOwnPendingPrideInvites: true,
+      })
+    ) {
       throw new Error(
         'This email already has a 3-month Premium grant. The code cannot be stacked.',
       );
@@ -644,6 +659,19 @@ export const promoService = {
       }
       throw err;
     }
+
+    // One grant per person: any other unused Pride invites for this email are
+    // revoked in the same transaction, so they cannot be used later.
+    await db.query(
+      `UPDATE beta_invite_codes
+          SET revoked_at = NOW()
+        WHERE LOWER(issued_email) = $1
+          AND pride_months_free IS NOT NULL
+          AND revoked_at IS NULL
+          AND use_count < max_uses
+          AND ($2::text IS NULL OR id::text <> $2::text)`,
+      [email.trim().toLowerCase(), redeemingInviteId ?? null],
+    );
 
     const { premiumUntil } = await this.applyPridePremiumGrant(userId, monthsFree, client);
     return { monthsFree, premiumUntil };

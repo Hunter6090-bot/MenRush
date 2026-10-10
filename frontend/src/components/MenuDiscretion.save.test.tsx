@@ -46,9 +46,34 @@ describe('MenuDiscretion saving', () => {
     const range = await ready();
     const start = STEPS.indexOf(250);
     fireEvent.change(range, { target: { value: String(start + 1) } });
+    await waitFor(() => expect(api.setMapPinFuzz).toHaveBeenCalledTimes(1));
+    await act(async () => {});
     fireEvent.change(range, { target: { value: String(start + 2) } });
-    expect(api.setMapPinFuzz).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(api.setMapPinFuzz).toHaveBeenCalledTimes(2));
     expect(api.setMapPinFuzz).toHaveBeenNthCalledWith(1, STEPS[start + 1]);
     expect(api.setMapPinFuzz).toHaveBeenNthCalledWith(2, STEPS[start + 2]);
+  });
+
+  it('serialises saves so the newest value wins (no out-of-order 120 after 160)', async () => {
+    const range = await ready();
+    // Slow first request: the second and third steps arrive while it is still in flight.
+    const resolvers: Array<() => void> = [];
+    api.setMapPinFuzz.mockImplementation(
+      () => new Promise((res) => resolvers.push(() => res({ data: {} }))),
+    );
+    const at = (m: number) => String(STEPS.indexOf(m));
+    fireEvent.change(range, { target: { value: at(200) } });
+    fireEvent.change(range, { target: { value: at(160) } });
+    fireEvent.change(range, { target: { value: at(120) } });
+    expect(screen.getByTestId('map-discretion-pill')).toHaveTextContent('~120 m');
+    // Only one request in flight; the 160 step was superseded before it was sent.
+    expect(api.setMapPinFuzz).toHaveBeenCalledTimes(1);
+    expect(api.setMapPinFuzz).toHaveBeenLastCalledWith(200);
+    await act(async () => resolvers.shift()!());
+    await waitFor(() => expect(api.setMapPinFuzz).toHaveBeenCalledTimes(2));
+    expect(api.setMapPinFuzz).toHaveBeenLastCalledWith(120);
+    await act(async () => resolvers.shift()!());
+    expect(api.setMapPinFuzz).toHaveBeenCalledTimes(2);
+    expect(api.setMapPinFuzz.mock.calls.map((c) => c[0])).toEqual([200, 120]);
   });
 });

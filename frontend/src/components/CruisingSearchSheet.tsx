@@ -161,7 +161,7 @@ export function CruisingSearchSheet({
             onClick={onClose}
             aria-label="Close cruising search"
             data-testid="cruising-search-close"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--cream-muted)] transition-colors hover:bg-white/5 hover:text-[var(--cream)]"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--cream-muted)] transition-colors hover:bg-white/5 hover:text-[var(--cream)]"
           >
             <IconClose size={18} />
           </button>
@@ -193,14 +193,14 @@ export function CruisingSearchSheet({
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search by spot name, city, woods, layby, sauna…"
               data-testid="cruising-search-input"
-              className="w-full rounded-full border border-[var(--border-default)] bg-[#14120E] py-2 pl-9 pr-9 text-sm text-[var(--cream)] placeholder-[var(--cream-muted)] focus:border-[var(--copper)] focus:outline-none focus:ring-1 focus:ring-[var(--copper)]"
+              className="w-full rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] min-h-[44px] py-2.5 pl-9 pr-11 text-[15px] text-[var(--cream)] placeholder-[var(--cream-muted)] focus:border-[var(--copper)] focus:outline-none focus:ring-1 focus:ring-[var(--copper)]"
             />
             {query ? (
               <button
                 type="button"
                 onClick={() => setQuery('')}
                 aria-label="Clear search query"
-                className="absolute right-3 text-sm text-[var(--cream-muted)] hover:text-[var(--cream)]"
+                className="absolute right-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-[15px] text-[var(--cream-muted)] hover:text-[var(--cream)]"
               >
                 ×
               </button>
@@ -209,7 +209,7 @@ export function CruisingSearchSheet({
 
           {/* Category filter pills: All | Woods | Beach | Layby | Park | Sauna */}
           <div
-            className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar"
+            className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[15px] no-scrollbar"
             role="tablist"
             aria-label="Category filters"
           >
@@ -218,10 +218,10 @@ export function CruisingSearchSheet({
               role="tab"
               aria-selected={selectedCategory === 'all'}
               onClick={() => setSelectedCategory('all')}
-              className={`rounded-full px-3 py-1 font-bold whitespace-nowrap transition-colors ${
+              className={`inline-flex min-h-[44px] items-center rounded-full px-3 py-1 font-bold whitespace-nowrap transition-colors ${
                 selectedCategory === 'all'
-                  ? 'bg-[#C4832A] text-[#1A0E03]'
-                  : 'border border-[var(--border-default)] bg-black/20 text-[var(--cream-soft)] hover:border-[var(--copper)]/40'
+                  ? 'bg-[var(--copper)] text-[var(--nn-on-copper)]'
+                  : 'border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream-soft)] hover:border-[color-mix(in_srgb,var(--copper)_40%,transparent)]'
               }`}
             >
               All spots
@@ -236,10 +236,10 @@ export function CruisingSearchSheet({
                   role="tab"
                   aria-selected={isSelected}
                   onClick={() => setSelectedCategory(catKey)}
-                  className={`inline-flex items-center gap-1 rounded-full px-3 py-1 font-bold whitespace-nowrap transition-colors ${
+                  className={`inline-flex min-h-[44px] items-center gap-1 rounded-full px-3 py-1 font-bold whitespace-nowrap transition-colors ${
                     isSelected
-                      ? 'bg-[#C4832A] text-[#1A0E03]'
-                      : 'border border-[var(--border-default)] bg-black/20 text-[var(--cream-soft)] hover:border-[var(--copper)]/40'
+                      ? 'bg-[var(--copper)] text-[var(--nn-on-copper)]'
+                      : 'border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream-soft)] hover:border-[color-mix(in_srgb,var(--copper)_40%,transparent)]'
                   }`}
                 >
                   <span aria-hidden="true">{meta.icon}</span>
@@ -256,7 +256,7 @@ export function CruisingSearchSheet({
           className="flex-1 overflow-y-auto p-4 space-y-3 sm:px-6 overscroll-contain"
         >
           {error ? (
-            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-center text-sm text-red-200">
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-center text-[15px] text-red-200">
               {error}
             </div>
           ) : null}
@@ -264,7 +264,7 @@ export function CruisingSearchSheet({
           {loading && spots.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <PulseRing size={32} label="Finding spots" />
-              <p className="mt-3 text-xs font-semibold text-[var(--cream-muted)]">
+              <p className="mt-3 text-[15px] font-semibold text-[var(--cream-muted)]">
                 Locating nearby spots…
               </p>
             </div>
@@ -276,10 +276,10 @@ export function CruisingSearchSheet({
               <span className="text-3xl" aria-hidden="true">
                 {selectedCategory !== 'all' ? CRUISING_CATEGORY_META[selectedCategory].icon : '🌲'}
               </span>
-              <p className="mt-2 text-sm font-bold text-[var(--cream)]">
+              <p className="mt-2 text-[15px] font-bold text-[var(--cream)]">
                 No spots found
               </p>
-              <p className="mt-1 max-w-xs text-xs text-[var(--cream-muted)]">
+              <p className="mt-1 max-w-xs text-[15px] text-[var(--cream-muted)]">
                 {query
                   ? `No matches for "${query}". Try searching another name or category.`
                   : 'No cruising spots found nearby. Try expanding your search.'}
@@ -291,7 +291,7 @@ export function CruisingSearchSheet({
                     setQuery('');
                     setSelectedCategory('all');
                   }}
-                  className="mt-4 rounded-full border border-[var(--copper)]/50 px-4 py-1.5 text-xs font-bold text-[#E0A14A] hover:bg-[#C4832A]/10"
+                  className="mt-4 rounded-full border border-[var(--copper)]/50 px-4 py-1.5 text-[15px] font-bold text-[#E0A14A] hover:bg-[#C4832A]/10"
                 >
                   Reset filters
                 </button>
@@ -299,7 +299,7 @@ export function CruisingSearchSheet({
             </div>
           ) : (
             <>
-              <p className="text-[11px] font-bold text-[var(--cream-muted)]">
+              <p className="text-[15px] font-bold text-[var(--cream-muted)]">
                 {filteredSpots.length}{' '}
                 {filteredSpots.length === 1 ? 'spot' : 'spots'} nearby · closest first
               </p>
@@ -321,7 +321,7 @@ export function CruisingSearchSheet({
         </div>
 
         {/* Footer info note */}
-        <div className="shrink-0 border-t border-[var(--border-default)]/40 bg-[var(--bg-elevated)]/40 px-4 py-2 text-center text-[10px] text-[var(--cream-muted)] sm:px-6">
+        <div className="shrink-0 border-t border-[var(--border-default)]/40 bg-[var(--bg-elevated)]/40 px-4 py-2 text-center text-[15px] text-[var(--cream-muted)] sm:px-6">
           <span>Outdoor locations for consenting adults (18+). One tap to maps navigation.</span>
         </div>
       </div>
