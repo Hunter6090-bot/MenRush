@@ -116,6 +116,7 @@ describe('InstallPrompt sheet and the phone tab bar', () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    resetPromptPrefsSyncForTests();
     resetInstallPromptStoreForTests();
     useAuthStore.setState({ user: { id: 'member-a', name: 'Member' } as never, token: 't' });
     Object.defineProperty(window, 'matchMedia', {
