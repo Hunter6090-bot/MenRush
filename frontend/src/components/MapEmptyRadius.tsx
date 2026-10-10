@@ -30,8 +30,9 @@ export function MapEmptyRadius({
             type="button"
             data-testid="map-widen-radius"
             onClick={onWiden}
-            className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full bg-[var(--copper)] px-3.5 text-[15px] font-extrabold text-[var(--nn-on-copper)]"
+            className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-[var(--copper)] px-3.5 text-[15px] font-extrabold text-[var(--nn-on-copper)]"
           >
+            <RadiusIcon />
             Widen to {label}
           </button>
         </div>
@@ -51,13 +52,35 @@ export function MapEmptyRadius({
           onClick={onWiden}
           className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full bg-[var(--copper)] px-5 py-2.5 text-[15px] font-extrabold text-[var(--nn-on-copper)] transition-opacity hover:opacity-90"
         >
-          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden focusable="false">
-            <circle cx="12" cy="12" r="8" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
+          <RadiusIcon />
           Widen to {label}
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Board radius icon (two rings) on the Widen button. Stroke is currentColor, so it
+ * takes the button's --nn-on-copper on --copper (contrast-tested >= 3:1, both themes).
+ */
+export function RadiusIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      aria-hidden
+      focusable="false"
+      data-icon="radius"
+      className="shrink-0"
+    >
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
   );
 }
