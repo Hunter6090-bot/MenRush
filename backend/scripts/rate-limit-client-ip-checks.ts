@@ -123,7 +123,7 @@ function sourceChecks() {
       if (unsubSuccess) {
         assert.match(
           block,
-          /email-unsub:\$\{payload\.userId\}:\$\{payload\.type\}/,
+          /email-unsub:\$\{(?:signed\.)?payload\.userId\}:\$\{(?:signed\.)?payload\.type\}/,
           `${file}: success limiter keys by user+type`,
         );
         assert.match(block, /rateLimitKey\(req\)/, `${file}: invalid-token fallback uses rateLimitKey`);

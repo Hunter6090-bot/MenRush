@@ -58,6 +58,11 @@ async function main() {
     assert.match(html, /width="140"/);
     assert.match(html, />Open MenRush</);
     assert.ok(html.includes('settings#email-notifications'));
+    assert.ok(html.includes('Settings, under Email notifications'));
+    assert.strictEqual(
+      emails.EMAIL_NOTIFY_FOOTER,
+      'You can choose which emails you get at any time in Settings, under Email notifications.',
+    );
     assert.ok(text.includes(emails.EMAIL_NOTIFY_FOOTER));
     assert.ok(text.includes(emails.EMAIL_NOTIFY_BODY));
     assert.ok(text.includes(emails.EMAIL_NOTIFY_HELLO));
@@ -153,6 +158,27 @@ async function main() {
   const unsubSrc = fs.readFileSync(path.join(__dirname, '../src/routes/email-unsubscribe.ts'), 'utf8');
   assert.ok(!/\u2014|\u2013/.test(unsubSrc), 'unsubscribe page copy has no em/en dash');
   assert.match(unsubSrc, /Stop these emails\? MenRush/);
+  assert.match(unsubSrc, /You're already unsubscribed/);
+  assert.ok(!unsubSrc.includes("You're already unsubscribed —"), 'already-unsubscribed title has no dash');
+  for (const verb of ['head', 'get', 'post'] as const) {
+    assert.match(
+      unsubSrc,
+      new RegExp(String.raw`router\.${verb}\(\s*'\/'\s*,\s*failIpLimiter\b`),
+      `failIpLimiter wraps ${verb.toUpperCase()}`,
+    );
+  }
+  assert.match(
+    unsubSrc,
+    /skip:\s*\(req[^)]*\)\s*=>\s*readSignedUnsubscribeToken\(tokenFrom\(req\)\)\.ok/,
+    'failIpLimiter skips when the token verifies',
+  );
+
+  const expiredTok = svc.signUnsubscribeToken('00000000-0000-4000-8000-000000000001', 'message', {
+    ttlSeconds: -10,
+  });
+  assert.ok(svc.readSignedUnsubscribeToken(expiredTok).ok, 'expired token is still validly signed');
+  assert.ok(!svc.readSignedUnsubscribeToken('forged.token').ok, 'forged token is not signed');
+  assert.ok(!svc.readSignedUnsubscribeToken('').ok, 'empty token is not signed');
 
   assert.strictEqual(svc.isEmailNotificationsEnabled(), false);
   assert.strictEqual(svc.showSenderName(), false);
@@ -286,6 +312,15 @@ async function main() {
   assert.match(script, /unsubscribeUrl/);
   assert.ok(!/List-Unsubscribe.*settings#email-notifications/.test(script), 'List-Unsubscribe must not point at Settings');
   assert.ok(!/sendTransactionalEmail|sendViaZoho|zoho/i.test(script), 'test send is Resend only');
+
+  const settingsSrc = fs.readFileSync(
+    path.join(__dirname, '../../frontend/src/components/EmailNotificationSettings.tsx'),
+    'utf8',
+  );
+  assert.match(settingsSrc, />Email notifications</);
+  assert.match(settingsSrc, />Email me about</);
+  assert.match(settingsSrc, /id="email-notifications"/);
+  assert.match(settingsSrc, /text-\[15px\]/);
 
   const usersSrc = fs.readFileSync(path.join(__dirname, '../src/routes/users.ts'), 'utf8');
   const likeBlock = usersSrc.slice(usersSrc.indexOf("router.post('/like/:id'"), usersSrc.indexOf("router.post('/like/:id'") + 1800);

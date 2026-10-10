@@ -224,6 +224,20 @@ export function assertPublicRateLimitedRouterGuard(route: string, source: string
   assert.ok(/skipSuccessfulRequests\s*:\s*true/.test(code), `${route}: IP limiter counts only failed / invalid tokens`);
   assert.ok(/skipFailedRequests\s*:\s*true/.test(code), `${route}: success limiter ignores invalid tokens`);
   assert.ok(/userId/.test(code) && /type/.test(code), `${route}: successful applies must key by user and type`);
+  assert.match(code, /const\s+failIpLimiter\s*=\s*rateLimit\s*\(/, `${route}: failIpLimiter must exist`);
+  // stripComments blanks string contents, so verb + path checks read the raw source.
+  for (const verb of ['head', 'get', 'post'] as const) {
+    assert.match(
+      source,
+      new RegExp(String.raw`router\.${verb}\(\s*['"]\/['"]\s*,\s*failIpLimiter\b`),
+      `${route}: failIpLimiter must wrap ${verb.toUpperCase()}`,
+    );
+  }
+  assert.match(
+    code,
+    /skip:\s*\(req[^)]*\)\s*=>\s*readSignedUnsubscribeToken\(tokenFrom\(req\)\)\.ok/,
+    `${route}: failIpLimiter must skip when the token verifies`,
+  );
 }
 
 export function assertAuthOnlyRouterGuard(route: string, source: string): void {
@@ -488,7 +502,7 @@ test('source guard helpers reject commented, hidden, extra, late or indented rou
 
 test('public rate-limited guard requires privateNoStore, no auth, and split rate keys', () => {
   const ok =
-    "const router = Router();\nrouter.use(privateNoStore);\nconst fail = rateLimit({ skipSuccessfulRequests: true, keyGenerator: rateLimitKey });\nconst win = rateLimit({ skipFailedRequests: true, keyGenerator: (req) => `email-unsub:${payload.userId}:${payload.type}` });\nrouter.get('/', fail, h);\n";
+    "const router = Router();\nrouter.use(privateNoStore);\nconst failIpLimiter = rateLimit({ skipSuccessfulRequests: true, keyGenerator: rateLimitKey, skip: (req) => readSignedUnsubscribeToken(tokenFrom(req)).ok });\nconst win = rateLimit({ skipFailedRequests: true, keyGenerator: (req) => `email-unsub:${payload.userId}:${payload.type}` });\nrouter.head('/', failIpLimiter, h);\nrouter.get('/', failIpLimiter, h);\nrouter.post('/', failIpLimiter, win, h);\n";
   assertPublicRateLimitedRouterGuard('ok', ok);
   const bad: Record<string, string> = {
     'has auth': ok.replace('privateNoStore);', 'privateNoStore, authMiddleware);'),

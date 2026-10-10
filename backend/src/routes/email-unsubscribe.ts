@@ -3,9 +3,10 @@ import rateLimit from 'express-rate-limit';
 import { rateLimitKey } from '../lib/clientIp';
 import { privateNoStore } from '../middleware/noStore';
 import {
+  classifyUnsubscribeToken,
   optOutType,
+  readSignedUnsubscribeToken,
   readValidUnsubscribeToken,
-  verifyUnsubscribeToken,
 } from '../services/email-notification.service';
 
 /**
@@ -22,11 +23,16 @@ import {
 const router = Router();
 router.use(privateNoStore);
 
+function tokenFrom(req: Request): string {
+  return String(req.query.token || (req.body && req.body.token) || '').trim();
+}
+
 const failIpLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 120,
   keyGenerator: rateLimitKey,
   skipSuccessfulRequests: true,
+  skip: (req: Request) => readSignedUnsubscribeToken(tokenFrom(req)).ok,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -36,12 +42,9 @@ const successUserTypeLimiter = rateLimit({
   max: 30,
   skipFailedRequests: true,
   keyGenerator: (req: Request) => {
-    try {
-      const payload = verifyUnsubscribeToken(tokenFrom(req));
-      return `email-unsub:${payload.userId}:${payload.type}`;
-    } catch {
-      return `email-unsub-invalid:${rateLimitKey(req)}`;
-    }
+    const signed = readSignedUnsubscribeToken(tokenFrom(req));
+    if (signed.ok) return `email-unsub:${signed.payload.userId}:${signed.payload.type}`;
+    return `email-unsub-invalid:${rateLimitKey(req)}`;
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -96,16 +99,21 @@ function doneHtml(): string {
   );
 }
 
+function alreadyHtml(): string {
+  return pageHtml(
+    `<h1>You're already unsubscribed</h1>
+    <p>You will not get that kind of email from MenRush any more.</p>
+    <p><a href="https://menrush.com/settings#email-notifications">Email notifications in Settings</a></p>`,
+    "You're already unsubscribed MenRush",
+  );
+}
+
 function errorHtml(message: string): string {
   return pageHtml(
     `<h1>MenRush</h1>
     <p class="err">${escapeHtml(message)}</p>
     <p><a href="https://menrush.com/settings#email-notifications">Email notifications in Settings</a></p>`,
   );
-}
-
-function tokenFrom(req: Request): string {
-  return String(req.query.token || (req.body && req.body.token) || '').trim();
 }
 
 function unsubAction(req: Request, token: string): string {
@@ -124,12 +132,9 @@ async function applyToken(token: string): Promise<boolean> {
 router.head('/', failIpLimiter, async (req: Request, res: Response) => {
   const token = tokenFrom(req);
   if (!token) return res.status(400).end();
-  try {
-    await readValidUnsubscribeToken(token);
-    return res.status(200).end();
-  } catch {
-    return res.status(400).end();
-  }
+  const kind = await classifyUnsubscribeToken(token);
+  if (kind === 'invalid') return res.status(400).end();
+  return res.status(200).end();
 });
 
 router.get('/', failIpLimiter, async (req: Request, res: Response) => {
@@ -137,27 +142,35 @@ router.get('/', failIpLimiter, async (req: Request, res: Response) => {
   if (!token) {
     return res.status(400).type('html').send(errorHtml('That unsubscribe link is missing.'));
   }
-  try {
-    await readValidUnsubscribeToken(token);
-    return res.type('html').send(confirmHtml(unsubAction(req, token)));
-  } catch {
+  const kind = await classifyUnsubscribeToken(token);
+  if (kind === 'invalid') {
     return res.status(400).type('html').send(errorHtml('That unsubscribe link is not valid.'));
   }
+  if (kind === 'stale') {
+    return res.type('html').send(alreadyHtml());
+  }
+  return res.type('html').send(confirmHtml(unsubAction(req, token)));
 });
 
 router.post('/', failIpLimiter, successUserTypeLimiter, async (req: Request, res: Response) => {
   const token = tokenFrom(req);
   if (!token) return res.status(400).json({ error: 'missing_token' });
-  try {
-    const ok = await applyToken(token);
-    const wantsHtml = String(req.headers.accept || '').includes('text/html');
-    if (wantsHtml) {
-      if (!ok) return res.status(404).type('html').send(errorHtml('That link is no longer valid.'));
-      return res.type('html').send(doneHtml());
-    }
-    return res.status(ok ? 200 : 404).json({ ok });
-  } catch {
+  const kind = await classifyUnsubscribeToken(token);
+  const wantsHtml = String(req.headers.accept || '').includes('text/html');
+  if (kind === 'invalid') {
     return res.status(400).json({ error: 'invalid_token' });
+  }
+  if (kind === 'stale') {
+    if (wantsHtml) return res.type('html').send(alreadyHtml());
+    return res.status(200).json({ ok: true });
+  }
+  try {
+    await applyToken(token);
+    if (wantsHtml) return res.type('html').send(doneHtml());
+    return res.status(200).json({ ok: true });
+  } catch {
+    if (wantsHtml) return res.type('html').send(alreadyHtml());
+    return res.status(200).json({ ok: true });
   }
 });
 

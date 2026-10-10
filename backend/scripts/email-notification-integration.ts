@@ -237,8 +237,41 @@ async function main() {
 
     const replay = await fetch(`http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(token)}`, {
       method: 'POST',
+      headers: { Accept: 'text/html' },
     });
-    assert.strictEqual(replay.status, 400, 'version bump revokes the used token');
+    assert.strictEqual(replay.status, 200, 'used token is already unsubscribed, not 400');
+    assert.match(await replay.text(), /You're already unsubscribed/);
+
+    const usedGet = await fetch(`http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(token)}`);
+    assert.strictEqual(usedGet.status, 200);
+    assert.match(await usedGet.text(), /You're already unsubscribed/);
+
+    const staleTok = svc.signUnsubscribeToken(unsubUser.id, 'jerk', { ttlSeconds: -30, version: 1 });
+    const staleGet = await fetch(
+      `http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(staleTok)}`,
+    );
+    assert.strictEqual(staleGet.status, 200, 'stale signed link is already unsubscribed');
+    assert.match(await staleGet.text(), /You're already unsubscribed/);
+
+    const forgedGet = await fetch(`http://127.0.0.1:${port}/api/email-unsubscribe?token=forged.token`);
+    assert.strictEqual(forgedGet.status, 400, 'forged token stays 400');
+    const forgedPost = await fetch(`http://127.0.0.1:${port}/api/email-unsubscribe?token=forged.token`, {
+      method: 'POST',
+    });
+    assert.strictEqual(forgedPost.status, 400, 'forged POST stays 400');
+
+    // A full fail-IP bucket must not block a validly signed token from that IP.
+    const floodUser = await makeUser('Flood');
+    const liveTok = await svc.issueUnsubscribeToken(floodUser.id, 'match');
+    for (let i = 0; i < 120; i += 1) {
+      const denied = await fetch(`http://127.0.0.1:${port}/api/email-unsubscribe?token=forged.${i}`);
+      assert.ok(denied.status === 400 || denied.status === 429, `flood ${i}: ${denied.status}`);
+    }
+    const afterFlood = await fetch(
+      `http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(liveTok)}`,
+    );
+    assert.strictEqual(afterFlood.status, 200, 'valid token skips a full fail-IP bucket');
+    assert.match(await afterFlood.text(), /Stop these emails/);
 
     // Per-type version: opting out of messages leaves the matches link working.
     const typed = await makeUser('UnsubTyped');
@@ -260,9 +293,10 @@ async function main() {
     assert.deepStrictEqual(prefs, { messages: false, matches: false, jerks: true });
     const messageReplay = await fetch(
       `http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(messageTok)}`,
-      { method: 'POST' },
+      { method: 'POST', headers: { Accept: 'text/html' } },
     );
-    assert.strictEqual(messageReplay.status, 400);
+    assert.strictEqual(messageReplay.status, 200, 'used messages link is already unsubscribed');
+    assert.match(await messageReplay.text(), /You're already unsubscribed/);
 
     // Unsub token is not a login.
     const loginProbe = await svc.issueUnsubscribeToken(unsubUser.id, 'message');

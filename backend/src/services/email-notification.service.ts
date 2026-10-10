@@ -179,31 +179,60 @@ export function signUnsubscribeToken(
   return `${base64UrlEncode(payloadJson)}.${base64UrlEncode(signature)}`;
 }
 
+/**
+ * HMAC + purpose + shape only. Expired and used tokens still come back
+ * `{ ok: true }` so a fail-IP bucket cannot block a validly signed link.
+ * Forged or malformed tokens are `{ ok: false }`.
+ */
+export function readSignedUnsubscribeToken(
+  token: string,
+): { ok: true; payload: UnsubscribePayload } | { ok: false } {
+  try {
+    const [payloadPart, signaturePart] = token.split('.');
+    if (!payloadPart || !signaturePart) return { ok: false };
+    const payloadJson = base64UrlDecode(payloadPart).toString('utf8');
+    const expected = crypto.createHmac('sha256', unsubSigningKey()).update(payloadJson).digest();
+    const actual = base64UrlDecode(signaturePart);
+    if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
+      return { ok: false };
+    }
+    const payload = JSON.parse(payloadJson) as UnsubscribePayload;
+    if (
+      payload.purpose !== EMAIL_UNSUB_PURPOSE ||
+      !isEmailNotifyType(payload.type) ||
+      !payload.userId ||
+      !Number.isInteger(payload.v)
+    ) {
+      return { ok: false };
+    }
+    return { ok: true, payload };
+  } catch {
+    return { ok: false };
+  }
+}
+
 /** Crypto + purpose + expiry. Does not check the per-user version. */
 export function verifyUnsubscribeToken(token: string): UnsubscribePayload {
-  const [payloadPart, signaturePart] = token.split('.');
-  if (!payloadPart || !signaturePart) {
+  const signed = readSignedUnsubscribeToken(token);
+  if (!signed.ok) {
     throw new Error('invalid_token');
   }
-  const payloadJson = base64UrlDecode(payloadPart).toString('utf8');
-  const expected = crypto.createHmac('sha256', unsubSigningKey()).update(payloadJson).digest();
-  const actual = base64UrlDecode(signaturePart);
-  if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
-    throw new Error('invalid_token');
-  }
-  const payload = JSON.parse(payloadJson) as UnsubscribePayload;
-  if (
-    payload.purpose !== EMAIL_UNSUB_PURPOSE ||
-    !isEmailNotifyType(payload.type) ||
-    !payload.userId ||
-    !Number.isInteger(payload.v)
-  ) {
-    throw new Error('invalid_token');
-  }
-  if (payload.exp < Math.floor(Date.now() / 1000)) {
+  if (signed.payload.exp < Math.floor(Date.now() / 1000)) {
     throw new Error('expired_token');
   }
-  return payload;
+  return signed.payload;
+}
+
+export type UnsubscribeTokenClass = 'invalid' | 'stale' | 'live';
+
+/** invalid = forged/malformed. stale = expired or version-revoked. live = can confirm/apply. */
+export async function classifyUnsubscribeToken(token: string): Promise<UnsubscribeTokenClass> {
+  const signed = readSignedUnsubscribeToken(token);
+  if (!signed.ok) return 'invalid';
+  if (signed.payload.exp < Math.floor(Date.now() / 1000)) return 'stale';
+  const version = await currentUnsubVersion(signed.payload.userId, signed.payload.type);
+  if (version === null || version !== signed.payload.v) return 'stale';
+  return 'live';
 }
 
 export async function currentUnsubVersion(
