@@ -106,6 +106,16 @@ async function emitDeleted(
   }
 }
 
+// GET /mine/count — how many map feed posts this member has (any age).
+router.get('/mine/count', async (req: AuthRequest, res: Response) => {
+  try {
+    res.json({ count: await mapFeedService.countOwn(req.userId!) });
+  } catch (err: unknown) {
+    console.error('[map-feed] count own', err);
+    res.status(500).json({ error: 'Could not count your posts' });
+  }
+});
+
 // DELETE /mine — delete every map feed post this member has made (any age).
 // Declared before /:id so 'mine' is never read as a post id.
 router.delete('/mine', async (req: AuthRequest, res: Response) => {

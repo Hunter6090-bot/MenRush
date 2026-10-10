@@ -114,6 +114,19 @@ router.put('/posts/:id', createLimiter, async (req: AuthRequest, res: Response) 
 });
 
 /**
+ * GET /api/community/posts/mine/count
+ * How many Community posts this member has (any age), for the delete-all confirm.
+ */
+router.get('/posts/mine/count', async (req: AuthRequest, res: Response) => {
+  try {
+    res.json({ count: await communityService.countOwnPosts(req.userId!) });
+  } catch (err: unknown) {
+    console.error('[community] count own posts', err);
+    res.status(500).json({ error: 'Could not count your posts' });
+  }
+});
+
+/**
  * DELETE /api/community/posts/mine
  * Delete every Community post this member has made (any age), with their
  * saved coordinates and comments. Declared before /posts/:id.

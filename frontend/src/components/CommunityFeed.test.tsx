@@ -42,6 +42,8 @@ vi.mock('./CommunityPostComments', () => ({
   CommunityPostComments: () => <div data-testid="mock-comments" />,
 }));
 
+import { useAuthStore } from '../hooks/store';
+
 function renderFeed() {
   return render(
     <MemoryRouter>
@@ -53,6 +55,9 @@ function renderFeed() {
 describe('CommunityFeed Mention Autocomplete', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Own-post controls key off the signed-in user (these two cases were parked
+    // failures on main because no user was set).
+    useAuthStore.setState({ user: { id: 'u-me', name: 'Me' } as never });
     getMe.mockResolvedValue({
       data: {
         id: 'u-me',
@@ -293,10 +298,21 @@ describe('CommunityFeed Mention Autocomplete', () => {
     await user.click(screen.getByTestId('community-post-edit-save-post-mine-1'));
 
     await waitFor(() => {
-      expect(updatePost).toHaveBeenCalledWith('post-mine-1', 'Updated @Tropics Day Spa ');
+      // The component trims before saving.
+      expect(updatePost).toHaveBeenCalledWith('post-mine-1', 'Updated @Tropics Day Spa');
     });
 
-    expect(await screen.findByText('Updated @Tropics Day Spa ')).toBeInTheDocument();
+    // The mention renders as its own element, so match on the post body's text.
+    expect(await screen.findByText((_, el) => el?.tagName === 'P' && el.textContent?.trim() === 'Updated @Tropics Day Spa')).toBeInTheDocument();
+    // Save returns focus to the post's ••• trigger.
+    await waitFor(() => expect(screen.getByTestId('community-post-more-post-mine-1')).toHaveFocus());
+
+    // Edit then Cancel also returns focus to the ••• trigger.
+    await user.click(screen.getByTestId('community-post-more-post-mine-1'));
+    await user.click(screen.getByTestId('community-post-edit-post-mine-1'));
+    await screen.findByTestId('community-post-edit-input-post-mine-1');
+    await user.click(screen.getByTestId('community-post-edit-cancel-post-mine-1'));
+    await waitFor(() => expect(screen.getByTestId('community-post-more-post-mine-1')).toHaveFocus());
   });
 
   it('allows author to delete own post with confirmation', async () => {

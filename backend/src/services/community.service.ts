@@ -460,6 +460,12 @@ export const communityService = {
     return { ok: true };
   },
 
+  /** How many Community posts this member has (any age), for the delete-all confirm. */
+  async countOwnPosts(userId: string): Promise<number> {
+    const res = await query(`SELECT COUNT(*)::int AS n FROM community_posts WHERE user_id = $1`, [userId]);
+    return res.rows[0]?.n ?? 0;
+  },
+
   /**
    * Delete every Community post this member has ever made (any age), with
    * their saved coordinates and comments. Returns how many were removed.

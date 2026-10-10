@@ -65,7 +65,7 @@ async function main() {
       method,
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-    return { status: res.status, cache: res.headers.get('cache-control'), body: (await res.json().catch(() => null)) as { deleted?: number } | null };
+    return { status: res.status, cache: res.headers.get('cache-control'), body: (await res.json().catch(() => null)) as { deleted?: number; count?: number } | null };
   }
   async function mapPost(owner: string, ageHours = 0) {
     const id = randomUUID();
@@ -141,6 +141,14 @@ async function main() {
     const theirs = await mapPost(other.id);
     const cMine = [await communityPost(owner.id), await communityPost(owner.id, 500)];
     const cTheirs = await communityPost(other.id);
+    // Counts for the Settings confirm: only the caller's posts, any age.
+    r = await call('GET', `/api/map-feed/mine/count`, owner.token);
+    assert.equal(r.status, 200);
+    assert.equal((r.body as { count?: number } | null)?.count, 2, 'map count = own posts only');
+    r = await call('GET', `/api/community/posts/mine/count`, owner.token);
+    assert.equal((r.body as { count?: number } | null)?.count, 2, 'community count = own posts only');
+    assert.equal(r.cache, 'private, no-store');
+
     emits.length = 0;
     r = await call('DELETE', `/api/map-feed/mine`, owner.token);
     assert.equal(r.status, 200);

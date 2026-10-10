@@ -173,6 +173,12 @@ export const mapFeedService = {
     return row ? { id: row.id, lat: Number(row.lat), lng: Number(row.lng) } : null;
   },
 
+  /** How many map feed posts this member has (any age), for the delete-all confirm. */
+  async countOwn(userId: string): Promise<number> {
+    const res = await query(`SELECT COUNT(*)::int AS n FROM map_feed_messages WHERE sender_id = $1`, [userId]);
+    return res.rows[0]?.n ?? 0;
+  },
+
   /**
    * Delete every map feed post this member has ever made (any age). Returns
    * the removed rows' ids and raw points (server-side only, for the fan-out).
