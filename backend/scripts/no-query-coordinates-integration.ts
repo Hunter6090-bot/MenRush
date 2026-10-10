@@ -24,7 +24,7 @@ async function main() {
   const { default: pool, query } = await import('../src/db');
   const { authService } = await import('../src/services/auth.service');
   const { accessControl } = await import('../src/security/access');
-  const { rejectQueryCoordinates } = await import('../src/middleware/noQueryCoordinates');
+  const { noQueryCoordinates } = await import('../src/middleware/noQueryCoordinates');
   const { resetLocationJumpGate } = await import('../src/lib/locationJumpGate');
 
   // Token = the user id (auth is not under test here).
@@ -59,7 +59,7 @@ async function main() {
 
   const app = express();
   app.use(express.json());
-  app.use('/api', rejectQueryCoordinates);
+  app.use('/api', noQueryCoordinates);
   app.use('/api/users', (await import('../src/routes/users')).default);
   app.use('/api/hot-spots', (await import('../src/routes/hot-spots')).default);
   app.use('/api/events', (await import('../src/routes/events')).default);
@@ -150,23 +150,51 @@ async function main() {
     assert.deepStrictEqual(nb.json.users, []);
     console.log('✓ no stored location: empty results, no error');
 
-    // 7. Coordinates in the URL: 400, and the stored location does not move.
+    // 7. Coordinates in the URL (old cached tab): ignored. 200, the stored
+    //    location is used for results and distance, and it never moves.
+    delete process.env.STRICT_NO_URL_COORDINATES;
+    const URL_PT = 'lat=51.5&lng=-0.12'; // London, ~1000 km from the stored point
     for (const p of [
-      `/api/users/nearby?lat=51.5&lng=-0.12`,
-      `/api/users/profile/${member}?lat=51.5&lng=-0.12`,
-      '/api/hot-spots?lat=51.5&lng=-0.12',
-      '/api/events/nearby?lat=51.5&lng=-0.12',
-      '/api/rooms?lat=51.5&lng=-0.12',
-      '/api/map-feed?lat=51.5&lng=-0.12',
-      '/api/community/posts?lat=51.5&lng=-0.12',
+      `/api/users/nearby?radius=10&limit=200&${URL_PT}`,
+      `/api/users/profile/${member}?${URL_PT}`,
+      `/api/hot-spots?radiusKm=80&${URL_PT}`,
+      `/api/events/nearby?radius=50&${URL_PT}`,
+      `/api/rooms?nearby=1&radius=10&${URL_PT}`,
+      `/api/map-feed?limit=50&${URL_PT}`,
+      `/api/community/posts?radiusKm=10&${URL_PT}`,
     ]) {
       const r = await call(viewer, 'GET', p);
-      assert.strictEqual(r.status, 400, `${p}: status`);
-      assert.strictEqual(r.json.code, 'coordinates_in_url', `${p}: code`);
+      assert.strictEqual(r.status, 200, `${p}: ${r.text}`);
     }
-    const unmoved = await query(`SELECT lat FROM profiles WHERE user_id = $1`, [viewer]);
-    assert.strictEqual(Number(unmoved.rows[0].lat), LAT, 'URL coordinates never move the stored location');
-    console.log('✓ coordinates in the URL are rejected and never stored');
+    const nearbyUrl = await call(viewer, 'GET', `/api/users/nearby?radius=10&limit=200&${URL_PT}`);
+    const rowUrl = nearbyUrl.json.users.find((x: any) => x.id === member);
+    assert.ok(rowUrl, 'nearby with URL coordinates: still the members around the STORED location');
+    assert.strictEqual(rowUrl.distance_label, row.distance_label, 'nearby: distance from the stored location, not the URL');
+    const profileUrl = await call(viewer, 'GET', `/api/users/profile/${member}?${URL_PT}`);
+    assert.strictEqual(profileUrl.json.distance_label, row.distance_label, 'profile: distance from the stored location, not the URL');
+    const hsUrl = await call(noLoc, 'GET', `/api/hot-spots?${URL_PT}`);
+    assert.strictEqual(hsUrl.status, 200);
+    assert.strictEqual(hsUrl.json.location_required, true, 'hot-spots: a URL point never stands in for a stored one');
+    const nbUrl = await call(noLoc, 'GET', `/api/users/nearby?${URL_PT}`);
+    assert.deepStrictEqual(nbUrl.json.users, [], 'nearby: a URL point never stands in for a stored one');
+    const evUrl = await call(noLoc, 'GET', `/api/events/nearby?${URL_PT}`);
+    assert.deepStrictEqual(evUrl.json, [], 'events: a URL point never stands in for a stored one');
+    const unmoved = await query(`SELECT lat, lng FROM profiles WHERE user_id = $1`, [viewer]);
+    assert.deepStrictEqual([Number(unmoved.rows[0].lat), Number(unmoved.rows[0].lng)], [LAT, LNG], 'viewer: URL coordinates never move the stored location');
+    const noLocRow = await query(`SELECT lat, lng, location FROM profiles WHERE user_id = $1`, [noLoc]);
+    assert.ok(noLocRow.rows[0].lat == null && noLocRow.rows[0].location == null, 'no-location member: URL coordinates are never stored');
+    console.log('✓ URL coordinates are ignored: 200, stored location used for distance, never stored');
+
+    // 8. Strict flag (for the later PR): 400 coordinates_in_url.
+    process.env.STRICT_NO_URL_COORDINATES = 'true';
+    try {
+      const r = await call(viewer, 'GET', `/api/users/nearby?${URL_PT}`);
+      assert.strictEqual(r.status, 400);
+      assert.strictEqual(r.json.code, 'coordinates_in_url');
+    } finally {
+      delete process.env.STRICT_NO_URL_COORDINATES;
+    }
+    console.log('✓ STRICT_NO_URL_COORDINATES=true rejects with 400 coordinates_in_url');
   } finally {
     server.close();
     await query(`DELETE FROM users WHERE id = ANY($1::uuid[])`, [ids]);

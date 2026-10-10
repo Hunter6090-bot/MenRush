@@ -13,7 +13,11 @@ import path from 'path';
 import express from 'express';
 import { AddressInfo } from 'net';
 import * as db from '../src/db';
-import { hasQueryCoordinates, rejectQueryCoordinates } from '../src/middleware/noQueryCoordinates';
+import {
+  hasQueryCoordinates,
+  noQueryCoordinates,
+  stripCoordinatesFromUrl,
+} from '../src/middleware/noQueryCoordinates';
 
 const STORED = { lat: 53.4808, lng: -2.2426 };
 
@@ -37,11 +41,18 @@ async function main() {
   assert.strictEqual(hasQueryCoordinates(undefined), false);
   console.log('✓ hasQueryCoordinates');
 
+  assert.strictEqual(stripCoordinatesFromUrl('/nearby?lat=1&lng=2&radius=5'), '/nearby?radius=5');
+  assert.strictEqual(stripCoordinatesFromUrl('/nearby?LAT=1&Longitude=2'), '/nearby');
+  assert.strictEqual(stripCoordinatesFromUrl('/x?%6Cat=1&q=lat'), '/x?q=lat');
+  assert.strictEqual(stripCoordinatesFromUrl('/x?radius=5'), '/x?radius=5');
+  assert.strictEqual(stripCoordinatesFromUrl('/x'), '/x');
+  console.log('✓ stripCoordinatesFromUrl');
+
   // ── server.ts wiring ───────────────────────────────────────────────────────
   const serverSrc = fs.readFileSync(path.join(__dirname, '../src/server.ts'), 'utf8');
-  const guardAt = serverSrc.indexOf("app.use('/api', rejectQueryCoordinates)");
+  const guardAt = serverSrc.indexOf("app.use('/api', noQueryCoordinates)");
   const firstRouteAt = serverSrc.indexOf("app.use('/api/");
-  assert.ok(guardAt > 0, 'server.ts mounts rejectQueryCoordinates on /api');
+  assert.ok(guardAt > 0, 'server.ts mounts noQueryCoordinates on /api');
   assert.ok(guardAt < firstRouteAt, 'the guard runs before every /api route');
   console.log('✓ server.ts mounts the guard on /api before any route');
 
@@ -79,7 +90,7 @@ async function main() {
 
   const app = express();
   app.use(express.json());
-  app.use('/api', rejectQueryCoordinates);
+  app.use('/api', noQueryCoordinates);
   app.use('/api/users', (await import('../src/routes/users')).default);
   app.use('/api/hot-spots', (await import('../src/routes/hot-spots')).default);
   app.use('/api/events', (await import('../src/routes/events')).default);
@@ -126,18 +137,73 @@ async function main() {
     assert.strictEqual(rm2.lat, undefined, 'rooms list without nearby: no origin');
     console.log('✓ rooms: nearby rooms only on ?nearby=1');
 
-    // Any coordinate in the query string: 400 coordinates_in_url, service not called.
+    // Lenient (default): URL coordinates are stripped, the read is a 200 and
+    // still uses the stored location, never the URL point.
+    delete process.env.STRICT_NO_URL_COORDINATES;
+    const URL_POINT = { lat: 57.1497, lng: -2.0943 }; // Aberdeen, far from STORED
     for (const p of reads) {
-      for (const coords of ['lat=53.4&lng=-2.2', 'latitude=53.4&longitude=-2.2', 'lon=-2.2']) {
+      for (const coords of [
+        `lat=${URL_POINT.lat}&lng=${URL_POINT.lng}`,
+        `latitude=${URL_POINT.lat}&longitude=${URL_POINT.lng}`,
+        `LAT=${URL_POINT.lat}&lon=${URL_POINT.lng}`,
+      ]) {
+        for (const k of Object.keys(seen)) delete seen[k];
         const sep = p.includes('?') ? '&' : '?';
         const res = await get(`${p}${sep}${coords}`);
-        const body = (await res.json()) as { code?: string };
-        assert.strictEqual(res.status, 400, `${p} with ${coords}: status`);
-        assert.strictEqual(body.code, 'coordinates_in_url', `${p} with ${coords}: code`);
-        assert.strictEqual(res.headers.get('cache-control'), 'private, no-store', `${p}: no-store`);
+        const text = await res.text();
+        assert.strictEqual(res.status, 200, `${p} with ${coords}: ${text}`);
+        const args = JSON.stringify(Object.values(seen));
+        assert.ok(!args.includes(String(URL_POINT.lat)) && !args.includes(String(URL_POINT.lng)),
+          `${p} with ${coords}: the URL point never reaches a service (${args})`);
       }
     }
-    console.log('✓ coordinates in the query string are rejected with 400 coordinates_in_url');
+    for (const k of Object.keys(seen)) delete seen[k];
+    await get(`/api/hot-spots?radiusKm=80&lat=${URL_POINT.lat}&lng=${URL_POINT.lng}`);
+    const hs2 = seen.hotSpots[0] as { lat: number; lng: number; radiusKm?: number };
+    assert.deepStrictEqual([hs2.lat, hs2.lng], [STORED.lat, STORED.lng], 'hot-spots: stored origin despite URL point');
+    await get(`/api/events/nearby?radius=50&lat=${URL_POINT.lat}&lng=${URL_POINT.lng}`);
+    const ev2 = seen.events[0] as { lat: number; lng: number };
+    assert.deepStrictEqual([ev2.lat, ev2.lng], [STORED.lat, STORED.lng], 'events: stored origin despite URL point');
+    console.log('✓ URL coordinates are ignored: 200, stored location used, URL point never reaches a service');
+
+    // A route handler never sees the keys, in req.query or req.url.
+    {
+      const probe = express();
+      let sawQuery: Record<string, unknown> = {};
+      let sawUrl = '';
+      probe.use('/api', noQueryCoordinates);
+      probe.get('/api/probe', (req, res) => {
+        sawQuery = { ...(req.query as Record<string, unknown>) };
+        sawUrl = req.url;
+        res.json({ ok: true });
+      });
+      const ps = probe.listen(0, '127.0.0.1');
+      await new Promise((r) => ps.once('listening', r));
+      const pb = `http://127.0.0.1:${(ps.address() as AddressInfo).port}`;
+      await fetch(`${pb}/api/probe?lat=1&lng=2&Latitude=3&lon=4&radius=5`);
+      ps.close();
+      assert.deepStrictEqual(sawQuery, { radius: '5' }, 'req.query keeps only non-coordinate keys');
+      assert.strictEqual(sawUrl, '/api/probe?radius=5', 'req.url has the coordinate keys removed');
+      console.log('✓ no route can read URL coordinates (req.query and req.url stripped)');
+    }
+
+    // Strict (flag, for the later PR): 400 coordinates_in_url, service not called.
+    process.env.STRICT_NO_URL_COORDINATES = 'true';
+    try {
+      for (const p of reads) {
+        for (const k of Object.keys(seen)) delete seen[k];
+        const sep = p.includes('?') ? '&' : '?';
+        const res = await get(`${p}${sep}lat=53.4&lng=-2.2`);
+        const body = (await res.json()) as { code?: string };
+        assert.strictEqual(res.status, 400, `${p} strict: status`);
+        assert.strictEqual(body.code, 'coordinates_in_url', `${p} strict: code`);
+        assert.strictEqual(res.headers.get('cache-control'), 'private, no-store', `${p}: no-store`);
+        assert.strictEqual(Object.keys(seen).length, 0, `${p} strict: no service called`);
+      }
+    } finally {
+      delete process.env.STRICT_NO_URL_COORDINATES;
+    }
+    console.log('✓ STRICT_NO_URL_COORDINATES=true rejects with 400 coordinates_in_url');
   } finally {
     server.close();
   }
