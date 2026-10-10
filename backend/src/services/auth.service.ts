@@ -1095,14 +1095,33 @@ export const authService = {
       throw new Error('Type DELETE to confirm account deletion');
     }
 
+    // One transaction: either every step lands (devices revoked, owned groups
+    // handed over or deleted, location rows erased, user deleted) or none
+    // does, so a failure never leaves a half-erased account behind.
+    const { locationRetentionService } = await import('./location-retention.service');
+    const { roomService } = await import('./room.service');
+    const client = await pool.connect();
     try {
-      const { trustedDeviceService } = await import('./trusted-device.service');
-      await trustedDeviceService.revokeAll(userId);
-    } catch {
-      /* best-effort */
+      await client.query('BEGIN');
+      await client.query(`SET LOCAL lock_timeout = '5s'`);
+      await client.query(
+        `UPDATE trusted_devices SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`,
+        [userId],
+      );
+      // Groups they own: longest-standing member becomes owner, or the group
+      // goes if nobody else is in it.
+      await roomService.handOverOwnedRoomsOnAccountDeletion(userId, (text, params) => client.query(text, params));
+      // Location rows (map feed, Community, chat location shares, room
+      // points, profile points); the FKs also cascade from users.
+      await locationRetentionService.eraseAccountLocationData(userId, (text, params) => client.query(text, params));
+      await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
     }
-
-    await query(`DELETE FROM users WHERE id = $1`, [userId]);
     return { ok: true };
   },
 };
