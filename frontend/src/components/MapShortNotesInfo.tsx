@@ -49,6 +49,24 @@ function pointerClient(e: Event): { x: number; y: number } | null {
   return touch ? { x: touch.clientX, y: touch.clientY } : null;
 }
 
+function clickMatchesOrigin(
+  ev: Event,
+  originTarget: EventTarget | null,
+  originPos: { x: number; y: number } | null,
+): boolean {
+  const node = ev.target as Node | null;
+  if (originTarget instanceof Node && node) {
+    if (originTarget === node || originTarget.contains(node) || node.contains(originTarget)) {
+      return true;
+    }
+  }
+  const pos = pointerClient(ev);
+  if (originPos && pos && Math.hypot(pos.x - originPos.x, pos.y - originPos.y) <= MAP_NOTES_DRAG_PX) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Short-map access to the 18+ spots note and Discretion pin note.
  * One 44px info button stays on the pills row after dismiss (no unread
@@ -147,11 +165,16 @@ export function MapShortNotesInfo({
       closeSheet(true);
       // One-shot click swallow for this gesture only. Survives the open-effect
       // teardown (closeSheet sets open=false). A drag (≥10px) disarms on
-      // pointerup/cancel; a tap stays armed until the click or 400ms.
+      // pointerup/cancel. A tap stays armed until its own click (same target
+      // or within 10px of the pointerdown) or 400ms. A later pointerdown
+      // after release is a new gesture and is never swallowed.
       swallowRef.current?.disarm();
       const start = pointerClient(e);
+      const originTarget = e.target;
       let dragged = false;
+      let released = false;
       const swallowClick = (ev: Event) => {
+        if (!clickMatchesOrigin(ev, originTarget, start)) return;
         ev.preventDefault();
         ev.stopPropagation();
         swallowRef.current?.disarm();
@@ -164,11 +187,19 @@ export function MapShortNotesInfo({
         }
       };
       const onRelease = () => {
-        if (dragged) swallowRef.current?.disarm();
+        if (dragged) {
+          swallowRef.current?.disarm();
+          return;
+        }
+        released = true;
+      };
+      const onLaterPointerDown = () => {
+        if (released) swallowRef.current?.disarm();
       };
       const disarm = () => {
         document.removeEventListener('click', swallowClick, true);
         document.removeEventListener('pointermove', onMove, true);
+        document.removeEventListener('pointerdown', onLaterPointerDown, true);
         document.removeEventListener('pointerup', onRelease, true);
         document.removeEventListener('pointercancel', onRelease, true);
         window.clearTimeout(backstop);
@@ -176,6 +207,7 @@ export function MapShortNotesInfo({
       };
       document.addEventListener('click', swallowClick, true);
       document.addEventListener('pointermove', onMove, true);
+      document.addEventListener('pointerdown', onLaterPointerDown, true);
       document.addEventListener('pointerup', onRelease, true);
       document.addEventListener('pointercancel', onRelease, true);
       const backstop = window.setTimeout(disarm, MAP_NOTES_SWALLOW_MS);

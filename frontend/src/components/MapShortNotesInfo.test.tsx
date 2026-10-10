@@ -128,6 +128,35 @@ describe('MapShortNotesInfo dismiss', () => {
     await user.click(screen.getByTestId('map-pill-radius'));
     expect(onRadius).toHaveBeenCalled();
   });
+
+  it('does not swallow a Radius tap 200ms after a clickless outside tap', async () => {
+    const user = userEvent.setup();
+    const onRadius = vi.fn();
+    render(
+      <div>
+        <button type="button" data-testid="outside">
+          Outside
+        </button>
+        <button type="button" data-testid="map-pill-radius" onClick={onRadius}>
+          Radius 5 miles
+        </button>
+        <div data-testid="map-top-stack" className="relative">
+          <MapShortNotesInfo spotsText={SPOTS} pinText={PIN} spotsLayerOn />
+        </div>
+      </div>,
+    );
+    await user.click(screen.getByTestId('map-short-notes-info'));
+    expect(screen.getByTestId('map-short-notes-sheet')).toBeInTheDocument();
+
+    const outside = screen.getByTestId('outside');
+    fireEvent.pointerDown(outside, { clientX: 8, clientY: 8 });
+    fireEvent.pointerUp(outside, { clientX: 8, clientY: 8 });
+    expect(screen.queryByTestId('map-short-notes-sheet')).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    await user.click(screen.getByTestId('map-pill-radius'));
+    expect(onRadius).toHaveBeenCalled();
+  });
 });
 
 describe('MapShortNotesInfo unread dot', () => {
