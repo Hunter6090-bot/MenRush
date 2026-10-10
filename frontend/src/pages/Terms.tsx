@@ -104,7 +104,7 @@ export const Terms = () => {
                 Terms and Conditions
               </h1>
               <p className="mt-2 text-sm text-[#a89070]">
-                Effective: <Strong>June 2026</Strong> — at public launch.
+                Effective: <Strong>June 2026</Strong>, at public launch.
               </p>
             </header>
 
@@ -158,9 +158,9 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  By accessing or using the MenRush platform — including our website at{' '}
+                  By accessing or using the MenRush platform, including our website at{' '}
                   <A href="https://menrush.com">menrush.com</A> and any associated mobile
-                  application (collectively, the "<Strong>Platform</Strong>") — you confirm that
+                  application (collectively, the "<Strong>Platform</Strong>"), you confirm that
                   you have read, understood, and agree to be bound by these Terms. If you do not
                   agree, do not use the Platform.
                 </>,
@@ -192,15 +192,15 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>1.4</Strong> When you sign up, you enter your date of birth and tick a box
-                  to confirm you are 18 or over. There is no selfie or ID check at signup. You can
-                  choose to complete an optional ID check with Veriff at any time from Get verified
-                  on the Edit screen in the You tab. If Veriff approves it, you receive the Verified
-                  badge. Veriff checks your ID; MenRush does not keep copies of your ID document.
-                  The Verified badge is optional and does not mean every member is ID checked. We
-                  may ask you to confirm your age again later and may suspend or terminate an
-                  account if we have reason to believe you do not meet the eligibility
-                  requirements.
+                  <Strong>1.4</Strong> You must be 18 or over to use MenRush. When you register, you
+                  give your date of birth, and we do not create an account if it shows you are under
+                  18. This is your own declaration and is not an ID check. You can choose to complete
+                  an optional ID check with our provider Veriff to get a Verified tick on your
+                  profile. Veriff carries out that check and MenRush does not keep copies of your ID
+                  document. A Verified tick shows only that a member chose to complete that check. It
+                  does not mean every member is ID checked. We may ask for further age checks at any
+                  time and may suspend or close an account if we have reason to believe you are under
+                  18 or do not meet these Terms.
                 </>,
               )}
             </section>
@@ -243,8 +243,8 @@ export const Terms = () => {
                 <>
                   <Strong>3.1</Strong> The Verified badge is optional and free. Complete an ID check
                   with Veriff from Get verified on the Edit screen in the You tab to receive the
-                  badge after approval. Veriff checks your ID; MenRush does not keep copies of your
-                  ID document. The badge is separate from the date of birth and 18 or over
+                  badge after approval. Veriff carries out that check and MenRush does not keep
+                  copies of your ID document. The badge is separate from the date of birth and 18 or over
                   confirmation in section 1.4, and it does not mean every member is identity
                   checked or that MenRush checks all user content in advance.
                 </>,
@@ -298,7 +298,7 @@ export const Terms = () => {
                 className="mt-6 rounded-r border-l-[3px] border-[#c8861c] bg-[#1e1208] p-4 text-[15px] leading-[1.7] text-[#f0e4cc]/90"
               >
                 <Strong>4.3</Strong> MenRush is a platform for consensual adult connection. Any
-                non-consensual behaviour — including sharing images of others without consent —
+                non-consensual behaviour, including sharing images of others without consent,
                 will result in immediate account termination and may be reported to law
                 enforcement.
               </aside>
@@ -396,16 +396,13 @@ export const Terms = () => {
                   sign-up, unless a valid promotional offer (including a Pride /{' '}
                   <span className="font-mono tracking-wide">PRIDE</span> promo code) grants a
                   longer free Premium period instead. Where such a promo applies, it replaces the
-                  30-day waitlist reward — it is not added on top.
+                  30-day waitlist reward. It is not added on top.
                 </>,
               )}
               {para(
                 <>
-                  <Strong>7.3</Strong> After any free trial period, paid Premium subscriptions
-                  will be billed on a recurring basis through our designated payment processor once
-                  live payment processing is activated (under merchant review). In the interim,
-                  in-app card checkout is not live, and subscriptions or upgrades are processed via
-                  manual invoice by contacting support@menrush.com.
+                  <Strong>7.3</Strong> Premium cannot be bought yet. We will update these Terms before
+                  payment opens.
                 </>,
               )}
               {para(
@@ -418,8 +415,10 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>7.5</Strong> Prices are displayed in GBP and are inclusive of any
-                  applicable VAT. We reserve the right to change pricing with 30 days' notice.
+                  <Strong>7.5</Strong> Prices are shown in pounds sterling (GBP). The price shown on
+                  your invoice or at checkout is the full amount you pay us, and if VAT applies it is
+                  shown there. If we change the price of Premium, the new price applies only to Premium
+                  you buy after the change, and you will see it before you pay.
                 </>,
               )}
               {para(
@@ -693,7 +692,7 @@ export const Terms = () => {
                 </p>
                 {subHeading('Data Protection Officer')}
                 <address className="mt-2 not-italic leading-[1.8] text-[15px] text-[#a89070]">
-                  Office 9811, 321–323 High Road
+                  Office 9811, 321-323 High Road
                   <br />
                   Chadwell Heath, Essex, RM6 6AX
                   <br />
@@ -738,7 +737,7 @@ export const Terms = () => {
             </section>
 
             <p className="mt-12 text-center text-[11px] uppercase tracking-[0.3em] text-[#a89070]/70">
-              — End of Terms —
+              End of Terms
             </p>
           </article>
         </div>

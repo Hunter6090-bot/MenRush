@@ -4,19 +4,19 @@ import { SiteFooter } from '../components/SiteFooter';
 const faqs = [
   {
     q: 'Who is MenRush for?',
-    a: 'Adult gay, bi, trans, discreet and curious men who want real-time local discovery and chat. You must be 18 or over. At signup you enter your date of birth and tick to confirm you are 18 or over. An optional Veriff ID check gives you the Verified badge. MenRush does not keep copies of your ID.',
+    a: 'Adult gay, bi, trans, discreet and curious men who want live local discovery and chat. You must be 18 or over, and you give your date of birth when you register.',
   },
   {
     q: 'How do I get verified?',
-    a: 'It is optional. Whenever you like, tap Get verified in You > Edit. Veriff checks your ID; MenRush does not keep copies of your ID. Once Veriff approves it, you get the Verified badge.',
+    a: 'It is optional and is not needed to join. Whenever you like, tap Get verified in You > Edit. Veriff carries out that check and MenRush does not keep copies of your ID document. Once Veriff approves it, you get the Verified badge.',
   },
   {
     q: 'What is the difference between age check and Verified?',
-    a: 'At signup every member enters their date of birth and ticks to confirm they are 18 or over. There is no selfie or ID check at signup. Verified means the member chose to complete an optional Veriff ID check and it was approved. Not every member is ID verified.',
+    a: 'Everyone tells us their date of birth when they register, and you must be 18 or over to join. Verified means a member also chose to complete an optional ID check with Veriff. Not every member is ID verified.',
   },
   {
     q: 'Why does location matter?',
-    a: 'Nearby discovery is the core product. We use location to show distance-bucketed results, not exact public coordinates.',
+    a: 'Nearby discovery is the core product. We show how far away other members are, rounded to the nearest mile, or as under 1 mile when they are closer than that. We do not show exact public coordinates.',
   },
   {
     q: 'What is Pulse?',
