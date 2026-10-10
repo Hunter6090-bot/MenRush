@@ -181,13 +181,34 @@ export function europeLondonYmd(d: Date): string {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
+/** Europe/London offset from UTC at instant t, in ms (BST 3600000, GMT 0). */
+function londonUtcOffsetMs(t: number): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: EUROPE_LONDON,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(new Date(t));
+  const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
+  const wall = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+  return wall - t;
+}
+
 /**
- * Start of a Europe/London calendar day as a UTC Date.
- * Claim window (1–5 Oct 2026) is BST (UTC+1); midnight London = previous day 23:00Z.
+ * Start of a Europe/London calendar day as a UTC Date, using the zone's own
+ * rules for that date: BST days start at 23:00Z the day before, GMT days at
+ * 00:00Z. No fixed offset.
  */
 export function startOfEuropeLondonDay(ymd: string): Date {
-  // Oct 2026 claim window is BST. Explicit offset matches Al's Europe/London calendar lock.
-  return new Date(`${ymd}T00:00:00+01:00`);
+  const [y, m, d] = ymd.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d, 0, 0, 0);
+  let t = guess - londonUtcOffsetMs(guess);
+  t = guess - londonUtcOffsetMs(t);
+  return new Date(t);
 }
 
 /**

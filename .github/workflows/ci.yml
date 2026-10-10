@@ -37,6 +37,8 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
+      - name: London midnight follows BST and GMT (promo Premium start)
+        run: npm run test:london-midnight
       - name: Security checks (source guards, uploads, media, CORS)
         run: npm run test:security
 
