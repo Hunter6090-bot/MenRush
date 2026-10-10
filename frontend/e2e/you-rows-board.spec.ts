@@ -21,13 +21,16 @@ async function authenticate(context: BrowserContext, theme: 'light' | 'dark') {
   }, { ...OWNER, theme });
 }
 
-async function mockApis(page: Page, writes: string[]) {
+async function mockApis(page: Page, writes: string[], name = 'Dan') {
   await page.route((url) => url.pathname === '/api' || url.pathname.startsWith('/api/'), async (route) => {
     const req = route.request();
     const p = new URL(req.url()).pathname;
     const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     if (req.method() !== 'GET') writes.push(`${req.method()} ${p}`);
-    if (p.endsWith('/users/me')) return json({ id: OWNER.user.id, name: 'Dan', age: 36, photo_url: '', bio: 'x', headline: 'x', looking_for: 'Chat', interests: ['Chat'] });
+    // #357: the install prompt dismissal (set in localStorage above) is already on the
+    // server, so the prompt-prefs sync has nothing to push. You itself writes nothing.
+    if (p.endsWith('/prompt-prefs')) return json({ never: ['install'] });
+    if (p.endsWith('/users/me')) return json({ id: OWNER.user.id, name, age: 36, photo_url: '', bio: 'x', headline: 'x', looking_for: 'Chat', interests: ['Chat'] });
     if (p.endsWith('/albums/mine')) return json({ albums: [{ id: 'a' }, { id: 'b' }, { id: 'c' }], public_photos: [], view_once_photos: [], private_photos: [], private_album: null, viewers: [], photo_total: 0, free_cap: 6 });
     if (p.endsWith('/auth/2fa/status')) return json({ enabled: true, enabledAt: null });
     if (p.endsWith('/profile-meta/map-pin-fuzz')) return json({ map_pin_fuzz_m: 320 });
@@ -83,6 +86,66 @@ for (const theme of ['dark', 'light'] as const) {
       await page.goto('/profile/edit');
       await expect(page.getByTestId('location-presence-strip')).toBeVisible({ timeout: 15_000 });
       await expect(page.getByTestId('profile-depth-strip')).toBeVisible();
+      await context.close();
+    });
+  }
+}
+
+// QC #385 P0: the header name is never cut off. Board: ~84px photo, name wraps to
+// two lines, steps down (never below 15px) if two lines are not enough.
+const LONG_NAMES = ['Torbay Bear', 'Christopher Montgomery', 'Maximilian Featherstonehaugh', 'Bartholomew Wolverhampton-Smythe'];
+for (const theme of ['dark', 'light'] as const) {
+  for (const width of [390, 360]) {
+    test(`You header name is never truncated at ${width}px (${theme})`, async ({ browser }, testInfo) => {
+      const context = await browser.newContext({ viewport: { width, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+      await authenticate(context, theme);
+      const rows: string[] = [];
+      for (const name of LONG_NAMES) {
+        const page = await context.newPage();
+        await mockApis(page, [], name);
+        await page.goto('/profile');
+        const el = page.getByTestId('you-name');
+        await expect(el).toHaveText(name, { timeout: 20_000 });
+        await expect(page.getByTestId('you-row-value-albums')).toHaveText('3');
+        const m = await el.evaluate((h) => {
+          const cs = getComputedStyle(h);
+          const fontPx = parseFloat(cs.fontSize);
+          const linePx = parseFloat(cs.lineHeight);
+          const r = h.getBoundingClientRect();
+          const edit = document.querySelector('[data-testid="you-edit"]')!.getBoundingClientRect();
+          const ring = document.querySelector('[data-testid="you-avatar-ring"]')!.getBoundingClientRect();
+          const photo = (document.querySelector('[data-testid="you-avatar"]') ?? document.querySelector('[data-testid="you-avatar-brand-face"]'))!.getBoundingClientRect();
+          return {
+            fontPx,
+            lines: Math.round(r.height / linePx),
+            width: Math.round(r.width),
+            overflowX: h.scrollWidth - h.clientWidth,
+            ellipsis: cs.textOverflow,
+            whiteSpace: cs.whiteSpace,
+            gapToEdit: Math.round(edit.left - r.right),
+            photo: Math.round(photo.width),
+            ring: Math.round(ring.width),
+            editH: Math.round(edit.height),
+          };
+        });
+        rows.push(`${width}px ${theme} "${name}": ${m.fontPx}px, ${m.lines} line(s), box ${m.width}px, photo ${m.photo}px (ring ${m.ring}px), Edit ${m.editH}px tall, gap to Edit ${m.gapToEdit}px`);
+        expect(m.overflowX, name).toBeLessThanOrEqual(0);
+        expect(m.ellipsis, name).not.toBe('ellipsis');
+        expect(m.whiteSpace, name).not.toBe('nowrap');
+        expect(m.fontPx, name).toBeGreaterThanOrEqual(15);
+        expect(m.fontPx, name).toBeLessThanOrEqual(24);
+        expect(m.photo, 'board ~84px photo').toBe(84);
+        expect(m.gapToEdit, name).toBeGreaterThanOrEqual(0);
+        expect(m.editH).toBeGreaterThanOrEqual(44);
+        // Two lines is the target; only a name that cannot fit at 15px may wrap further.
+        if (m.lines > 2) expect(m.fontPx, name).toBe(15);
+        if (name === 'Torbay Bear') expect(m.lines).toBeLessThanOrEqual(2);
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+        expect(overflow).toBeLessThanOrEqual(0);
+        await page.getByTestId('you-header').screenshot({ path: testInfo.outputPath(`you-name-${width}-${theme}-${name.replace(/\W+/g, '-')}.png`) });
+        await page.close();
+      }
+      console.log(rows.join('\n'));
       await context.close();
     });
   }

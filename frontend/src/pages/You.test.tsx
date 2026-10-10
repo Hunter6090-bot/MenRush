@@ -41,8 +41,8 @@ vi.mock('../components/Layout', () => ({
   Layout: ({ children }: { children: React.ReactNode }) => <div data-testid="layout">{children}</div>,
 }));
 
-import { You, REQUEST_SIGN_OUT_EVENT } from './You';
-import { YOU_FEATURE_STATUS, YOU_ROW_CARDS } from '../lib/youRows';
+import { You, REQUEST_SIGN_OUT_EVENT, fitNameSize, YOU_AVATAR_PX, YOU_NAME_MAX_PX, YOU_NAME_MIN_PX } from './You';
+import { VERIFY_HOME_PATH, YOU_FEATURE_STATUS, YOU_ROW_CARDS } from '../lib/youRows';
 
 let lastPath = '';
 function PathSpy() {
@@ -362,5 +362,120 @@ describe('You locks: type, tap targets, copy, avatar', () => {
     expect(you).toMatch(/mx-auto w-full min-w-0 max-w-xl/);
     expect(you).toMatch(/min-w-0 flex-1 truncate/);
     expect(you).not.toMatch(/\bw-\[(3[7-9]\d|[4-9]\d\d)px\]/);
+  });
+});
+
+describe('Discretion sheet keyboard (QC #385)', () => {
+  async function openSheet() {
+    renderYou();
+    await screen.findByTestId('you-row-value-discretion');
+    const trigger = screen.getByTestId('you-row-discretion');
+    trigger.focus();
+    fireEvent.click(trigger);
+    const sheet = screen.getByTestId('you-discretion-sheet');
+    await waitFor(() => expect(within(sheet).getByTestId('map-discretion-range')).not.toBeDisabled());
+    return { trigger, sheet };
+  }
+
+  it('moves focus into the sheet on open', async () => {
+    const { sheet } = await openSheet();
+    expect(within(sheet).getByRole('button', { name: 'Close' })).toHaveFocus();
+  });
+
+  it('Escape closes it and returns focus to the Discretion row', async () => {
+    const { trigger, sheet } = await openSheet();
+    fireEvent.keyDown(within(sheet).getByTestId('map-discretion-range'), { key: 'Escape' });
+    expect(screen.queryByTestId('you-discretion-sheet')).toBeNull();
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(api.setMapPinFuzz).not.toHaveBeenCalled();
+  });
+
+  it('Close returns focus to the Discretion row', async () => {
+    const { trigger, sheet } = await openSheet();
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByTestId('you-discretion-sheet')).toBeNull();
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it('traps Tab and Shift+Tab inside the sheet', async () => {
+    const { sheet } = await openSheet();
+    const close = within(sheet).getByRole('button', { name: 'Close' });
+    const range = within(sheet).getByTestId('map-discretion-range');
+    // The backdrop is not a tab stop.
+    expect(within(sheet).getByRole('button', { name: 'Close Discretion' })).toHaveAttribute('tabindex', '-1');
+    // Shift+Tab on the first stop wraps to the last.
+    close.focus();
+    fireEvent.keyDown(close, { key: 'Tab', shiftKey: true });
+    const focusables = Array.from(
+      sheet.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'),
+    ).filter((el) => el.getAttribute('tabindex') !== '-1');
+    const last = focusables[focusables.length - 1];
+    expect(last).toHaveFocus();
+    // Tab on the last stop wraps to the first.
+    fireEvent.keyDown(last, { key: 'Tab' });
+    expect(close).toHaveFocus();
+    expect(focusables).toContain(range);
+    expect(screen.getByTestId('you-discretion-sheet')).toBeInTheDocument();
+  });
+});
+
+describe('You header name (QC #385 P0)', () => {
+  it('the photo is the board ~84px and the name is never truncated', () => {
+    const you = read('./You.tsx');
+    expect(YOU_AVATAR_PX).toBe(84);
+    const nameTag = you.slice(you.indexOf('<h2'), you.indexOf('data-testid="you-name"'));
+    expect(nameTag).not.toMatch(/truncate|line-clamp|text-ellipsis|nowrap/);
+    expect(nameTag).toMatch(/break-words/);
+  });
+
+  it('shows the whole long name', async () => {
+    api.getMe.mockResolvedValue({ data: { name: 'Torbay Bear Featherstonehaugh', photo_url: '/uploads/dan.jpg' } });
+    renderYou();
+    await waitFor(() => expect(screen.getByTestId('you-name')).toHaveTextContent('Torbay Bear Featherstonehaugh'));
+    expect(screen.getByTestId('you-name').className).not.toMatch(/truncate/);
+  });
+
+  it('fits to two lines, stepping down 1px, never below 15px', () => {
+    expect(YOU_NAME_MAX_PX).toBe(24);
+    expect(YOU_NAME_MIN_PX).toBe(15);
+    // Fits on two lines at the full size.
+    expect(fitNameSize(() => 2)).toBe(24);
+    // Needs three lines until 20px.
+    expect(fitNameSize((px) => (px > 20 ? 3 : 2))).toBe(20);
+    // Never fits: floor at 15px (wraps further rather than truncate).
+    const tried: number[] = [];
+    expect(fitNameSize((px) => { tried.push(px); return 4; })).toBe(15);
+    expect(Math.min(...tried)).toBeGreaterThanOrEqual(15);
+  });
+});
+
+describe('Get verified destination (QC #385)', () => {
+  it('old /verify/* links land on /profile/edit#verify', () => {
+    expect(VERIFY_HOME_PATH).toBe('/profile/edit#verify');
+    const app = read('../App.tsx');
+    expect(app).toMatch(/path="\/verify\/\*" element=\{<ProtectedRoute><Navigate to=\{VERIFY_HOME_PATH\} replace \/><\/ProtectedRoute>\}/);
+    expect(app).not.toMatch(/path="\/verify\/\*"[^\n]*to="\/profile"/);
+  });
+
+  it('a /verify/id visit redirects to the Edit screen Verify section', async () => {
+    const { Navigate } = await import('react-router-dom');
+    render(
+      <MemoryRouter initialEntries={['/verify/id']}>
+        <PathSpy />
+        <Routes>
+          <Route path="/verify/*" element={<Navigate to={VERIFY_HOME_PATH} replace />} />
+          <Route path="/profile/edit" element={<p>edit</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('edit')).toBeInTheDocument();
+    expect(lastPath).toBe('/profile/edit#verify');
+  });
+
+  it('the Veriff return URL in the backend is /profile/edit#verify', () => {
+    const svc = read('../../../backend/src/services/veriff.service.ts');
+    expect(svc).toContain("VERIFF_RETURN_PATH = '/profile/edit#verify'");
+    expect(svc).toMatch(/callback: veriffCallbackUrl\(\)/);
   });
 });

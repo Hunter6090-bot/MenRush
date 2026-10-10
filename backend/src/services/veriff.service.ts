@@ -114,6 +114,16 @@ function frontendBase(): string {
   return (raw || 'http://localhost:5173').replace(/\/$/, '');
 }
 
+/**
+ * Where Veriff sends the member back after the check. 'Get verified' lives on the
+ * Edit screen (#385 You rows), so return there, scrolled to the Verify section.
+ */
+export const VERIFF_RETURN_PATH = '/profile/edit#verify';
+
+export function veriffCallbackUrl(): string {
+  return `${frontendBase()}${VERIFF_RETURN_PATH}`;
+}
+
 export interface VeriffProgress {
   is_verified: boolean;
   session_id: string | null;
@@ -165,7 +175,7 @@ export const veriffService = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-AUTH-CLIENT': apiKey() },
       signal: AbortSignal.timeout(15000),
-      body: JSON.stringify({ verification: { callback: `${frontendBase()}/profile`, vendorData: userId } }),
+      body: JSON.stringify({ verification: { callback: veriffCallbackUrl(), vendorData: userId } }),
     });
     if (!res.ok) throw new Error('veriff_session_failed');
     const json = await res.json() as { verification?: { id?: string; url?: string } };

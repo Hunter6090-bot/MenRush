@@ -8,14 +8,21 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 const getMe = vi.hoisted(() => vi.fn());
-vi.mock('../api/client', () => ({ usersAPI: { getMe, updateLocation: vi.fn() } }));
+vi.mock('../api/client', () => ({
+  usersAPI: { getMe, updateLocation: vi.fn() },
+  // #357 synced "Don't show again": signed-in members read their prompt prefs.
+  promptPrefsAPI: { get: vi.fn(async () => ({ data: { never: [] } })), setNever: vi.fn(async () => ({ data: {} })) },
+}));
 vi.mock('../lib/deviceLocation', () => ({
   LOCATION_PRIVACY_LINE: 'We use your location to show who is nearby.',
   requestDeviceLocation: vi.fn(async () => ({ ok: false, message: 'Location is blocked.' })),
 }));
 vi.mock('../hooks/store', () => {
   const state = { lat: null, lng: null, setLocation: vi.fn() };
-  return { useLocationStore: (sel: (s: typeof state) => unknown) => sel(state) };
+  // ProfileDepthStrip uses usePromptDismissal (#357), which reads the signed-in user.
+  const auth = { user: { id: 'u-test' } };
+  const useAuthStore = Object.assign((sel: (s: typeof auth) => unknown) => sel(auth), { getState: () => auth });
+  return { useLocationStore: (sel: (s: typeof state) => unknown) => sel(state), useAuthStore };
 });
 
 import { LocationPresenceStrip } from './LocationPresenceStrip';

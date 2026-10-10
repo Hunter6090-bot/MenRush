@@ -9,7 +9,7 @@
  * Profile form, map photo, Viewed me, Invite, location, Mood, Ghost, visibility)
  * is now on the Edit screen (/profile/edit). Nothing on this page writes data.
  */
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { albumsAPI, authAPI, profileMetaAPI, usersAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
@@ -40,6 +40,67 @@ import {
   isComingSoon,
   type YouRowId,
 } from '../lib/youRows';
+
+/**
+ * Board header: ~84px photo, name wraps to two lines and is never cut off.
+ * A name that still needs more than two lines steps down 1px at a time, never
+ * below 15px (text lock). At 15px a very long name keeps wrapping rather than truncate.
+ */
+export const YOU_AVATAR_PX = 84;
+export const YOU_NAME_MAX_PX = 24;
+export const YOU_NAME_MIN_PX = 15;
+export const YOU_NAME_LINE_HEIGHT = 1.2;
+
+/**
+ * Largest size from max down to min whose rendered line count is at most 2.
+ * `linesAt(px)` sets the size and returns how many lines the name takes.
+ */
+export function fitNameSize(linesAt: (px: number) => number, max = YOU_NAME_MAX_PX, min = YOU_NAME_MIN_PX): number {
+  for (let px = max; px > min; px -= 1) {
+    if (linesAt(px) <= 2) return px;
+  }
+  return min;
+}
+
+function useFittedNameSize(name: string) {
+  const ref = useRef<HTMLHeadingElement | null>(null);
+  const [px, setPx] = useState(YOU_NAME_MAX_PX);
+  const fit = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const linesAt = (size: number) => {
+      el.style.fontSize = `${size}px`;
+      const lineBox = size * YOU_NAME_LINE_HEIGHT;
+      // jsdom has no layout (height 0): treat that as one line.
+      return el.scrollHeight > 0 ? Math.round(el.scrollHeight / lineBox) : 1;
+    };
+    const next = fitNameSize(linesAt);
+    el.style.fontSize = `${next}px`;
+    setPx(next);
+  }, []);
+  useLayoutEffect(() => {
+    fit();
+  }, [fit, name]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const parent = el.parentElement;
+    if (!parent) return;
+    let lastW = parent.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (parent.clientWidth !== lastW) {
+        lastW = parent.clientWidth;
+        fit();
+      }
+    });
+    ro.observe(parent);
+    return () => ro.disconnect();
+  }, [fit]);
+  return { ref, px };
+}
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /** Ask Layout to open its Sign out confirm (same confirm as the Menu and sidebar). */
 export const REQUEST_SIGN_OUT_EVENT = 'menrush:request-sign-out';
@@ -75,6 +136,10 @@ export function You() {
   const [discretionOpen, setDiscretionOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const noticeTimer = useRef<number | null>(null);
+  const discretionTrigger = useRef<HTMLButtonElement | null>(null);
+  const discretionPanel = useRef<HTMLDivElement | null>(null);
+  const discretionClose = useRef<HTMLButtonElement | null>(null);
+  const discretionWasOpen = useRef(false);
 
   // Reads only. Opening You never writes anything.
   useEffect(() => {
@@ -111,7 +176,49 @@ export function You() {
     return () => window.removeEventListener(MAP_PIN_FUZZ_EVENT, onFuzz);
   }, []);
 
+  // Discretion sheet: focus moves in on open and back to the row on close.
+  useEffect(() => {
+    if (discretionOpen) {
+      discretionWasOpen.current = true;
+      discretionClose.current?.focus();
+    } else if (discretionWasOpen.current) {
+      discretionWasOpen.current = false;
+      discretionTrigger.current?.focus();
+    }
+  }, [discretionOpen]);
+
+  const closeDiscretion = () => setDiscretionOpen(false);
+
+  const onDiscretionKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeDiscretion();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const panel = discretionPanel.current;
+    if (!panel) return;
+    const items = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE));
+    if (items.length === 0) {
+      e.preventDefault();
+      return;
+    }
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    const inside = active ? panel.contains(active) : false;
+    if (e.shiftKey && (active === first || !inside)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && (active === last || !inside)) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
   const name = me?.name ?? user?.name ?? '';
+  const { ref: nameRef, px: namePx } = useFittedNameSize(name);
   const photoUrl = me?.photo_url ?? user?.photo_url ?? null;
   const verified = verification.status?.is_verified === true;
 
@@ -180,6 +287,7 @@ export function You() {
           type="button"
           className={rowClass}
           data-testid={`you-row-${row.id}`}
+          ref={discretionTrigger}
           aria-haspopup="dialog"
           aria-expanded={discretionOpen}
           onClick={() => setDiscretionOpen(true)}
@@ -199,21 +307,38 @@ export function You() {
     <Layout>
       <h1 className="sr-only">You</h1>
       <div className="mx-auto w-full min-w-0 max-w-xl space-y-4 px-4 py-4 pb-28 lg:py-8" data-testid="you-rows-page">
-        <header className="flex items-center gap-4 py-2" data-testid="you-header">
+        <header className="flex items-center gap-3 py-2" data-testid="you-header">
           <span
             className="inline-flex shrink-0 rounded-full border-2 border-[var(--copper)] p-0.5"
             data-testid="you-avatar-ring"
           >
             {isNearbyPlaceholderFace(photoUrl) ? (
-              <span className="inline-flex overflow-hidden rounded-full" style={{ width: 96, height: 96 }} data-testid="you-avatar-brand-face">
-                <FadedBrandFace variant="profile" size={96} label={name || 'MenRush'} />
+              <span
+                className="inline-flex overflow-hidden rounded-full"
+                style={{ width: YOU_AVATAR_PX, height: YOU_AVATAR_PX }}
+                data-testid="you-avatar-brand-face"
+              >
+                <FadedBrandFace variant="profile" size={YOU_AVATAR_PX} label={name || 'MenRush'} />
               </span>
             ) : (
-              <UserAvatar name={name} photoUrl={photoUrl ?? undefined} size="xl" showStatus={false} />
+              <UserAvatar
+                name={name}
+                photoUrl={photoUrl ?? undefined}
+                size="xl"
+                showStatus={false}
+                className="!h-[84px] !w-[84px]"
+                data-testid="you-avatar"
+              />
             )}
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-[24px] font-extrabold text-[var(--cream)]" data-testid="you-name">
+            <h2
+              ref={nameRef}
+              className="whitespace-normal break-words font-extrabold text-[var(--cream)] [overflow-wrap:anywhere]"
+              style={{ fontSize: namePx, lineHeight: YOU_NAME_LINE_HEIGHT }}
+              data-testid="you-name"
+              data-font-px={namePx}
+            >
               {name}
             </h2>
             {verified ? (
@@ -272,14 +397,18 @@ export function You() {
             aria-label="Close Discretion"
             tabIndex={-1}
             className="absolute inset-0 bg-black/55"
-            onClick={() => setDiscretionOpen(false)}
+            onClick={closeDiscretion}
           />
-          <div className="absolute inset-x-0 bottom-0 mx-auto max-w-xl rounded-t-3xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-4 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
+          <div
+            ref={discretionPanel}
+            onKeyDown={onDiscretionKeyDown}
+            className="absolute inset-x-0 bottom-0 mx-auto max-w-xl rounded-t-3xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-4 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-[17px] font-extrabold text-[var(--cream)]">Discretion</p>
               <button
                 type="button"
-                onClick={() => setDiscretionOpen(false)}
+                ref={discretionClose}
+                onClick={closeDiscretion}
                 aria-label="Close"
                 className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--cream-soft)]"
               >

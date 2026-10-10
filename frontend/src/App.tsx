@@ -20,6 +20,7 @@ import { savePostAuthRedirect } from './lib/profileLinks';
 import { prefetchAppRouteChunks } from './lib/routeChunks';
 import { warmTabListCaches } from './lib/tabListCache';
 import { readStoredToken } from './lib/authSession';
+import { VERIFY_HOME_PATH } from './lib/youRows';
 
 /**
  * Named-export pages → lazy defaults. Keeps Mapbox / heavy screens out of the
@@ -282,7 +283,7 @@ function AppShell() {
           <Route path="/guidelines" element={<CommunityGuidelines />} />
           <Route path="/help" element={<Help />} />
           {/* Absolute Navigate only — no relative links under this splat, so keep path+/splat. */}
-          <Route path="/verify/*" element={<ProtectedRoute><Navigate to="/profile" replace /></ProtectedRoute>} />
+          <Route path="/verify/*" element={<ProtectedRoute><Navigate to={VERIFY_HOME_PATH} replace /></ProtectedRoute>} />
           <Route
             path="/premium"
             element={

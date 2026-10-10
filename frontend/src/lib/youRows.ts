@@ -66,6 +66,8 @@ export function comingSoonNotice(label: string): string {
 
 /** Edit screen for everything that used to sit on the You page. */
 export const PROFILE_EDIT_PATH = '/profile/edit';
+/** 'Get verified' lives on the Edit screen; old /verify/* links and the Veriff return land here. */
+export const VERIFY_HOME_PATH = `${PROFILE_EDIT_PATH}#verify`;
 
 /** The You rows screen (bottom tab You). */
 export const YOU_ROWS_PATH = '/profile';
