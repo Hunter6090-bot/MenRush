@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { isPhoneDevice } from '../lib/device';
 import {
@@ -54,7 +55,14 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
     variant !== 'sheet' ? 'none' : wants ? 'want' : waiting ? 'pending' : 'none',
   );
 
-  if (!wants || (variant === 'sheet' && !onTop)) return null;
+  const visible = wants && (variant !== 'sheet' || onTop);
+  const { markShown } = dismissal;
+  // Once on screen it stays until closed, whatever the server prefs say later.
+  useEffect(() => {
+    if (visible) markShown();
+  }, [visible, markShown]);
+
+  if (!visible) return null;
 
   // Android Chrome can one-tap install when we still hold the deferred event.
   // iPhone / Safari cannot — keep Show me how. Android without a prompt falls

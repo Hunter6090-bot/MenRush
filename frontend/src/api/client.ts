@@ -43,6 +43,32 @@ apiClient.interceptors.request.use((config) => {
 });
 
 /**
+ * Short timeout for the small requests that gate the top prompts (QC P1 on
+ * #354). A hung /push/vapid-public or /prompt-prefs used to hold the alerts
+ * banner in "still checking" for ever, and with it Finish profile behind it.
+ *
+ * Scoped on purpose rather than a client-wide default: sign up, Veriff, map
+ * reads after a cold start and every upload can take longer than 4s, and
+ * uploads already set their own long timeouts (60s to 180s) or none. A call
+ * that passes its own timeout keeps it.
+ */
+export const SHORT_REQUEST_TIMEOUT_MS = 4000;
+const SHORT_TIMEOUT_PATHS: readonly RegExp[] = [/^\/?push\/vapid-public(?:[?#]|$)/, /^\/?prompt-prefs(?:[/?#]|$)/];
+
+export function shortTimeoutFor(url: string | undefined): number | undefined {
+  if (!url) return undefined;
+  return SHORT_TIMEOUT_PATHS.some((re) => re.test(url)) ? SHORT_REQUEST_TIMEOUT_MS : undefined;
+}
+
+apiClient.interceptors.request.use((config) => {
+  if (!config.timeout) {
+    const short = shortTimeoutFor(config.url);
+    if (short) config.timeout = short;
+  }
+  return config;
+});
+
+/**
  * Coordinates never travel in a URL: query strings end up in proxy logs
  * (Vercel runtime logs keep the search params of every /api request). The
  * device fix goes only in the body of POST /users/location, and every read

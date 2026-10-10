@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
 import { PushAlertBanner } from '../components/PushAlertBanner';
 import { InstallPrompt } from '../components/InstallPrompt';
 import { ProfileDepthStrip } from '../components/ProfileDepthStrip';
@@ -335,5 +335,92 @@ describe('Old device keys are synced up once (QC P1 on #357)', () => {
     render(<PushAlertBanner />);
     await waitFor(() => expect(server['member-a']?.has('install')).toBe(true));
     await waitFor(() => expect(window.localStorage.getItem('menrush_prompt_legacy_synced')).toBe('1'));
+  });
+});
+
+describe('Once shown, a prompt stays until closed (QC P1 on #357)', () => {
+  it('slow prefs: the fallback sheet is not pulled or swapped for alerts when the server answers late', async () => {
+    Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => androidUa });
+    vi.mocked(usersAPI.getMe).mockResolvedValue({ data: incompleteMe } as never);
+    setPromptPrefsTimeoutForTests(30);
+    let answer: (v: unknown) => void = () => {};
+    vi.mocked(promptPrefsAPI.get).mockReturnValue(
+      new Promise((r) => {
+        answer = r;
+      }) as never,
+    );
+    const user = userEvent.setup();
+    const watch = watchPrompts();
+    renderShell();
+    // Timeout fallback: this phone has no ticks, so the sheet shows.
+    expect(await screen.findByRole('dialog', { name: 'Install MenRush' })).toBeInTheDocument();
+
+    // The server answers late: install and alerts were turned off on another phone.
+    await act(async () => answer({ data: { never: ['install', 'alerts'] } }));
+    await settle();
+    expect(screen.getByRole('dialog', { name: 'Install MenRush' })).toBeInTheDocument();
+    expect(screen.queryByTestId('push-alert-banner')).toBeNull();
+
+    // Closing it moves on, and the late answer now stops alerts from showing.
+    await user.click(screen.getByTestId('install-prompt-close'));
+    await settle();
+    watch.stop();
+    expect(screen.queryByRole('dialog', { name: 'Install MenRush' })).toBeNull();
+    expect(screen.getByTestId('profile-depth-strip')).toBeInTheDocument();
+    expect(watch.seen.has('banner')).toBe(false);
+  });
+
+  it('failed prefs: the alerts banner stays put when a remount retries and succeeds', async () => {
+    vi.mocked(promptPrefsAPI.get).mockRejectedValueOnce(new Error('offline'));
+    const view = render(<PushAlertBanner />);
+    expect(await screen.findByText('Turn on alerts')).toBeInTheDocument();
+    server['member-a'] = new Set(['alerts']);
+    view.rerender(<PushAlertBanner key="again" />);
+    await settle();
+    await settle();
+    expect(promptPrefsAPI.get).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('Turn on alerts')).toBeInTheDocument();
+  });
+
+  it('a prompt on screen keeps its place when a higher one turns up later', async () => {
+    Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => androidUa });
+    // On /messages the sheet steps aside, so alerts shows first.
+    function GoToRooms() {
+      const navigate = useNavigate();
+      return (
+        <button type="button" onClick={() => navigate('/rooms')}>
+          go
+        </button>
+      );
+    }
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/messages']}>
+        <PushAlertBanner />
+        <InstallPrompt variant="sheet" />
+        <GoToRooms />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('Turn on alerts')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Install MenRush' })).toBeNull();
+    // Same page load, the member moves on and the sheet becomes eligible: alerts is not swapped out.
+    await user.click(screen.getByText('go'));
+    await settle();
+    expect(screen.getByText('Turn on alerts')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Install MenRush' })).toBeNull();
+    // Once alerts is closed, the sheet is next.
+    await user.click(screen.getByTestId('alerts-prompt-close'));
+    expect(await screen.findByRole('dialog', { name: 'Install MenRush' })).toBeInTheDocument();
+  });
+});
+
+describe('Alerts banner does not push the page down (QC P2)', () => {
+  it('overlays from a zero height slot', async () => {
+    render(<PushAlertBanner />);
+    const card = await screen.findByTestId('push-alert-banner');
+    const slot = screen.getByTestId('push-alert-banner-slot');
+    expect(slot.className.split(/\s+/)).toEqual(expect.arrayContaining(['relative', 'h-0']));
+    expect(card.className.split(/\s+/)).toEqual(expect.arrayContaining(['absolute', 'top-0', 'inset-x-0']));
+    expect(card.parentElement).toBe(slot);
   });
 });

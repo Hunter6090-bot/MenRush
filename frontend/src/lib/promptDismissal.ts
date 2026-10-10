@@ -76,8 +76,27 @@ export function isPromptClosedThisSession(id: PromptId, userId: string | null | 
   return read('session', promptSessionKey(id, userId));
 }
 
+/**
+ * Prompts already on screen this page load (QC P1 on #357). A prompt that has
+ * been shown stays until the member closes it: a late server answer (after the
+ * timeout fallback) can stop it coming back, but never pulls it from under
+ * them. Module state, so it lasts for the page load and not a reload.
+ */
+const shownThisLoad = new Set<string>();
+
+function shownKey(id: PromptId, userId: string | null | undefined): string {
+  return `${id}:${owner(userId)}`;
+}
+
+/** Called by a prompt once it is on screen. */
+export function markPromptShown(id: PromptId, userId: string | null | undefined): void {
+  shownThisLoad.add(shownKey(id, userId));
+}
+
 export function isPromptHidden(id: PromptId, userId: string | null | undefined): boolean {
-  return isPromptNeverShown(id, userId) || isPromptClosedThisSession(id, userId);
+  if (isPromptClosedThisSession(id, userId)) return true;
+  if (shownThisLoad.has(shownKey(id, userId))) return false;
+  return isPromptNeverShown(id, userId);
 }
 
 const listeners = new Set<() => void>();
@@ -205,6 +224,7 @@ export function closePrompt(id: PromptId, userId: string | null | undefined, for
     if (userId) void pushNever(id);
   }
   write('session', promptSessionKey(id, userId));
+  shownThisLoad.delete(shownKey(id, userId));
   notify();
 }
 
@@ -214,6 +234,8 @@ export function usePromptDismissal(id: PromptId): {
   /** False on a device still waiting for the server prefs. Render nothing until true. */
   ready: boolean;
   close: (forever: boolean) => void;
+  /** Call once the prompt is on screen, so late prefs cannot remove it. */
+  markShown: () => void;
 } {
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const [hidden, setHidden] = useState(() => isPromptHidden(id, userId));
@@ -234,14 +256,17 @@ export function usePromptDismissal(id: PromptId): {
 
   const close = useCallback((forever: boolean) => closePrompt(id, userId, forever), [id, userId]);
 
+  const markShown = useCallback(() => markPromptShown(id, userId), [id, userId]);
+
   // The member changed and the effect has not run yet: wait for their prefs.
-  return { hidden, ready: ready && isPromptPrefsSettled(userId), close };
+  return { hidden, ready: ready && isPromptPrefsSettled(userId), close, markShown };
 }
 
 /** Test-only: forget server syncs between Vitest cases. */
 export function resetPromptPrefsSyncForTests(): void {
   syncs.clear();
   settled.clear();
+  shownThisLoad.clear();
   listeners.clear();
   timeoutMs = PROMPT_PREFS_TIMEOUT_MS;
 }
