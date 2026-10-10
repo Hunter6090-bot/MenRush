@@ -1,8 +1,8 @@
 /**
  * QC P2 on #357: the floating alerts banner (z-40) covered the map's Radius
  * and Filters pills until it was closed. While it is on screen the pills move
- * below it; once it closes they go back. Geometry is mocked for 390px and
- * 360px phones (jsdom has no layout), using the banner heights at those widths.
+ * below it; once it closes they go back. jsdom has no layout, so geometry is
+ * mocked with the positions measured in a real browser at 390px and 360px.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
@@ -34,12 +34,15 @@ vi.mock('../lib/push', () => ({
   registerServiceWorker: vi.fn().mockResolvedValue(undefined),
 }));
 
-/** Layout below the 52px mobile header, per phone width. */
+/**
+ * Layout below the 52px mobile header, per phone width. Banner and map panel
+ * positions measured in headless Chromium (Layout shell + Discover map panel,
+ * light and dark): the banner card runs 60 to 202px at both widths (Turn on
+ * sits on its own row), and the pills then sit about 20px below it.
+ */
 const phones = [
-  // Banner: 8px margin + card (title, tick row and buttons on one line at 390).
-  { width: 390, bannerTop: 60, bannerHeight: 104, mapTop: 116 },
-  // At 360 the Turn on button wraps under the tick row, so the card is taller.
-  { width: 360, bannerTop: 60, bannerHeight: 152, mapTop: 116 },
+  { width: 390, bannerTop: 60, bannerHeight: 142, mapTop: 116 },
+  { width: 360, bannerTop: 60, bannerHeight: 142, mapTop: 116 },
 ];
 
 const PILL_ROW_PADDING_PX = 12; // pt-3 inside the stack
