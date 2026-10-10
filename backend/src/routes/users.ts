@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { ShowDistancePremiumError, userService } from '../services/user.service';
 import { profileViewsService } from '../services/profile-views.service';
 import { notificationService } from '../services/notification.service';
+import { queueEmailNotification } from '../services/email-notification.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { SecurityError } from '../security/access';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
@@ -332,6 +333,16 @@ router.post('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Respo
         title: `You matched with ${senderName}`,
         body: 'Say hello while you are both online.',
         linkPath: `/messages/${req.userId}`,
+      });
+      queueEmailNotification({
+        recipientId: req.userId!,
+        actorId: req.params.id,
+        type: 'match',
+      });
+      queueEmailNotification({
+        recipientId: req.params.id,
+        actorId: req.userId!,
+        type: 'match',
       });
     } else {
       await notificationService.notify(io, {

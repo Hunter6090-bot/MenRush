@@ -196,6 +196,8 @@ export const AUTH_ONLY_ROUTERS: Record<string, string> = {
   // The caller's own "Don't show again" choices. Nothing about any other member,
   // and the prompts show before verification finishes (#357).
   'prompt-prefs': 'own prompt choices only, shown before verification',
+  // The caller's own activity-mail ticks. Nothing about any other member.
+  'email-notifications': 'own email notification ticks only',
 };
 
 export function assertAuthOnlyRouterGuard(route: string, source: string): void {

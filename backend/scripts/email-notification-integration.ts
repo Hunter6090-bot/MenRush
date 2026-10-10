@@ -1,0 +1,352 @@
+/**
+ * Integration: email notification prefs, hourly lock, safety, unsubscribe.
+ * Needs a migrated DATABASE_URL (schema.sql + migrations). Skips without one.
+ *   npm run test:email-notifications-integration
+ */
+import assert from 'assert';
+import http from 'http';
+import { randomUUID } from 'crypto';
+
+if (!process.env.DATABASE_URL) {
+  console.log('email-notification-integration: SKIPPED (no DATABASE_URL)');
+  process.exit(0);
+}
+
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'email-notify-integration-test';
+process.env.EMAIL_NOTIFICATIONS_ENABLED = 'true';
+process.env.EMAIL_NOTIFY_SHOW_SENDER_NAME = 'false';
+process.env.EMAIL_NOTIFY_JERK_ENABLED = 'true';
+process.env.EMAIL_NOTIFY_ACTIVE_MINUTES = '15';
+process.env.FRONTEND_URL = 'https://menrush.com';
+
+type Sent = { to: string; subject: string; html: string; text?: string; headers?: Record<string, string> };
+
+async function main() {
+  const { default: pool, query } = await import('../src/db');
+  const svc = await import('../src/services/email-notification.service');
+  const { default: emailNotificationsRoutes } = await import('../src/routes/email-notifications');
+  const { default: emailUnsubscribeRoutes } = await import('../src/routes/email-unsubscribe');
+  const { authService } = await import('../src/services/auth.service');
+  const express = (await import('express')).default;
+
+  const col = await query(
+    `SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'users'
+        AND column_name IN ('email_notify_messages', 'email_notify_matches', 'email_notify_jerks')
+      ORDER BY column_name`,
+  );
+  assert.deepStrictEqual(
+    col.rows.map((r: { column_name: string }) => r.column_name),
+    ['email_notify_jerks', 'email_notify_matches', 'email_notify_messages'],
+  );
+  const table = await query(
+    `SELECT 1 FROM information_schema.tables WHERE table_name = 'email_notification_sends'`,
+  );
+  assert.strictEqual(table.rows.length, 1, 'email_notification_sends exists');
+
+  const sent: Sent[] = [];
+  svc.setEmailNotificationSender(async (params) => {
+    sent.push({
+      to: Array.isArray(params.to) ? params.to[0] : params.to,
+      subject: params.subject,
+      html: params.html,
+      text: params.text,
+      headers: params.headers,
+    });
+    return { id: `test-${sent.length}` };
+  });
+
+  const ids: string[] = [];
+  async function makeUser(label: string, extras: { confirmed?: boolean; lastSeen?: string | null; online?: boolean } = {}) {
+    const id = randomUUID();
+    ids.push(id);
+    const email = `en-${id.slice(0, 8)}@example.test`;
+    await query(
+      `INSERT INTO users (id, email, password_hash, name, age, email_confirmed)
+       VALUES ($1, $2, 'x', $3, 30, $4)`,
+      [id, email, label, extras.confirmed !== false],
+    );
+    await query(
+      `INSERT INTO profiles (user_id, online, last_seen, is_visible)
+       VALUES ($1, $2, $3, TRUE)`,
+      [
+        id,
+        extras.online === true,
+        extras.lastSeen === null ? null : extras.lastSeen ?? new Date(Date.now() - 2 * 60 * 60 * 1000),
+      ],
+    );
+    return { id, email };
+  }
+
+  const app = express();
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: false }));
+  app.use('/api/email-notifications', emailNotificationsRoutes);
+  app.use('/api/email-unsubscribe', emailUnsubscribeRoutes);
+  const server = http.createServer(app);
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = (server.address() as any).port;
+
+  try {
+    const actor = await makeUser('Actor');
+    const recipient = await makeUser('Recipient');
+
+    // Default prefs are all on.
+    let prefs = await svc.getEmailNotifyPrefs(recipient.id);
+    assert.deepStrictEqual(prefs, { messages: true, matches: true, jerks: true });
+
+    // Happy path: inactive recipient, confirmed, not blocked.
+    let result = await svc.maybeSendEmailNotification({
+      recipientId: recipient.id,
+      actorId: actor.id,
+      type: 'message',
+    });
+    assert.strictEqual(result.status, 'sent', JSON.stringify(result));
+    assert.strictEqual(sent.length, 1);
+    assert.strictEqual(sent[0].subject, "You've got something new on MenRush");
+    assert.ok(!/jerk/i.test(sent[0].subject));
+    assert.ok(sent[0].headers?.['List-Unsubscribe']?.startsWith('<http'));
+    assert.strictEqual(sent[0].headers?.['List-Unsubscribe-Post'], 'List-Unsubscribe=One-Click');
+    assert.ok(sent[0].html.includes('https://menrush.com/brand/medallion-transparent.png'));
+    assert.ok(sent[0].html.includes('Open MenRush'));
+    assert.ok(!sent[0].html.includes('Sam'));
+    assert.ok(!/beta/i.test(sent[0].html.replace(/<[^>]+>/g, ' ')));
+
+    // Hourly limit, including parallel events.
+    sent.length = 0;
+    const parallel = await Promise.all([
+      svc.maybeSendEmailNotification({ recipientId: recipient.id, actorId: actor.id, type: 'message' }),
+      svc.maybeSendEmailNotification({ recipientId: recipient.id, actorId: actor.id, type: 'message' }),
+    ]);
+    const sentCount = parallel.filter((r) => r.status === 'sent').length;
+    const throttled = parallel.filter((r) => r.status === 'skipped' && r.reason === 'throttled').length;
+    assert.strictEqual(sentCount, 0, 'already used this hour');
+    assert.strictEqual(throttled, 2);
+    assert.strictEqual(sent.length, 0);
+
+    // A different type still sends once this hour.
+    result = await svc.maybeSendEmailNotification({
+      recipientId: recipient.id,
+      actorId: actor.id,
+      type: 'match',
+    });
+    assert.strictEqual(result.status, 'sent');
+    assert.strictEqual(sent.length, 1);
+
+    // Parallel first-hour claim for jerk: only one send.
+    sent.length = 0;
+    const jerkPair = await Promise.all([
+      svc.maybeSendEmailNotification({ recipientId: recipient.id, actorId: actor.id, type: 'jerk' }),
+      svc.maybeSendEmailNotification({ recipientId: recipient.id, actorId: actor.id, type: 'jerk' }),
+    ]);
+    assert.strictEqual(jerkPair.filter((r) => r.status === 'sent').length, 1);
+    assert.strictEqual(jerkPair.filter((r) => r.status === 'skipped' && r.reason === 'throttled').length, 1);
+    assert.strictEqual(sent.length, 1);
+    assert.ok(!/jerk/i.test(sent[0].subject));
+    assert.ok(!/jerk/i.test(sent[0].html.match(/display:none[\s\S]*?<\/div>/)?.[0] ?? ''));
+
+    // Active recipient (socket) is skipped and does not burn a later send after we free them.
+    const active = await makeUser('Active', { online: true, lastSeen: new Date().toISOString() });
+    sent.length = 0;
+    result = await svc.maybeSendEmailNotification({
+      recipientId: active.id,
+      actorId: actor.id,
+      type: 'message',
+    });
+    assert.deepStrictEqual(result, { status: 'skipped', reason: 'active' });
+    assert.strictEqual(sent.length, 0);
+    const burned = await query(
+      `SELECT 1 FROM email_notification_sends WHERE user_id = $1 AND notify_type = 'message'`,
+      [active.id],
+    );
+    assert.strictEqual(burned.rows.length, 0, 'active skip must not claim the hourly slot');
+
+    // last_seen within the window, socket off.
+    const recent = await makeUser('Recent', { online: false, lastSeen: new Date().toISOString() });
+    result = await svc.maybeSendEmailNotification({
+      recipientId: recent.id,
+      actorId: actor.id,
+      type: 'match',
+    });
+    assert.deepStrictEqual(result, { status: 'skipped', reason: 'active' });
+
+    // Opt-out per type.
+    const opted = await makeUser('Opted');
+    await svc.setEmailNotifyPrefs(opted.id, { messages: false });
+    result = await svc.maybeSendEmailNotification({
+      recipientId: opted.id,
+      actorId: actor.id,
+      type: 'message',
+    });
+    assert.deepStrictEqual(result, { status: 'skipped', reason: 'opt_out' });
+    result = await svc.maybeSendEmailNotification({
+      recipientId: opted.id,
+      actorId: actor.id,
+      type: 'match',
+    });
+    assert.strictEqual(result.status, 'sent');
+
+    // One-click unsubscribe token unticks that type only.
+    const unsubUser = await makeUser('Unsub');
+    const token = svc.signUnsubscribeToken(unsubUser.id, 'jerk');
+    const res = await fetch(`http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(token)}`, {
+      method: 'POST',
+    });
+    assert.strictEqual(res.status, 200);
+    assert.deepStrictEqual(await res.json(), { ok: true });
+    prefs = await svc.getEmailNotifyPrefs(unsubUser.id);
+    assert.deepStrictEqual(prefs, { messages: true, matches: true, jerks: false });
+    result = await svc.maybeSendEmailNotification({
+      recipientId: unsubUser.id,
+      actorId: actor.id,
+      type: 'jerk',
+    });
+    assert.deepStrictEqual(result, { status: 'skipped', reason: 'opt_out' });
+
+    // GET unsubscribe also works.
+    const unsub2 = await makeUser('UnsubGet');
+    const getToken = svc.signUnsubscribeToken(unsub2.id, 'match');
+    const getRes = await fetch(`http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(getToken)}`);
+    assert.strictEqual(getRes.status, 200);
+    prefs = await svc.getEmailNotifyPrefs(unsub2.id);
+    assert.strictEqual(prefs.matches, false);
+    assert.strictEqual(prefs.messages, true);
+
+    // Block both directions.
+    const blockedA = await makeUser('BlockA');
+    const blockedB = await makeUser('BlockB');
+    await query(`INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2)`, [blockedA.id, blockedB.id]);
+    result = await svc.maybeSendEmailNotification({
+      recipientId: blockedB.id,
+      actorId: blockedA.id,
+      type: 'message',
+    });
+    assert.deepStrictEqual(result, { status: 'skipped', reason: 'blocked' });
+    result = await svc.maybeSendEmailNotification({
+      recipientId: blockedA.id,
+      actorId: blockedB.id,
+      type: 'message',
+    });
+    assert.deepStrictEqual(result, { status: 'skipped', reason: 'blocked' });
+
+    // Hide-from both directions.
+    const hideA = await makeUser('HideA');
+    const hideB = await makeUser('HideB');
+    await query(`INSERT INTO location_hidden_from (owner_id, hidden_user_id) VALUES ($1, $2)`, [
+      hideA.id,
+      hideB.id,
+    ]);
+    result = await svc.maybeSendEmailNotification({
+      recipientId: hideB.id,
+      actorId: hideA.id,
+      type: 'match',
+    });
+    assert.deepStrictEqual(result, { status: 'skipped', reason: 'hidden' });
+    result = await svc.maybeSendEmailNotification({
+      recipientId: hideA.id,
+      actorId: hideB.id,
+      type: 'match',
+    });
+    assert.deepStrictEqual(result, { status: 'skipped', reason: 'hidden' });
+
+    // Deleted both directions.
+    const gone = await makeUser('Gone');
+    const stays = await makeUser('Stays');
+    await query(`DELETE FROM users WHERE id = $1`, [gone.id]);
+    result = await svc.maybeSendEmailNotification({
+      recipientId: gone.id,
+      actorId: stays.id,
+      type: 'message',
+    });
+    assert.deepStrictEqual(result, { status: 'skipped', reason: 'deleted' });
+    result = await svc.maybeSendEmailNotification({
+      recipientId: stays.id,
+      actorId: gone.id,
+      type: 'message',
+    });
+    assert.deepStrictEqual(result, { status: 'skipped', reason: 'deleted' });
+
+    // Unconfirmed email.
+    const pending = await makeUser('Pending', { confirmed: false });
+    result = await svc.maybeSendEmailNotification({
+      recipientId: pending.id,
+      actorId: actor.id,
+      type: 'message',
+    });
+    assert.deepStrictEqual(result, { status: 'skipped', reason: 'unconfirmed' });
+
+    // Sender-name switch.
+    sent.length = 0;
+    const named = await makeUser('Named');
+    process.env.EMAIL_NOTIFY_SHOW_SENDER_NAME = 'true';
+    result = await svc.maybeSendEmailNotification({
+      recipientId: named.id,
+      actorId: actor.id,
+      type: 'message',
+    });
+    assert.strictEqual(result.status, 'sent');
+    assert.ok(sent[0].html.includes('Actor'), 'adds the sender profile name');
+    process.env.EMAIL_NOTIFY_SHOW_SENDER_NAME = 'false';
+    const named2 = await makeUser('NamedOff');
+    sent.length = 0;
+    result = await svc.maybeSendEmailNotification({
+      recipientId: named2.id,
+      actorId: actor.id,
+      type: 'message',
+    });
+    assert.strictEqual(result.status, 'sent');
+    assert.ok(!sent[0].html.includes('Actor'), 'omits sender name when the switch is off');
+
+    // Master flag off: nothing sends.
+    process.env.EMAIL_NOTIFICATIONS_ENABLED = 'false';
+    const flagged = await makeUser('Flagged');
+    sent.length = 0;
+    result = await svc.maybeSendEmailNotification({
+      recipientId: flagged.id,
+      actorId: actor.id,
+      type: 'message',
+    });
+    assert.deepStrictEqual(result, { status: 'skipped', reason: 'disabled' });
+    assert.strictEqual(sent.length, 0);
+    process.env.EMAIL_NOTIFICATIONS_ENABLED = 'true';
+
+    // Jerk hold: type exists but the flag skips live sends.
+    process.env.EMAIL_NOTIFY_JERK_ENABLED = 'false';
+    const jerkHold = await makeUser('JerkHold');
+    result = await svc.maybeSendEmailNotification({
+      recipientId: jerkHold.id,
+      actorId: actor.id,
+      type: 'jerk',
+    });
+    assert.deepStrictEqual(result, { status: 'skipped', reason: 'jerk_hold' });
+    process.env.EMAIL_NOTIFY_JERK_ENABLED = 'true';
+
+    // Prefs HTTP: private, no-store, owner only.
+    const httpUser = await makeUser('Http');
+    const jwt = authService.issueAccessToken(httpUser.id);
+    const prefsRes = await fetch(`http://127.0.0.1:${port}/api/email-notifications`, {
+      headers: { Authorization: `Bearer ${jwt}` },
+    });
+    assert.strictEqual(prefsRes.status, 200);
+    assert.strictEqual(prefsRes.headers.get('cache-control'), 'private, no-store');
+    assert.deepStrictEqual(await prefsRes.json(), { messages: true, matches: true, jerks: true });
+    const putRes = await fetch(`http://127.0.0.1:${port}/api/email-notifications`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ matches: false, jerks: false }),
+    });
+    assert.deepStrictEqual(await putRes.json(), { messages: true, matches: false, jerks: false });
+  } finally {
+    svc.setEmailNotificationSender(null);
+    server.close();
+    if (ids.length) await query(`DELETE FROM users WHERE id = ANY($1::uuid[])`, [ids]);
+    await pool.end();
+  }
+
+  console.log('email-notification-integration: ok');
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

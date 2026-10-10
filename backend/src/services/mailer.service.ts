@@ -112,6 +112,10 @@ export interface SendEmailParams {
   subject: string;
   html: string;
   text?: string;
+  /** Extra RFC headers (List-Unsubscribe, etc.). Resend only. */
+  headers?: Record<string, string>;
+  /** Replaces the recipient address in logs. Use for activity mail so member emails stay out of logs. */
+  logHint?: string;
 }
 
 export interface EmailStatus {
@@ -309,7 +313,7 @@ export async function sendEmail(params: SendEmailParams): Promise<{ id: string }
     throw new Error('[mailer] RESEND_REPLY_TO is not set');
   }
 
-  const toLog = formatToForLog(params.to);
+  const toLog = params.logHint || formatToForLog(params.to);
 
   try {
     const { data, error } = await getResend().emails.send({
@@ -319,6 +323,7 @@ export async function sendEmail(params: SendEmailParams): Promise<{ id: string }
       html: params.html,
       text: params.text,
       replyTo,
+      headers: params.headers,
     });
 
     if (error) {
