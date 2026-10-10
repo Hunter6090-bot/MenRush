@@ -188,6 +188,12 @@ jobs:
         run: npm run test:hot-spot-ghost-live-count
       - name: Pride code holders can register (real PG)
         run: npm run test:pride-invite-register-integration
+      - name: Referrals grant 1 month Premium every 3 (real PG)
+        run: npm run test:referral-grant-integration
+      - name: Referral checks (real PG)
+        run: npm run test:referrals
+      - name: Earned referral months survive renewal and cancel, cap, Gmail dedupe, read-only card (real PG)
+        run: npm run test:referral-earned-months-integration
       - name: Deleting a member who created a room works (real PG)
         run: npm run test:delete-room-creator-integration
       - name: Ghost or hidden first event check-in creates no public spot (real PG)

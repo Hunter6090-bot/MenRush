@@ -373,13 +373,15 @@ export const usersAPI = {
       unlock_every: number;
       progress_to_unlock: number;
       unlocks_earned: number;
-      pending_payout_total: number;
+      months_saved?: number;
+      reward_mode?: 'free_for_everyone' | 'open_ended' | 'paid' | 'end_date' | 'no_end_date';
+      max_months_per_12_months?: number;
+      at_cap?: boolean;
       referrals: Array<{
         referred_user_id: string;
         name: string | null;
+        qualified: boolean;
         status: 'pending' | 'verified' | 'credited';
-        payout_amount: number;
-        payout_status: 'none' | 'pending' | 'paid';
         created_at: string;
         verified_at: string | null;
         credited_at: string | null;
