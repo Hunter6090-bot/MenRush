@@ -98,6 +98,18 @@ export function Out() {
   // overwrite spot B's newer check-in, and an old location's list never overwrites the
   // new one (QC P0 on #393).
   const listSeqRef = useRef(0);
+  const [reloadKey, setReloadKey] = useState(0);
+  // Set while a full load (first load, location change) is in flight or after its reply
+  // was dropped as stale. If the re-read that superseded it then fails or times out, we
+  // reload, so the member is never stuck on the old location's list (QC P1 on #393).
+  const loadInFlightRef = useRef(false);
+  const loadDroppedRef = useRef(false);
+  const reloadIfLoadWasDropped = useCallback(() => {
+    if (loadInFlightRef.current || loadDroppedRef.current) {
+      loadDroppedRef.current = false;
+      setReloadKey((k) => k + 1);
+    }
+  }, []);
   const takeListTicket = useCallback(() => {
     listSeqRef.current += 1;
     return listSeqRef.current;
@@ -129,15 +141,20 @@ export function Out() {
       if (res === 'timeout') {
         // Retire this read so a reply that turns up later is ignored.
         if (isLatestList(ticket)) takeListTicket();
+        reloadIfLoadWasDropped();
         return;
       }
-      if (isLatestList(ticket)) setSpots(res.data.spots ?? []);
+      if (isLatestList(ticket)) {
+        setSpots(res.data.spots ?? []);
+        loadDroppedRef.current = false;
+      }
     } catch {
-      /* keep the server spot we already merged */
+      // Keep the server spot we already merged, but never leave an old list in place.
+      reloadIfLoadWasDropped();
     } finally {
       clearTimeout(timer);
     }
-  }, [lat, lng, chip, takeListTicket, isLatestList]);
+  }, [lat, lng, chip, takeListTicket, isLatestList, reloadIfLoadWasDropped]);
 
   // Same check-in / check-out calls the map sheet uses (Discover handleHotSpotCheckIn).
   const handleCheckIn = useCallback(
@@ -182,7 +199,6 @@ export function Out() {
   // A brand-new member's first read can land before the server has their
   // location (empty list, location_required). Reload once when it is saved.
   const [needsLocation, setNeedsLocation] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
   useEffect(() => {
     if (!needsLocation) return;
     return onLocationSaved(() => {
@@ -206,8 +222,16 @@ export function Out() {
                 if (!cancelled) setSpots([]);
                 return;
               }
-              const res = await hotSpotsAPI.listNearby(lat, lng, 80);
+              loadInFlightRef.current = true;
+              let res;
+              try {
+                res = await hotSpotsAPI.listNearby(lat, lng, 80);
+              } finally {
+                if (!cancelled) loadInFlightRef.current = false;
+              }
+              if (!cancelled && !isLatestList(ticket)) loadDroppedRef.current = true;
               if (!cancelled && isLatestList(ticket)) {
+                loadDroppedRef.current = false;
                 setSpots(res.data.spots ?? []);
                 setNeedsLocation(Boolean((res.data as { location_required?: boolean }).location_required));
               }

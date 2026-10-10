@@ -155,4 +155,50 @@ describe('Out list re-reads are latest-wins', () => {
     expect(screen.getByTestId('hotspot-sheet-activity')).toHaveTextContent('3 checked in');
     expect(screen.getByTestId('hotspot-sheet-checkout')).toBeInTheDocument();
   });
+  it.each(['fails', 'times out'] as const)(
+    'a location-change load dropped by a check-in is reloaded when the re-read %s',
+    async (mode) => {
+      const lateLoad = deferred<unknown>();
+      const C: HotSpotDTO = { ...B, id: 'spot-c', name: 'Charlie Dunes', live_count: 7 } as HotSpotDTO;
+      const reread =
+        mode === 'fails'
+          ? Promise.reject(Object.assign(new Error('Request failed with status code 500'), { response: { status: 500 } }))
+          : new Promise(() => {});
+      reread.catch(() => {});
+      vi.mocked(hotSpotsAPI.listNearby)
+        .mockResolvedValueOnce(list(A)) // first load, old location
+        .mockReturnValueOnce(lateLoad.promise as never) // load for the new location: still in flight
+        .mockReturnValueOnce(reread as never) // re-read after the check-in: 500 or hangs
+        .mockResolvedValue(list(C)); // reload for the new location
+      vi.mocked(hotSpotsAPI.checkIn).mockResolvedValue({
+        data: { ok: true, spot: { ...A, is_checked_in: true, live_count: 3 } },
+      } as never);
+
+      render(<MemoryRouter><Out /></MemoryRouter>);
+      await openSpot(A.id);
+      if (mode === 'times out') vi.useFakeTimers({ shouldAdvanceTime: true });
+      act(() => useLocationStore.setState({ lat: 53.4, lng: -2.2 }));
+      await waitFor(() => expect(hotSpotsAPI.listNearby).toHaveBeenCalledTimes(2));
+
+      // The check-in's server spot drops the in-flight load; then its re-read goes wrong.
+      fireEvent.click(screen.getByTestId('hotspot-sheet-checkin'));
+      await waitFor(() => expect(hotSpotsAPI.listNearby).toHaveBeenCalledTimes(3));
+      if (mode === 'times out') {
+        await act(async () => {
+          vi.advanceTimersByTime(OUT_REFRESH_TIMEOUT_MS + 50);
+        });
+      }
+      // The dropped load's reply finally lands (stale, ignored).
+      await act(async () => {
+        lateLoad.resolve(list(C));
+        await lateLoad.promise;
+      });
+
+      // Out reloads for the new location instead of leaving the old list in place.
+      await waitFor(() => expect(hotSpotsAPI.listNearby).toHaveBeenCalledTimes(4));
+      expect(vi.mocked(hotSpotsAPI.listNearby).mock.calls[3].slice(0, 2)).toEqual([53.4, -2.2]);
+      expect(await screen.findByTestId(`out-spot-open-${C.id}`)).toBeInTheDocument();
+      expect(screen.queryByTestId(`out-spot-open-${A.id}`)).toBeNull();
+    },
+  );
 });
