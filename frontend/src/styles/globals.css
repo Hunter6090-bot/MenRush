@@ -519,8 +519,10 @@ input:-webkit-autofill:focus {
   cursor: pointer;
 }
 
-/* Menu Discretion slider: 44px tall drag area (transparent), same 6px track and 18px thumb.
-   Fill left of the thumb uses --nn-accent-text, the rest --border-default (>= 3:1 in both themes). */
+/* Menu Discretion slider: 44px tall drag area (transparent), 6px track, tokens only.
+   Fill left of the thumb is --cream, the empty track --nn-range-track, both >= 3:1 vs --bg-card
+   and vs each other. Thumb is --nn-accent-text inside a --bg-card ring, so it reads >= 3:1
+   against the ring, and the ring against the fill, track and box, in both themes. */
 .proximity-range--tall {
   height: 44px;
   background: transparent;
@@ -532,25 +534,40 @@ input:-webkit-autofill:focus {
   border-radius: 9999px;
   background: linear-gradient(
     to right,
-    var(--nn-accent-text) 0 var(--range-pct, 0%),
-    var(--border-default) var(--range-pct, 0%) 100%
+    var(--cream) 0 var(--range-pct, 0%),
+    var(--nn-range-track) var(--range-pct, 0%) 100%
   );
 }
 
 .proximity-range--tall::-webkit-slider-thumb {
-  margin-top: -6px;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  margin-top: -9px;
+  border: 4px solid var(--bg-card);
+  background: var(--nn-accent-text);
+  box-shadow: none;
 }
 
 .proximity-range--tall::-moz-range-track {
   height: 6px;
   border-radius: 9999px;
-  background: var(--border-default);
+  background: var(--nn-range-track);
 }
 
 .proximity-range--tall::-moz-range-progress {
   height: 6px;
   border-radius: 9999px;
+  background: var(--cream);
+}
+
+.proximity-range--tall::-moz-range-thumb {
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  border: 4px solid var(--bg-card);
   background: var(--nn-accent-text);
+  box-shadow: none;
 }
 
 /* Claude Design room icons (RoomAvatar): copper line on a soft copper tile,

@@ -103,18 +103,48 @@ describe.each(['/discover', '/rooms'])('Menu Discretion focus on %s', (path) => 
     range.focus();
     expect(document.activeElement).toBe(range);
 
-    let index = Number(range.value);
+    let index = MAP_PIN_FUZZ_STEPS_M.indexOf(Number(range.value));
+    expect(index).toBeGreaterThanOrEqual(0);
     const dir = index + 3 < MAP_PIN_FUZZ_STEPS_M.length ? 1 : -1;
     for (let i = 1; i <= 3; i += 1) {
-      const before = range.getAttribute('aria-valuenow');
+      const before = range.value;
       fireEvent.keyDown(range, { key: dir > 0 ? 'ArrowRight' : 'ArrowLeft' });
+      // The browser nudges a metre-valued range by 1 m; the slider moves a whole step.
+      fireEvent.change(range, { target: { value: String(Number(before) + dir) } });
       index += dir;
-      fireEvent.change(range, { target: { value: String(index) } });
       rerender(tree(i)); // parent re-render with fresh inline props
-      const now = screen.getByTestId('map-discretion-range');
+      const now = screen.getByTestId('map-discretion-range') as HTMLInputElement;
       expect(document.activeElement).toBe(now);
-      expect(now.getAttribute('aria-valuenow')).not.toBe(before);
-      expect(now.getAttribute('aria-valuenow')).toBe(String(MAP_PIN_FUZZ_STEPS_M[index]));
+      expect(now.value).not.toBe(before);
+      expect(now.value).toBe(String(MAP_PIN_FUZZ_STEPS_M[index]));
+      expect(now.getAttribute('aria-valuetext')).toBe(`~${MAP_PIN_FUZZ_STEPS_M[index]} m`);
     }
+  });
+});
+
+describe('Menu closes back to its trigger', () => {
+  async function openFromTrigger(focusTrigger: boolean) {
+    currentPath.value = '/discover';
+    render(tree(0));
+    const trigger = screen.getAllByTestId('account-menu-button')[0];
+    if (focusTrigger) trigger.focus(); // Safari does not focus a button on tap, so test both
+    fireEvent.click(trigger);
+    await screen.findByTestId('account-menu');
+    expect(document.activeElement).not.toBe(trigger);
+    return trigger;
+  }
+
+  it.each([true, false])('Escape closes the Menu and focuses the Menu button (opener focused: %s)', async (focused) => {
+    const trigger = await openFromTrigger(focused);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByTestId('account-menu')).not.toBeInTheDocument());
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it.each([true, false])('the Close button returns focus to the Menu button (opener focused: %s)', async (focused) => {
+    const trigger = await openFromTrigger(focused);
+    fireEvent.click(screen.getByTestId('account-menu-close'));
+    await waitFor(() => expect(screen.queryByTestId('account-menu')).not.toBeInTheDocument());
+    expect(document.activeElement).toBe(trigger);
   });
 });

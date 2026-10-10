@@ -173,16 +173,35 @@ export function AccountMenu({
     onCloseRef.current = onClose;
   }, [onClose]);
 
+  // Element that opened the Menu; Escape and Close hand focus back to it.
+  const openerRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     if (!open) return;
+    const active = document.activeElement;
+    openerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCloseRef.current();
+      if (e.key === 'Escape') closeAndReturnFocusRef.current();
     };
     document.addEventListener('keydown', onKeyDown);
     const first = panelRef.current?.querySelector<HTMLElement>('a, button, input');
     first?.focus();
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [open]);
+
+  /** Close, then focus the Menu trigger (the opener, or the visible Menu button when Safari did not focus it on tap). */
+  const closeAndReturnFocus = () => {
+    onCloseRef.current();
+    const opener = openerRef.current;
+    const triggers = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="account-menu-button"]'));
+    const target =
+      (opener?.isConnected && !panelRef.current?.contains(opener) ? opener : null) ??
+      triggers.find((el) => el.getClientRects().length > 0) ??
+      triggers[0];
+    target?.focus();
+  };
+  const closeAndReturnFocusRef = useRef(closeAndReturnFocus);
+  closeAndReturnFocusRef.current = closeAndReturnFocus;
 
   if (!open) return null;
 
@@ -197,7 +216,7 @@ export function AccountMenu({
       <button
         type="button"
         aria-label="Close menu"
-        onClick={onClose}
+        onClick={closeAndReturnFocus}
         className="absolute inset-0 bg-black/55 backdrop-blur-sm"
         tabIndex={-1}
       />
@@ -210,7 +229,7 @@ export function AccountMenu({
           <p className="pl-2 text-[19px] font-extrabold text-[var(--cream)]">Menu</p>
           <button
             type="button"
-            onClick={onClose}
+            onClick={closeAndReturnFocus}
             aria-label="Close menu"
             data-testid="account-menu-close"
             className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--cream-soft)] active:bg-[var(--bg-card)]"
@@ -270,7 +289,7 @@ export function AccountMenu({
               onSignOut();
             }}
             data-testid="account-menu-sign-out"
-            className={`${rowClass} text-[#D9694F]`}
+            className={`${rowBaseClass} text-[var(--nn-danger-text)]`}
           >
             <span className="flex w-5 shrink-0 justify-center">
               <IconSignOut size={20} />
