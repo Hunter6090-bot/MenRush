@@ -13,7 +13,7 @@
  * 5. Invoice cancellation: cancel unpaid invoice, cannot confirm cancelled invoice.
  * 5a. Immediate start tick (Terms 7.6A): POST /api/premium/invoices refuses a missing or
  *     false tick with 400 and no invoice row; a ticked request records the time on the row.
- * 5b. "Your MenRush Premium is now on" email carries the 14-day cancellation details.
+ * 5b. "Your MenRush Premium is now on" email carries the 14 day cancellation details.
  * 6. Set / Change Password flow during invoice journey:
  *    - Account with password requires correct current password to change.
  *    - Account without password can set password without current password.
@@ -27,6 +27,8 @@ import {
   invoiceService,
   getManualPaymentInstructions,
   buildPremiumOnEmail,
+  buildPremiumPaidNotification,
+  buildRefundPaidEmail,
 } from '../src/services/invoice.service';
 import { IMMEDIATE_START_CONSENT_TEXT } from '../src/types/validation';
 import {
@@ -495,7 +497,7 @@ test('HTTP API routes: invoice create -> unpaid view -> admin confirm -> status 
   }
 });
 
-test('Email: "Your MenRush Premium is now on" carries the 14-day cancellation details', () => {
+test('Email: "Your MenRush Premium is now on" carries the 14 day cancellation details', () => {
   const email = buildPremiumOnEmail({
     name: 'Sam',
     amountPence: 699,
@@ -530,7 +532,7 @@ test('Email: "Your MenRush Premium is now on" carries the 14-day cancellation de
   });
   assert.strictEqual(noTick.subject, 'Your MenRush payment has arrived');
   for (const body of [noTick.text, noTick.html]) {
-    assert.match(body, /your Premium starts on 25 October 2026, after the 14-day cancellation period/);
+    assert.match(body, /your Premium starts on 25 October 2026, after the 14 day cancellation period/);
     assert.match(body, /As you chose not to start straight away/, 'states the choice');
     assert.match(body, /before then, just email support@menrush\.com with your invoice reference, MR-INV-20261010-DEF456/);
     assert.match(body, /full refund within 14 days of hearing from you, to the account you paid from/);
@@ -713,7 +715,7 @@ test('Ops-created invoices record the member choice: consent with time and wordi
   });
 });
 
-test('Start rule: with no immediate start choice, paid Premium starts only after the 14-day cancellation period', async () => {
+test('Start rule: with no immediate start choice, paid Premium starts only after the 14 day cancellation period', async () => {
   const user = await createTestUser('delayed');
   const invoice = await invoiceService.createInvoice({ userId: user.id, createdByAdminId: 'ops-c' });
   assert.strictEqual(invoice.immediate_start_consent_at, null);
@@ -780,7 +782,8 @@ async function shiftUserTimeBack(userId: string, days: number) {
     [userId, iv],
   );
   await query(
-    `UPDATE premium_invoices SET created_at = created_at - $2::interval, paid_at = paid_at - $2::interval WHERE user_id = $1`,
+    `UPDATE premium_invoices SET created_at = created_at - $2::interval, requested_at = requested_at - $2::interval,
+                                 paid_at = paid_at - $2::interval WHERE user_id = $1`,
     [userId, iv],
   );
   await query(
@@ -957,16 +960,16 @@ test('Cancel/refund: started gives amount less days had, pro rata; refused after
   const user = await createTestUser('refund-part');
   const invoice = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: true });
   await invoiceService.confirmPayment(invoice.id);
-  // 2 days and 23 hours in: 3 days had (each started day counts).
+  // 2 days and 23 hours in: 2 completed days (a part day goes in the member's favour).
   await shiftUserTimeBack(user.id, 2);
   await query(
     `UPDATE subscriptions SET current_period_start = current_period_start - INTERVAL '23 hours' WHERE user_id = $1`,
     [user.id],
   );
   const r = await invoiceService.cancelPaidInvoiceWithRefund(invoice.id, 'ops-t');
-  assert.strictEqual(r.daysHad, 3);
-  assert.strictEqual(r.refundPence, 699 - Math.round((699 * 3) / 30));
-  assert.strictEqual(r.refundPence, 629);
+  assert.strictEqual(r.daysHad, 2);
+  // 699 * 2 / 30 = 46.6, floored to 46: refund 653p (never rounded against the member).
+  assert.strictEqual(r.refundPence, 653);
   const status = await premiumService.getStatus(user.id);
   if (!premiumService.isBetaPremiumFree()) assert.strictEqual(status?.is_premium, false);
 
@@ -1079,11 +1082,264 @@ test('Buying more never counts earned months twice', async () => {
   assert.ok(gain4 > 27 && gain4 < 32, `earlier applied month not re-added (${gain4.toFixed(1)} days)`);
 });
 
+test('Pro rata boundaries: exactly 0, 1 and 14 completed days, integer pence, floored deduction', async () => {
+  const DAY = 86_400_000;
+  const cases: Array<[number, number, number]> = [
+    // [days in, days had, refund pence]
+    [0, 0, 699],
+    [1, 1, 699 - Math.floor(699 / 30)], // 676
+    [14, 14, 699 - Math.floor((699 * 14) / 30)], // 373
+  ];
+  for (const [daysIn, expectHad, expectRefund] of cases) {
+    const user = await createTestUser(`prorata-${daysIn}`);
+    const invoice = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: true });
+    await invoiceService.confirmPayment(invoice.id);
+    const sub = await query(
+      `SELECT current_period_start FROM subscriptions WHERE user_id = $1 AND processor_subscription_id = $2`,
+      [user.id, invoice.invoice_number],
+    );
+    const start = new Date(sub.rows[0].current_period_start);
+    // Bought at the moment Premium started, so day 14 exactly is still inside the 14 days.
+    await query(`UPDATE premium_invoices SET created_at = $2, requested_at = $2 WHERE id = $1`, [invoice.id, start]);
+    const r = await invoiceService.cancelPaidInvoiceWithRefund(invoice.id, 'ops-p', new Date(start.getTime() + daysIn * DAY));
+    assert.strictEqual(r.daysHad, expectHad, `days had at ${daysIn}`);
+    assert.strictEqual(r.refundPence, expectRefund, `refund at ${daysIn}`);
+    assert.ok(Number.isInteger(r.refundPence));
+  }
+  assert.deepStrictEqual(cases.map((c) => c[2]), [699, 676, 373]);
+});
+
+test('Refund email: sent once when refund-paid is recorded, right content, nothing on a repeat call', async () => {
+  const { invoiceMailer } = await import('../src/services/invoice.service');
+  const sent: Array<{ to: string; subject: string; html: string; text: string }> = [];
+  const realSend = invoiceMailer.send;
+  invoiceMailer.send = async (msg) => {
+    sent.push(msg);
+  };
+  try {
+    const user = await createTestUser('refund-mail', 'Sam');
+    const invoice = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: true });
+    await invoiceService.confirmPayment(invoice.id);
+    await shiftUserTimeBack(user.id, 3);
+    const cancelled = await invoiceService.cancelPaidInvoiceWithRefund(invoice.id, 'ops-m');
+    assert.strictEqual(sent.length, 0, 'no email on cancel, only once the refund is paid');
+
+    await invoiceService.markRefundPaid(invoice.id, 'ops-m');
+    assert.strictEqual(sent.length, 1, 'sent once');
+    const mail = sent[0];
+    assert.strictEqual(mail.to, user.email);
+    assert.strictEqual(mail.subject, 'Your MenRush refund is on its way');
+    const amount = `£${(cancelled.refundPence / 100).toFixed(2)}`;
+    const endedDay = new Date(cancelled.invoice.cancelled_at as string).toLocaleDateString('en-GB', {
+      day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London',
+    });
+    for (const body of [mail.text, mail.html]) {
+      assert.ok(body.includes(amount), 'refund amount');
+      assert.ok(body.includes(invoice.invoice_number), 'invoice reference');
+      assert.match(body, /by bank transfer to the account you paid from/);
+      assert.ok(body.includes(`ended on ${endedDay}`), 'when Premium ended');
+      assert.match(body, /Invoice number: /);
+      assert.match(body, /Refund amount: /);
+      assert.match(body, /All the best,/);
+      assert.match(body, /MenRush/);
+    }
+    assert.match(mail.text, /^Hello Sam,/);
+    assert.doesNotMatch(mail.text, /[\u2013\u2014]| - |beta|\blove\b|14-day/i);
+    assert.doesNotMatch(mail.text, /Invoice Number|Refund Amount/, 'sentence case labels');
+    assert.match(mail.html, /<html|<table/i, 'uses the MenRush email template');
+
+    const meta = await query(`SELECT metadata FROM premium_invoices WHERE id = $1`, [invoice.id]);
+    assert.ok(meta.rows[0].metadata.refund_email_sent_at);
+
+    // Repeat call: refused and no second email.
+    await assert.rejects(() => invoiceService.markRefundPaid(invoice.id, 'ops-m'), /refund_not_due/);
+    assert.strictEqual(sent.length, 1, 'nothing on a repeat call');
+
+    // Not started: the email says so.
+    const u2 = await createTestUser('refund-mail-2');
+    const inv2 = await invoiceService.createInvoice({ userId: u2.id, immediateStartConsent: false });
+    await invoiceService.confirmPayment(inv2.id);
+    await invoiceService.cancelPaidInvoiceWithRefund(inv2.id, 'ops-m');
+    await invoiceService.markRefundPaid(inv2.id, 'ops-m');
+    assert.strictEqual(sent.length, 2);
+    assert.match(sent[1].text, /had not started yet/);
+
+    // Started but cancelled inside the first day: 0 completed days, full refund, and it did start.
+    const u3 = await createTestUser('refund-mail-3');
+    const inv3 = await invoiceService.createInvoice({ userId: u3.id, immediateStartConsent: true });
+    await invoiceService.confirmPayment(inv3.id);
+    const r3 = await invoiceService.cancelPaidInvoiceWithRefund(inv3.id, 'ops-m', new Date(Date.now() + 3_600_000));
+    assert.strictEqual(r3.refundPence, 699);
+    await invoiceService.markRefundPaid(inv3.id, 'ops-m');
+    assert.doesNotMatch(sent[2].text, /had not started yet/);
+    assert.match(sent[2].text, /ended on .*, when you cancelled/);
+    assert.ok(sent[1].text.includes('£6.99'));
+  } finally {
+    invoiceMailer.send = realSend;
+  }
+});
+
+test("Customer copy says '14 day' as Legal writes it, never '14-day' (email, notification)", () => {
+  const now = new Date('2026-10-11T09:00:00Z');
+  const startsAt = new Date('2026-10-25T09:00:00Z');
+  const copies: string[] = [];
+  for (const startedStraightAway of [true, false]) {
+    const e = buildPremiumOnEmail({
+      name: 'Sam',
+      amountPence: 699,
+      premiumUntil: new Date('2026-11-24T09:00:00Z'),
+      invoiceNumber: 'MR-INV-20261011-AAA111',
+      paymentReference: 'MR-1111AAAA',
+      startedStraightAway,
+      premiumStartsAt: startedStraightAway ? null : startsAt,
+      now,
+    });
+    copies.push(e.subject, e.text, e.html);
+  }
+  for (const premiumHadStarted of [true, false]) {
+    const e = buildRefundPaidEmail({ name: 'Sam', refundPence: 653, invoiceNumber: 'MR-INV-X', premiumEndedAt: now, premiumHadStarted });
+    copies.push(e.subject, e.text, e.html);
+  }
+  for (const n of [
+    buildPremiumPaidNotification({ invoiceNumber: 'MR-INV-20261011-AAA111', premiumStartsAt: startsAt }),
+    buildPremiumPaidNotification({ invoiceNumber: 'MR-INV-20261011-AAA111', premiumStartsAt: null }),
+  ]) {
+    copies.push(n.title, n.body);
+  }
+  for (const c of copies) assert.doesNotMatch(c, /14-day/i, c.slice(0, 80));
+  assert.match(
+    buildPremiumPaidNotification({ invoiceNumber: 'X', premiumStartsAt: startsAt }).body,
+    /Your Premium starts on 25 October 2026, after the 14 day cancellation period\./,
+  );
+});
+
 test('Migration 085 is tracked in schema_migrations', async () => {
   const migRes = await query(
     `SELECT version FROM schema_migrations WHERE version = '085_premium_invoices.sql'`,
   );
   assert.ok(migRes.rows.length >= 1, 'Migration for premium_invoices recorded as 085');
+});
+
+test('Confirm payment is refused on a refunded invoice', async () => {
+  const user = await createTestUser('confirm-refunded');
+  const invoice = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: true });
+  await invoiceService.confirmPayment(invoice.id);
+  await invoiceService.cancelPaidInvoiceWithRefund(invoice.id, 'ops-r');
+  const before = await query(`SELECT premium_until, premium_starts_at FROM users WHERE id = $1`, [user.id]);
+  await assert.rejects(() => invoiceService.confirmPayment(invoice.id), /refunded invoice/);
+  const after = await query(`SELECT premium_until, premium_starts_at FROM users WHERE id = $1`, [user.id]);
+  assert.deepStrictEqual(after.rows[0], before.rows[0], 'no Premium granted by a refused confirm');
+  const row = await invoiceService.getInvoiceById(invoice.id);
+  assert.strictEqual(row?.status, 'refunded');
+});
+
+test('requested_at: set when the member asks; the 14 day window and delayed start run from it, not payment', async () => {
+  const user = await createTestUser('requested-at');
+  const t0 = Date.now();
+  const invoice = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: false });
+  assert.ok(invoice.requested_at, 'requested_at is set on create');
+  assert.ok(Math.abs(new Date(invoice.requested_at as string).getTime() - t0) < 60_000);
+
+  // Asked 10 days ago, paid only now: Premium starts 14 days after the ASK (4 days from now), not after payment.
+  await query(`UPDATE premium_invoices SET requested_at = NOW() - INTERVAL '10 days' WHERE id = $1`, [invoice.id]);
+  await invoiceService.confirmPayment(invoice.id);
+  const u = await query(`SELECT premium_starts_at FROM users WHERE id = $1`, [user.id]);
+  const startsIn = new Date(u.rows[0].premium_starts_at).getTime() - Date.now();
+  assert.ok(startsIn > 3.9 * 86_400_000 && startsIn < 4.1 * 86_400_000, `starts ~4 days from now, got ${startsIn}`);
+
+  // Window: asked 15 days ago but paid and created just now -> cancellation refused.
+  const late = await createTestUser('requested-at-late');
+  const inv2 = await invoiceService.createInvoice({ userId: late.id, immediateStartConsent: true });
+  await invoiceService.confirmPayment(inv2.id);
+  await query(`UPDATE premium_invoices SET requested_at = NOW() - INTERVAL '15 days' WHERE id = $1`, [inv2.id]);
+  await assert.rejects(() => invoiceService.cancelPaidInvoiceWithRefund(inv2.id, 'ops-w'), /cancellation_period_over/);
+
+  // And the reverse: paid long after creation still inside 14 days of the ask -> allowed.
+  const ok = await createTestUser('requested-at-ok');
+  const inv3 = await invoiceService.createInvoice({ userId: ok.id, immediateStartConsent: true });
+  await query(`UPDATE premium_invoices SET created_at = NOW() - INTERVAL '30 days', requested_at = NOW() - INTERVAL '13 days' WHERE id = $1`, [inv3.id]);
+  await invoiceService.confirmPayment(inv3.id);
+  const r = await invoiceService.cancelPaidInvoiceWithRefund(inv3.id, 'ops-w');
+  assert.ok(r.refundPence > 0);
+});
+
+test('Payment instructions carry the start line from the recorded choice, never the old "switches on" line', async () => {
+  const { getManualPaymentInstructions, invoiceStartLine } = await import('../src/services/invoice.service');
+  const user = await createTestUser('start-line');
+  const unticked = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: false });
+  const pi = getManualPaymentInstructions(unticked.payment_reference, unticked);
+  assert.doesNotMatch(pi.instructions, /switches on once we have confirmed your payment/i);
+  assert.match(pi.premium_start_line ?? '', /^Your Premium starts on \d{1,2} \w+ \d{4}, after the 14 day cancellation period/);
+  assert.strictEqual(pi.premium_start_line, invoiceStartLine(unticked));
+  const u2 = await createTestUser('start-line-2');
+  const ticked = await invoiceService.createInvoice({ userId: u2.id, immediateStartConsent: true });
+  assert.strictEqual(
+    getManualPaymentInstructions(ticked.payment_reference, ticked).premium_start_line,
+    'Your Premium starts as soon as we confirm your payment.',
+  );
+});
+
+test('Refund email failure: retried, flagged for ops, team alerted (invoice id only), resend works once', async () => {
+  const { invoiceMailer } = await import('../src/services/invoice.service');
+  const realSend = invoiceMailer.send;
+  const realOps = invoiceMailer.sendOps;
+  const prevTeam = process.env.TEAM_EMAILS;
+  let attempts = 0;
+  const memberSent: string[] = [];
+  const opsSent: Array<{ to: string; subject: string; text: string }> = [];
+  invoiceMailer.send = async (msg) => {
+    attempts += 1;
+    if (failing) throw new Error('smtp down');
+    memberSent.push(msg.to);
+  };
+  invoiceMailer.sendOps = async (msg) => {
+    opsSent.push(msg);
+  };
+  let failing = true;
+  process.env.TEAM_EMAILS = 'ops@test.menrush.local';
+  try {
+    const user = await createTestUser('refund-fail', 'Sam');
+    const invoice = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: true });
+    await invoiceService.confirmPayment(invoice.id);
+    await invoiceService.cancelPaidInvoiceWithRefund(invoice.id, 'ops-f');
+    const paid = await invoiceService.markRefundPaid(invoice.id, 'ops-f');
+    assert.strictEqual(attempts, 2, 'retried once');
+    assert.ok(paid.refund_paid_at, 'refund still recorded as paid');
+    const md = (paid.metadata ?? {}) as Record<string, unknown>;
+    assert.ok(md.refund_email_failed_at, 'ops-visible flag set');
+    assert.ok(!md.refund_email_sent_at);
+    // Shown to ops in the admin list.
+    const list = await invoiceService.listAllInvoices(500, 'refunded');
+    assert.ok(list.some((i) => i.id === invoice.id && (i.metadata as any)?.refund_email_failed_at));
+    // Team alert: invoice id/number only, no member email or name.
+    assert.ok(opsSent.length >= 1, 'team alerted');
+    for (const m of opsSent) {
+      assert.match(m.text, new RegExp(invoice.id));
+      assert.doesNotMatch(m.text + m.subject, new RegExp(user.email.replace(/[.+]/g, '\\$&')));
+      assert.doesNotMatch(m.text, /\bSam\b/);
+    }
+
+    // Resend after the mailer is back: sent once, flag cleared; a second resend sends nothing.
+    failing = false;
+    assert.strictEqual(await invoiceService.sendRefundEmail(invoice.id), 'sent');
+    assert.deepStrictEqual(memberSent, [user.email]);
+    const row = await invoiceService.getInvoiceById(invoice.id);
+    const md2 = (row?.metadata ?? {}) as Record<string, unknown>;
+    assert.ok(md2.refund_email_sent_at);
+    assert.ok(!md2.refund_email_failed_at, 'flag cleared after a good resend');
+    assert.strictEqual(await invoiceService.sendRefundEmail(invoice.id), 'already_sent');
+    assert.strictEqual(memberSent.length, 1);
+
+    // Not due on an invoice whose refund is not paid.
+    const u2 = await createTestUser('refund-fail-2');
+    const inv2 = await invoiceService.createInvoice({ userId: u2.id, immediateStartConsent: true });
+    await invoiceService.confirmPayment(inv2.id);
+    assert.strictEqual(await invoiceService.sendRefundEmail(inv2.id), 'not_due');
+  } finally {
+    invoiceMailer.send = realSend;
+    invoiceMailer.sendOps = realOps;
+    if (prevTeam === undefined) delete process.env.TEAM_EMAILS; else process.env.TEAM_EMAILS = prevTeam;
+  }
 });
 
 async function main() {

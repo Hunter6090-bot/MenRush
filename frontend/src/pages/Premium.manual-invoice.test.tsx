@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { Premium } from './Premium';
-import { premiumStartLine } from '../lib/premiumStart';
+import { invoiceStartLine, premiumStartLine } from '../lib/premiumStart';
 
 const mocks = vi.hoisted(() => ({
   getPlans: vi.fn(),
@@ -193,8 +193,8 @@ describe('Premium manual invoice stopgap and password step', () => {
     expect(screen.getByText('MR-INV-20260919-UNCONF')).toBeInTheDocument();
     expect(screen.getAllByText('MR-87654321').length).toBeGreaterThanOrEqual(1);
     // Verifies no mock bank coordinates appear
-    expect(screen.queryByText('Sort Code:')).not.toBeInTheDocument();
-    expect(screen.queryByText('Account No:')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sort code')).not.toBeInTheDocument();
+    expect(screen.queryByText('Account number')).not.toBeInTheDocument();
     expect(screen.getByText(/Bank details are not shown here yet/i)).toBeInTheDocument();
   });
 
@@ -405,5 +405,158 @@ describe('Premium manual invoice stopgap and password step', () => {
 
     expect(await screen.findByText('Current password is incorrect')).toBeInTheDocument();
     expect(mocks.setTokens).not.toHaveBeenCalled();
+  });
+
+  it("customer copy on the Premium page says '14 day' as Legal writes it, never '14-day'", async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    for (const file of ['./Premium.tsx', '../lib/premiumStart.ts']) {
+      const src = readFileSync(resolve(__dirname, file), 'utf8');
+      expect(src, file).not.toMatch(/14-day/i);
+    }
+    render(
+      <MemoryRouter>
+        <Premium />
+      </MemoryRouter>,
+    );
+    await screen.findByTestId('start-options');
+    expect(document.body.textContent ?? '').not.toMatch(/14-day/i);
+    expect(document.body.textContent ?? '').toMatch(/14 day cancellation period/);
+  });
+
+  const OLD_START_TEXT = /Premium switches on once we have confirmed your payment/i;
+  const unpaidInvoice = (over: Record<string, unknown> = {}) => ({
+    id: 'inv-u1',
+    invoice_number: 'MR-INV-20261010-UNTICK',
+    amount_pence: 699,
+    plan_days: 30,
+    status: 'unpaid',
+    payment_reference: 'MR-11112222',
+    immediate_start_consent_at: null,
+    requested_at: '2026-10-10T09:00:00.000Z',
+    created_at: '2026-10-10T09:00:00.000Z',
+    ...over,
+  });
+  const instructions = (over: Record<string, unknown> = {}) => ({
+    account_name: 'MenRush Ltd',
+    sort_code: '20-00-00',
+    account_number: '12345678',
+    bank_name: 'Barclays Bank UK',
+    currency: 'GBP',
+    payment_reference: 'MR-11112222',
+    instructions: 'Use your payment reference as the bank transfer reference.',
+    bank_configured: true,
+    ...over,
+  });
+
+  it('unticked member: the invoice card gives their delayed start, never the old "switches on" line', async () => {
+    const inv = unpaidInvoice();
+    mocks.getUnpaidInvoice.mockResolvedValue({ data: { invoice: inv, payment_instructions: instructions() } });
+    render(
+      <MemoryRouter>
+        <Premium />
+      </MemoryRouter>,
+    );
+    const line = await screen.findByTestId('invoice-start-line');
+    expect(line.textContent).toBe(invoiceStartLine(inv));
+    expect(line.textContent).toMatch(/Your Premium starts on \d+ \w+ 2026, after the 14 day cancellation period/);
+    expect(line.className).toContain('text-[15px]');
+    expect(document.body.textContent ?? '').not.toMatch(OLD_START_TEXT);
+  });
+
+  it('unticked member: the server start line is shown when the API sends one', async () => {
+    mocks.getUnpaidInvoice.mockResolvedValue({
+      data: {
+        invoice: unpaidInvoice(),
+        payment_instructions: instructions({ premium_start_line: 'Your Premium starts on 24 October 2026, after the 14 day cancellation period, or when we confirm your payment if that is later.' }),
+      },
+    });
+    render(
+      <MemoryRouter>
+        <Premium />
+      </MemoryRouter>,
+    );
+    expect((await screen.findByTestId('invoice-start-line')).textContent).toMatch(/starts on 24 October 2026/);
+    expect(document.body.textContent ?? '').not.toMatch(OLD_START_TEXT);
+  });
+
+  it('ticked member: the invoice card says Premium starts once payment is confirmed', async () => {
+    const inv = unpaidInvoice({ immediate_start_consent_at: '2026-10-10T09:00:00.000Z' });
+    mocks.getUnpaidInvoice.mockResolvedValue({ data: { invoice: inv, payment_instructions: instructions() } });
+    render(
+      <MemoryRouter>
+        <Premium />
+      </MemoryRouter>,
+    );
+    expect((await screen.findByTestId('invoice-start-line')).textContent).toBe(
+      'Your Premium starts as soon as we confirm your payment.',
+    );
+  });
+
+  it('invoice card text is 15px and Copy and Cancel have 44px targets', async () => {
+    mocks.getUnpaidInvoice.mockResolvedValue({ data: { invoice: unpaidInvoice(), payment_instructions: instructions() } });
+    render(
+      <MemoryRouter>
+        <Premium />
+      </MemoryRouter>,
+    );
+    const card = await screen.findByTestId('unpaid-invoice-card');
+    expect(card.innerHTML).not.toMatch(/text-\[1[0-2]px\]|text-xs/);
+    const targets = [...screen.getAllByTestId('copy-reference'), screen.getByTestId('cancel-invoice')];
+    expect(targets.length).toBe(2);
+    for (const el of targets) {
+      expect(el.className).toContain('min-h-[44px]');
+      expect(el.className).toContain('min-w-[44px]');
+      expect(el.className).toContain('text-[15px]');
+    }
+  });
+
+  it('paid, delayed start: /premium says when Premium starts', async () => {
+    mocks.getStatus.mockResolvedValue({
+      data: {
+        tier: 'free',
+        is_premium: false,
+        beta_premium_included: false,
+        premium_until: '2099-02-23T09:00:00.000Z',
+        premium_starts_at: '2099-01-24T09:00:00.000Z',
+        features: [],
+        free_limits: { likesPerDay: 20, radiusKm: 5, photos: 6 },
+      },
+    });
+    render(
+      <MemoryRouter>
+        <Premium />
+      </MemoryRouter>,
+    );
+    const pending = await screen.findByTestId('premium-pending-start');
+    expect(pending.textContent).toMatch(/Your Premium starts on 24 January 2099/);
+    expect(pending.textContent).not.toMatch(/14-day|beta/i);
+  });
+
+  it.each([
+    ['paid Premium', false],
+    ['Premium included for everyone', true],
+  ])('hides the £6.99 offer from anyone already Premium (%s)', async (_label, included) => {
+    mocks.getStatus.mockResolvedValue({
+      data: {
+        tier: 'premium',
+        is_premium: true,
+        beta_premium_included: included,
+        premium_until: included ? null : '2099-01-01T00:00:00.000Z',
+        features: [],
+        free_limits: { likesPerDay: 20, radiusKm: 5, photos: 6 },
+      },
+    });
+    render(
+      <MemoryRouter>
+        <Premium />
+      </MemoryRouter>,
+    );
+    await screen.findByTestId('premium-active-status');
+    expect(screen.queryByTestId('generate-invoice-button')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('immediate-start-consent')).not.toBeInTheDocument();
+    expect(screen.queryByText('£6.99')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Use the bank invoice below/i)).not.toBeInTheDocument();
+    expect(document.body.textContent ?? '').not.toMatch(/beta/i);
   });
 });
