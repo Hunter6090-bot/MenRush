@@ -45,11 +45,11 @@ export function MapTopPillBar({
     <div
       ref={columnRef}
       className="pointer-events-none absolute inset-0 z-20 flex flex-col overflow-y-auto overscroll-y-contain"
-      style={{ visibility: ready ? 'visible' : 'hidden' }}
       data-testid="map-overlay-column"
       data-offset-for-banner={offset}
       data-overlay-ready={ready ? 'true' : 'false'}
     >
+      {!ready ? null : (
       <div
         className="flex flex-col gap-2 px-3 pt-3"
         style={offset > 0 ? { paddingTop: `${PILL_STACK_PAD_PX + offset}px` } : undefined}
@@ -94,8 +94,9 @@ export function MapTopPillBar({
           </div>
         ) : null}
       </div>
-      <div className="min-h-0 flex-1" aria-hidden data-testid="map-overlay-spacer" />
-      {footer}
+      )}
+      {ready ? <div className="min-h-0 flex-1" aria-hidden data-testid="map-overlay-spacer" /> : null}
+      {ready ? footer : null}
     </div>
   );
 }

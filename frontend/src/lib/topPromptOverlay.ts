@@ -67,20 +67,25 @@ export function useClearanceBelowTopPrompt(anchorRef: RefObject<HTMLElement | nu
 } {
   const bannerBottom = useTopPromptBottom();
   const [offset, setOffset] = useState(0);
-  // Hide until the first layout measure when a banner is up, so the first
-  // painted frame is never the stale offset-0 / leftover-offset jump (QC P2).
-  const [ready, setReady] = useState(bannerBottom == null);
+  // Always hide until the first layout measure so the first painted frame is
+  // never offset-0 (pills under the banner) or a leftover offset (y606).
+  const [ready, setReady] = useState(false);
 
   useLayoutEffect(() => {
     const anchor = anchorRef.current;
-    if (!anchor || bannerBottom == null) {
+    if (!anchor) {
       setOffset(0);
       setReady(true);
       return;
     }
 
     const measure = () => {
-      setOffset(offsetBelowTopPrompt(anchor.getBoundingClientRect().top, bannerBottom));
+      const live = getTopPromptBottom();
+      const bannerEl = document.querySelector('[data-testid="push-alert-banner"]');
+      // Banner is in the tree but has not published yet — stay hidden so the
+      // first painted pills are not at the un-offset y (QC P2).
+      if (bannerEl && live == null) return;
+      setOffset(offsetBelowTopPrompt(anchor.getBoundingClientRect().top, live));
       setReady(true);
     };
 
@@ -89,6 +94,8 @@ export function useClearanceBelowTopPrompt(anchorRef: RefObject<HTMLElement | nu
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
     ro?.observe(anchor);
     if (anchor.parentElement) ro?.observe(anchor.parentElement);
+    const bannerEl = document.querySelector('[data-testid="push-alert-banner"]');
+    if (bannerEl) ro?.observe(bannerEl);
     window.addEventListener('resize', measure);
     return () => {
       ro?.disconnect();
