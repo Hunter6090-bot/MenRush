@@ -5,8 +5,8 @@ import {
   useDeferredInstallPrompt,
 } from '../lib/installPromptStore';
 import { useEffect, useState } from 'react';
-
-const DISMISS_KEY = 'menrush_install_prompt_dismissed';
+import { usePromptDismissal } from '../lib/promptDismissal';
+import { PromptDismissControls } from './PromptDismissControls';
 
 function isStandalone() {
   return (
@@ -24,6 +24,8 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
   const location = useLocation();
   const deferred = useDeferredInstallPrompt();
   const [hidden, setHidden] = useState(true);
+  // One "Don't remind me again" rule for every phone (owner ask, 10 Oct 2026).
+  const dismissal = usePromptDismissal('install');
 
   // Never cover chat/room composers or Settings Sign out — sheet sits at z-60.
   const blocksChrome =
@@ -50,20 +52,10 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
       setHidden(true);
       return;
     }
-    if (variant === 'sheet' && localStorage.getItem(DISMISS_KEY) === '1') {
-      setHidden(true);
-      return;
-    }
-
     setHidden(false);
   }, [location.pathname, variant, blocksChrome]);
 
-  if (hidden || blocksChrome) return null;
-
-  const dismiss = () => {
-    localStorage.setItem(DISMISS_KEY, '1');
-    setHidden(true);
-  };
+  if (hidden || blocksChrome || dismissal.hidden) return null;
 
   // Android Chrome can one-tap install when we still hold the deferred event.
   // iPhone / Safari cannot — keep Show me how. Android without a prompt falls
@@ -75,19 +67,19 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
     await deferred.prompt();
     await deferred.userChoice;
     clearDeferredInstallPrompt();
-    dismiss();
+    dismissal.close(true);
   };
 
   const wrap =
     variant === 'sheet'
-      ? 'fixed inset-x-0 bottom-0 z-[60] border-t border-[rgba(196,131,42,0.35)] bg-[#140E08] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4'
-      : 'mt-4 rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[rgba(20,14,8,0.72)] px-4 py-4';
+      ? 'fixed inset-x-0 bottom-0 z-[60] border-t border-[var(--border-default)] bg-[var(--bg-card)] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4'
+      : 'mt-4 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-4 py-4';
 
   return (
     <aside className={wrap} role="dialog" aria-label="Install MenRush">
-      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#C4832A]">Get the app</p>
-      <p className="mt-1 text-[17px] font-extrabold leading-tight text-[#F0E0C0]">Put MenRush on your Home Screen.</p>
-      <p className="mt-1 text-[13px] leading-snug text-[#A89070]">
+      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--nn-accent-text)]">Get the app</p>
+      <p className="mt-1 text-[17px] font-extrabold leading-tight text-[var(--cream)]">Put MenRush on your Home Screen.</p>
+      <p className="mt-1 text-[15px] leading-snug text-[var(--cream-muted)]">
         {isIos()
           ? 'Safari only. Share, then Add to Home Screen.'
           : 'Opens like an app. No store. No extra download.'}
@@ -109,14 +101,13 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
             Show me how
           </Link>
         )}
-        <button
-          type="button"
-          onClick={dismiss}
-          className="rounded-full border border-[rgba(196,131,42,0.35)] px-4 py-3 text-[14px] font-bold text-[#F0E0C0]"
-        >
-          Not now
-        </button>
       </div>
+      <PromptDismissControls
+        onClose={dismissal.close}
+        closeLabel="Close get the app"
+        testIdPrefix="install-prompt"
+        className="mt-2"
+      />
     </aside>
   );
 }

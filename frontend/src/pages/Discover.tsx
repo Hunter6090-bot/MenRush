@@ -906,9 +906,10 @@ export const Discover = () => {
     }
     setNeedsLocationGate(false);
     setLocationNotice('');
-    setActivationProfile((prev) =>
-      prev ? { ...prev, lat: latitude, lng: longitude } : { lat: latitude, lng: longitude },
-    );
+    // Merge only into the real /users/me profile. A coords-only stub made the
+    // banner read every field as missing, so complete profiles saw "Finish profile"
+    // on each Discover load until (or unless) /users/me answered.
+    setActivationProfile((prev) => (prev ? { ...prev, lat: latitude, lng: longitude } : prev));
   }, []);
 
   const useDiscoveryLocation = useCallback(

@@ -8,6 +8,8 @@ import {
   profileSetupProgress,
   type ProfileSetupSnapshot,
 } from '../lib/profileSetup';
+import { usePromptDismissal } from '../lib/promptDismissal';
+import { PromptDismissControls } from './PromptDismissControls';
 
 const BLOCKER_COPY: Record<ReturnType<typeof activationBlockers>[number], string> = {
   avatar: 'Photo',
@@ -34,6 +36,7 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
   const needsLocation = !isDiscoverLocationReady(profile);
   const locationOnly = isLocationOnlyGap(profile);
   const fieldsComplete = isProfileSetupComplete(profile);
+  const profileDismissal = usePromptDismissal('profile');
   if (blockers.length === 0 && !needsLocation) return null;
 
   const progress = profileSetupProgress(profile);
@@ -53,6 +56,11 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
 
   // Missing GPS is not "finish profile" — never dump a fields-complete user onto the wizard.
   const showFinishProfileCta = !showLocationCta && fieldGaps.length > 0;
+
+  // Finish-profile mode honours "Don't remind me again". A complete profile never
+  // reaches this mode; the location prompt is separate and unchanged.
+  const finishProfileMode = !fieldsComplete && !showLocationCta;
+  if (finishProfileMode && profileDismissal.hidden) return null;
 
   return (
     <div
@@ -107,6 +115,14 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
           ) : null}
         </div>
       </div>
+      {finishProfileMode ? (
+        <PromptDismissControls
+          onClose={profileDismissal.close}
+          closeLabel="Close finish your profile"
+          testIdPrefix="profile-prompt"
+          className="mt-1"
+        />
+      ) : null}
     </div>
   );
 }

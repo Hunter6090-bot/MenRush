@@ -2,10 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { usersAPI } from '../api/client';
 import {
-  activationBlockers,
+  isProfileSetupComplete,
+  profileFieldBlockers,
   type ActivationBlocker,
   type ProfileSetupSnapshot,
 } from '../lib/profileSetup';
+import { usePromptDismissal } from '../lib/promptDismissal';
+import { PromptDismissControls } from './PromptDismissControls';
 
 const DEPTH_COPY: Partial<Record<ActivationBlocker, string>> = {
   avatar: 'Add a photo',
@@ -22,6 +25,7 @@ const DEPTH_COPY: Partial<Record<ActivationBlocker, string>> = {
 export function ProfileDepthStrip() {
   const pathname = useLocation().pathname;
   const [gaps, setGaps] = useState<ActivationBlocker[]>([]);
+  const dismissal = usePromptDismissal('profile');
 
   const hidden =
     pathname.startsWith('/discover') ||
@@ -36,10 +40,9 @@ export function ProfileDepthStrip() {
     usersAPI
       .getMe()
       .then((res) => {
-        const blockers = activationBlockers(res.data as ProfileSetupSnapshot).filter(
-          (b) => b !== 'location',
-        );
-        setGaps(blockers);
+        const profile = res.data as ProfileSetupSnapshot | null | undefined;
+        // Same "complete" rule as setup and Discover: photo, bio of 20+, looking for, 3 tags.
+        setGaps(profile && !isProfileSetupComplete(profile) ? profileFieldBlockers(profile) : []);
       })
       .catch(() => {
         setGaps([]);
@@ -47,11 +50,11 @@ export function ProfileDepthStrip() {
   }, []);
 
   useEffect(() => {
-    if (hidden) return;
+    if (hidden || dismissal.hidden) return;
     refresh();
-  }, [hidden, pathname, refresh]);
+  }, [hidden, dismissal.hidden, pathname, refresh]);
 
-  if (hidden || gaps.length === 0) return null;
+  if (hidden || dismissal.hidden || gaps.length === 0) return null;
 
   const primary = gaps[0];
   const detail = gaps.map((g) => DEPTH_COPY[g] ?? g).join(' · ');
@@ -80,6 +83,12 @@ export function ProfileDepthStrip() {
         >
           Finish profile
         </Link>
+        <PromptDismissControls
+          onClose={dismissal.close}
+          closeLabel="Close finish your profile"
+          testIdPrefix="profile-prompt"
+          className="w-full"
+        />
       </div>
     </div>
   );
