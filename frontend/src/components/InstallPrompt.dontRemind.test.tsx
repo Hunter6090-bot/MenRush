@@ -5,6 +5,19 @@ import { MemoryRouter } from 'react-router-dom';
 import { InstallPrompt } from './InstallPrompt';
 import { resetInstallPromptStoreForTests } from '../lib/installPromptStore';
 import { useAuthStore } from '../hooks/store';
+import { resetPromptPrefsSyncForTests } from '../lib/promptDismissal';
+
+// Server prefs: nothing stored, so these cases cover the on-device rule.
+vi.mock('../api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../api/client')>();
+  return {
+    ...actual,
+    promptPrefsAPI: {
+      get: vi.fn().mockResolvedValue({ data: { never: [] } }),
+      setNever: vi.fn().mockResolvedValue({ data: { never: [] } }),
+    },
+  };
+});
 
 vi.mock('../lib/push', () => ({
   registerServiceWorker: vi.fn().mockResolvedValue(undefined),
@@ -37,6 +50,7 @@ describe("InstallPrompt: Don't remind me again", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    resetPromptPrefsSyncForTests();
     resetInstallPromptStoreForTests();
     useAuthStore.setState({ user: { id: 'member-a', name: 'Member' } as never, token: 't' });
     Object.defineProperty(window, 'matchMedia', {

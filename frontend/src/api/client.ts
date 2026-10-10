@@ -1272,3 +1272,12 @@ function resolveSocketUrl(): string {
 // Keep signalling on the same host as the API when deployed separately from
 // the static frontend (e.g. Railway backend + Vercel frontend).
 export const SOCKET_URL = resolveSocketUrl();
+
+/** "Don't remind me again" across devices. Keys: install, alerts, profile. */
+export type PromptPrefKey = 'install' | 'alerts' | 'profile';
+
+export const promptPrefsAPI = {
+  get: () => apiClient.get<{ never: PromptPrefKey[] }>('/prompt-prefs'),
+  setNever: (prompt: PromptPrefKey) =>
+    apiClient.put<{ never: PromptPrefKey[] }>(`/prompt-prefs/${encodeURIComponent(prompt)}/never`),
+};

@@ -34,6 +34,7 @@ import campaignRoutes from './routes/campaigns';
 import socialRoutes from './routes/social';
 import mapFeedRoutes from './routes/map-feed';
 import locationPrivacyRoutes from './routes/location-privacy';
+import promptPrefsRoutes from './routes/prompt-prefs';
 import communityRoutes from './routes/community';
 import mediaDisplayRoutes from './routes/media-display';
 import { startPulseExpiryCron } from './services/pulse.service';
@@ -149,6 +150,7 @@ app.use('/api/campaigns', campaignRoutes);
 app.use('/api/social', socialRoutes);
 app.use('/api/map-feed', mapFeedRoutes);
 app.use('/api/location-privacy', locationPrivacyRoutes);
+app.use('/api/prompt-prefs', promptPrefsRoutes);
 app.use('/api/community', communityRoutes);
 
 // Waitlist signup — POSTs to /api/waitlist land here; the dripRoutes router

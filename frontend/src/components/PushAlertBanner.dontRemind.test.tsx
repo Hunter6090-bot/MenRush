@@ -3,7 +3,20 @@ import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PushAlertBanner } from './PushAlertBanner';
 import { useAuthStore } from '../hooks/store';
+import { resetPromptPrefsSyncForTests } from '../lib/promptDismissal';
 import * as push from '../lib/push';
+
+// Server prefs: nothing stored, so these cases cover the on-device rule.
+vi.mock('../api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../api/client')>();
+  return {
+    ...actual,
+    promptPrefsAPI: {
+      get: vi.fn().mockResolvedValue({ data: { never: [] } }),
+      setNever: vi.fn().mockResolvedValue({ data: { never: [] } }),
+    },
+  };
+});
 
 vi.mock('../lib/push', () => ({
   enablePushNotifications: vi.fn().mockResolvedValue('default'),
@@ -56,6 +69,7 @@ describe("PushAlertBanner: Don't remind me again", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    resetPromptPrefsSyncForTests();
     vi.mocked(push.getPushSupport).mockReturnValue('default');
     vi.mocked(push.iosNeedsHomeScreenForPush).mockReturnValue(false);
     vi.mocked(push.isStandalonePwa).mockReturnValue(false);
