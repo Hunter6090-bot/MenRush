@@ -34,9 +34,13 @@ async function main() {
   );
 
   const row = await query(`SELECT reason, details, status FROM reports WHERE id = $1`, [report.id]);
-  const details = String(row.rows[0]?.details ?? '');
-  if (!details.includes(`thread_id=${threadId}`)) {
-    throw new Error(`Expected thread_id in details, got: ${details}`);
+  const details = row.rows[0]?.details;
+  if (details) {
+    throw new Error(`Expected free-text details to stay empty when none were sent, got: ${details}`);
+  }
+  const evidence = await query(`SELECT kind FROM report_evidence WHERE report_id = $1`, [report.id]);
+  if (!Array.isArray(evidence.rows)) {
+    throw new Error('Expected evidence snapshot rows');
   }
   if (row.rows[0]?.reason !== 'other') {
     throw new Error(`Unexpected reason: ${row.rows[0]?.reason}`);

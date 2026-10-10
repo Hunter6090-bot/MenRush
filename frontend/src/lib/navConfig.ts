@@ -4,7 +4,7 @@ import { readHomeView } from './homeView';
 import {
   IconChat,
   IconCommunity,
-  IconDiscover,
+  IconMapPin,
   IconEvents,
   IconHotSpots,
   IconMatches,
@@ -45,14 +45,15 @@ export function getNavItems(): NavItem[] {
       to: '/discover',
       label: ROUTE_LABELS.map,
       shortLabel: 'Map',
-      Icon: IconDiscover,
+      // Outline map pin, same as the tabs (desktop sidebar too, Zoul 10 Oct).
+      Icon: IconMapPin,
       fillWhenActive: false,
       mobileTab: true,
       desktopNav: true,
     },
     {
       to: '/conversations',
-      label: ROUTE_LABELS.messages,
+      label: ROUTE_LABELS.chat,
       shortLabel: 'Chat',
       Icon: IconChat,
       fillWhenActive: false,

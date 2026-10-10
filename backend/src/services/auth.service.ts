@@ -1242,7 +1242,10 @@ export const authService = {
     // does, so a failure never leaves a half-erased account behind.
     const { locationRetentionService } = await import('./location-retention.service');
     const { roomService } = await import('./room.service');
+    const { listSentMessageMediaKeys, unlinkMessageMedia } = await import('./report-evidence.service');
     const client = await pool.connect();
+    let messageMediaKeys: string[] = [];
+    let committed = false;
     try {
       await client.query('BEGIN');
       await client.query(`SET LOCAL lock_timeout = '5s'`);
@@ -1256,14 +1259,19 @@ export const authService = {
       // Location rows (map feed, Community, chat location shares, room
       // points, profile points); the FKs also cascade from users.
       await locationRetentionService.eraseAccountLocationData(userId, (text, params) => client.query(text, params));
+      // Conservative: only this account's outbound chat files. Incoming media
+      // belongs to the other member. Both-directions can wait if Al chooses it.
+      messageMediaKeys = await listSentMessageMediaKeys([userId], (text, params) => client.query(text, params));
       await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
       await client.query('COMMIT');
+      committed = true;
     } catch (err) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw err;
     } finally {
       client.release();
     }
+    if (committed) unlinkMessageMedia(messageMediaKeys);
     return { ok: true };
   },
 };

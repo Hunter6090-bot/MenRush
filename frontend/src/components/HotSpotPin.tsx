@@ -1,12 +1,17 @@
 import { createRoot, type Root } from 'react-dom/client';
 import { IconCruise } from './icons';
+import { SpotTypeIcon, spotTypeKey } from './icons/SpotTypeIcon';
 import { CRUISE_PIN_LABEL } from '../lib/cruiseCopy';
 import { hotSpotCountLabel, isHotSpotActive } from '../lib/hotSpotCounts';
 
 export type HotSpotPinData = {
   id: string;
   name: string;
+  /** Legacy emoji from the server. Kept on the type for callers; never painted on the pin. */
   category_icon?: string;
+  /** Category slug/name pick the copper line spot-type icon (same set as the Out cards, #386). */
+  category_slug?: string | null;
+  category_name?: string | null;
   /** Exact live check-in count. Premium only (null for Free); used for occupancy, never as a label. */
   live_count_exact?: number | null;
   /** Server display count (rounded for Free). The only number the pin shows. */
@@ -22,8 +27,10 @@ interface HotSpotPinProps {
 }
 
 /**
- * Always-visible Cruise marker on the Nearby map — shows the spot's category icon
- * (park, parking, sauna, bar…); falls back to the cruise-ship icon if none is set.
+ * Always-visible Cruise marker on the Nearby map. Shows the spot's copper line
+ * spot-type icon (park, parking, sauna, bar…) on a dark disc so it reads on the
+ * light and dark map styles; falls back to the cruise-ship icon with no category.
+ * No emoji (Brand, 10 Oct 2026).
  * Pin label is Brand "Cruise". Chip on the map chrome is "Hot Spots".
  * Empty: solid copper pin (slightly quieter, never near-invisible).
  * Occupied: larger glow + pulse + venue name + approximate check-in count.
@@ -34,6 +41,7 @@ export function HotSpotPin({ spot, size = 48, showLabel = true }: HotSpotPinProp
   const pinSize = occupied ? size : Math.round(size * 0.92);
   // Server value only (Free is already rounded). Never derive a number from live_count_exact.
   const countLabel = hotSpotCountLabel(spot);
+  const hasCategory = Boolean(spot.category_slug?.trim() || spot.category_name?.trim());
 
   return (
     <div
@@ -89,35 +97,29 @@ export function HotSpotPin({ spot, size = 48, showLabel = true }: HotSpotPinProp
       )}
       <div
         className="flex h-full w-full items-center justify-center rounded-full"
+        data-testid="hotspot-pin-disc"
         style={{
-          background: occupied
-            ? 'linear-gradient(145deg, #E0A14A 0%, #C4832A 45%, #8B5A1A 100%)'
-            : 'linear-gradient(145deg, #C4832A 0%, #A06A28 55%, #6E4518 100%)',
-          border: occupied ? '3px solid #FFF6E6' : '2.5px solid #F0E0C0',
+          // Dark disc + copper line icon: >= 3:1 for the icon on any map style,
+          // copper rim + cream halo so the pin itself reads on light and dark maps.
+          background: '#1A0E03',
+          border: occupied ? '3px solid #E0A14A' : '2.5px solid #C4832A',
           boxShadow: occupied
-            ? '0 0 20px rgba(196,131,42,0.85), 0 4px 14px rgba(0,0,0,0.55)'
-            : '0 0 10px rgba(196,131,42,0.45), 0 3px 10px rgba(0,0,0,0.5)',
-          color: '#FFF6E6',
+            ? '0 0 0 2px #FFF6E6, 0 0 20px rgba(196,131,42,0.85), 0 4px 14px rgba(0,0,0,0.55)'
+            : '0 0 0 1.5px #F0E0C0, 0 0 10px rgba(196,131,42,0.45), 0 3px 10px rgba(0,0,0,0.5)',
+          color: occupied ? '#E0A14A' : '#C4832A',
         }}
       >
-        {spot.category_icon ? (
-          <span
-            aria-hidden
+        {hasCategory ? (
+          <SpotTypeIcon
+            type={spotTypeKey(spot.category_slug, spot.category_name)}
+            size={Math.round(pinSize * 0.5)}
             data-testid="hotspot-category-icon"
-            style={{
-              fontSize: Math.round(pinSize * 0.48),
-              lineHeight: 1,
-              filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.45))',
-            }}
-          >
-            {spot.category_icon}
-          </span>
+          />
         ) : (
           <IconCruise
             size={Math.round(pinSize * 0.52)}
             aria-hidden
             data-testid="cruise-ship-icon"
-            style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.45))' }}
           />
         )}
       </div>

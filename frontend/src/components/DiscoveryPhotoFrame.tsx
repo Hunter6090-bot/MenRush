@@ -54,7 +54,8 @@ export function DiscoveryPhotoFrame({
         <VerifiedBadge
           compact
           // Circle pins: tuck the tick toward the centre so the arc does not clip it.
-          className={`absolute z-10 ${isCircle ? 'bottom-[12%] right-[12%]' : 'bottom-1 right-1'}`}
+          // Square tiles: top-right, so the name and tags below use the full width.
+          className={`absolute z-10 ${isCircle ? 'bottom-[12%] right-[12%]' : 'top-1 right-1'}`}
         />
       ) : null}
     </div>

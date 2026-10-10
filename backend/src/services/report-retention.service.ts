@@ -3,18 +3,28 @@ import { query } from '../db';
 /**
  * Closed-report retention (pending Al's sign-off on the period).
  *
- *   REPORT_RETENTION_MONTHS_AFTER_CLOSE  months after a report is closed
+ *   REPORT_RETENTION_MONTHS              months after a report is closed
  *                                        (actioned / dismissed) before it is
  *                                        deleted. Default 12.
- *   REPORT_RETENTION_PURGE_ENABLED       'true' to run the purge job. Off by
+ *   REPORT_RETENTION_MONTHS_AFTER_CLOSE  accepted as an alias.
+ *   REPORT_PURGE_ENABLED                 'true' to run the purge job. Off by
  *                                        default: nothing is deleted until set.
+ *   REPORT_RETENTION_PURGE_ENABLED       accepted as an alias.
  *
- * Open and reviewing reports are never purged, whatever their age.
+ * Open, reviewing, and legal_hold reports are never purged.
  */
 export const REPORT_RETENTION_DEFAULT_MONTHS = 12;
 
-export function reportRetentionMonthsAfterClose(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = (env.REPORT_RETENTION_MONTHS_AFTER_CLOSE ?? '').trim();
+function firstEnv(env: NodeJS.ProcessEnv, keys: string[]): string {
+  for (const key of keys) {
+    const raw = (env[key] ?? '').trim();
+    if (raw) return raw;
+  }
+  return '';
+}
+
+export function reportRetentionMonths(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = firstEnv(env, ['REPORT_RETENTION_MONTHS', 'REPORT_RETENTION_MONTHS_AFTER_CLOSE']);
   if (!raw) return REPORT_RETENTION_DEFAULT_MONTHS;
   const n = Number(raw);
   // Whole months, at least 1. Anything else falls back to the default rather
@@ -23,40 +33,67 @@ export function reportRetentionMonthsAfterClose(env: NodeJS.ProcessEnv = process
   return n;
 }
 
-export function reportRetentionPurgeEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return (env.REPORT_RETENTION_PURGE_ENABLED ?? '').trim().toLowerCase() === 'true';
+/** @deprecated Use reportRetentionMonths */
+export const reportRetentionMonthsAfterClose = reportRetentionMonths;
+
+export function reportPurgeEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = firstEnv(env, ['REPORT_PURGE_ENABLED', 'REPORT_RETENTION_PURGE_ENABLED']);
+  return raw.toLowerCase() === 'true' || raw === '1' || raw.toLowerCase() === 'yes';
 }
+
+/** @deprecated Use reportPurgeEnabled */
+export const reportRetentionPurgeEnabled = reportPurgeEnabled;
 
 export const reportRetentionService = {
   /**
-   * Delete closed reports whose resolved_at is more than `months` ago.
-   * Returns the number deleted. Callers decide whether the job is on.
+   * Delete closed reports (and cascaded evidence) whose close date is more
+   * than `months` ago. Skips legal_hold. Returns the number deleted.
    */
-  async purgeClosedReports(months = reportRetentionMonthsAfterClose()): Promise<number> {
-    const res = await query(
-      `DELETE FROM reports
+  async purgeClosedReports(months = reportRetentionMonths()): Promise<number> {
+    const doomed = await query(
+      `SELECT id FROM reports
         WHERE status IN ('actioned', 'dismissed')
-          AND resolved_at IS NOT NULL
-          AND resolved_at < NOW() - make_interval(months => $1::int)`,
+          AND legal_hold = FALSE
+          AND COALESCE(closed_at, resolved_at) IS NOT NULL
+          AND COALESCE(closed_at, resolved_at) < NOW() - make_interval(months => $1::int)`,
       [months],
     );
+    const ids = doomed.rows.map((row: { id: string }) => row.id);
+    if (!ids.length) return 0;
+    const media = await query(
+      `SELECT media_ref FROM report_evidence WHERE report_id = ANY($1::uuid[])`,
+      [ids],
+    );
+    const res = await query(`DELETE FROM reports WHERE id = ANY($1::uuid[])`, [ids]);
+    const { unlinkEvidenceMedia } = await import('./report-evidence.service');
+    unlinkEvidenceMedia(media.rows.map((row: { media_ref?: string | null }) => row.media_ref));
     return res.rowCount ?? 0;
+  },
+
+  /** No-op unless REPORT_PURGE_ENABLED (or the alias) is on. */
+  async runScheduledPurge(env: NodeJS.ProcessEnv = process.env): Promise<number> {
+    if (!reportPurgeEnabled(env)) return 0;
+    return this.purgeClosedReports(reportRetentionMonths(env));
   },
 };
 
 let handle: NodeJS.Timeout | null = null;
 
-/** Daily purge of closed reports. Does nothing unless REPORT_RETENTION_PURGE_ENABLED=true. */
+/** Daily purge of closed reports. Does nothing unless REPORT_PURGE_ENABLED=true. */
 export function startReportRetentionWorker() {
-  if (handle || !reportRetentionPurgeEnabled()) return;
+  if (handle || !reportPurgeEnabled()) return;
   const run = async () => {
-    const months = reportRetentionMonthsAfterClose();
-    const n = await reportRetentionService.purgeClosedReports(months);
+    const months = reportRetentionMonths();
+    const n = await reportRetentionService.runScheduledPurge();
     if (n) console.log(`[report-retention] purged ${n} closed report(s) older than ${months} months`);
   };
-  void run().catch((err) => console.error('[report-retention] initial purge failed:', err));
+  void run().catch(() => {
+    console.error('[report-retention] initial purge failed');
+  });
   handle = setInterval(() => {
-    void run().catch((err) => console.error('[report-retention] purge failed:', err));
+    void run().catch(() => {
+      console.error('[report-retention] purge failed');
+    });
   }, 24 * 60 * 60 * 1000);
   handle.unref?.();
 }

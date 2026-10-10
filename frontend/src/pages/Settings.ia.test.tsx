@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   getTeamStatus: vi.fn(),
   listReports: vi.fn(),
   updateReportStatus: vi.fn(),
+  getReportEvidenceMedia: vi.fn(),
   updateLocation: vi.fn(),
 }));
 
@@ -51,6 +52,7 @@ vi.mock('../api/client', () => ({
     getTeamStatus: mocks.getTeamStatus,
     listReports: mocks.listReports,
     updateReportStatus: mocks.updateReportStatus,
+    getReportEvidenceMedia: mocks.getReportEvidenceMedia,
     updateLocation: mocks.updateLocation,
   },
 }));
@@ -300,6 +302,213 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
 
     expect(mocks.logout).toHaveBeenCalled();
     expect(mocks.navigate).toHaveBeenCalledWith('/login');
+  });
+
+  it('shows Deleted account when the reporter or reported member is gone', async () => {
+    mocks.getTeamStatus.mockResolvedValue({
+      data: { is_team: true },
+    });
+    mocks.listReports.mockResolvedValue({
+      data: {
+        reports: [
+          {
+            id: 'rep-deleted',
+            reason: 'spam',
+            status: 'actioned',
+            created_at: '2026-09-20T10:00:00Z',
+            reporter_name: 'Deleted account',
+            reporter_account_deleted_at: '2026-09-21T10:00:00Z',
+            reported_name: 'Deleted account',
+            reported_account_deleted_at: '2026-09-21T11:00:00Z',
+            details: 'Fixture notes for the team only',
+            evidence: [
+              {
+                id: 'ev-1',
+                kind: 'message',
+                body: 'Meet under the bridge',
+                from_reported: true,
+                sent_at: '2026-09-20T09:00:00Z',
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-reports')).toBeInTheDocument();
+      expect(screen.getByText('Deleted account → Deleted account')).toBeInTheDocument();
+      expect(screen.getByText('Fixture notes for the team only')).toBeInTheDocument();
+      expect(screen.getByText(/From reported/)).toBeInTheDocument();
+      expect(screen.getByText(/Meet under the bridge/)).toBeInTheDocument();
+      expect(screen.getByText(/From reported/).closest('li')?.className).toMatch(/text-\[15px\]/);
+    });
+  });
+
+  it('opens evidence media on the tap and revokes the blob URL', async () => {
+    mocks.getTeamStatus.mockResolvedValue({ data: { is_team: true } });
+    let resolveMedia: (value: { data: Blob }) => void = () => undefined;
+    mocks.getReportEvidenceMedia.mockReturnValue(
+      new Promise<{ data: Blob }>((resolve) => {
+        resolveMedia = resolve;
+      }),
+    );
+    mocks.listReports.mockResolvedValue({
+      data: {
+        reports: [
+          {
+            id: 'rep-media',
+            reason: 'harassment',
+            status: 'open',
+            created_at: '2026-09-20T10:00:00Z',
+            reporter_name: 'ReporterUser',
+            reported_name: 'BadUser',
+            evidence: [
+              {
+                id: 'ev-photo',
+                kind: 'message',
+                media_type: 'image',
+                media_available: true,
+                from_reported: true,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const popup = {
+      closed: false,
+      close: vi.fn(),
+      opener: {} as unknown,
+      location: { href: '' },
+      addEventListener: vi.fn(),
+    };
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
+    const createSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:evidence-1');
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const timeoutSpy = vi.spyOn(window, 'setTimeout');
+
+    render(
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>,
+    );
+
+    const openBtn = await screen.findByRole('button', { name: 'Open' });
+    expect(openBtn.className).toMatch(/text-\[15px\]/);
+    expect(openBtn.className).toMatch(/min-h-\[44px\]/);
+    expect(openBtn.className).toMatch(/min-w-\[44px\]/);
+    expect(openBtn.className).toMatch(/nn-accent-text/);
+    fireEvent.click(openBtn);
+    expect(openSpy).toHaveBeenCalled();
+    expect(popup.location.href).toBe('');
+    expect(popup.opener).toBeNull();
+
+    resolveMedia({ data: new Blob(['bytes']) });
+    await waitFor(() => {
+      expect(popup.location.href).toBe('blob:evidence-1');
+    });
+    expect(createSpy).toHaveBeenCalled();
+    expect(revokeSpy).not.toHaveBeenCalled();
+    expect(popup.addEventListener).not.toHaveBeenCalled();
+    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 60_000);
+    const revokeLater = timeoutSpy.mock.calls.find((call) => call[1] === 60_000)?.[0] as (() => void) | undefined;
+    expect(revokeLater).toEqual(expect.any(Function));
+    revokeLater?.();
+    expect(revokeSpy).toHaveBeenCalledWith('blob:evidence-1');
+
+    openSpy.mockRestore();
+    createSpy.mockRestore();
+    revokeSpy.mockRestore();
+    timeoutSpy.mockRestore();
+  });
+
+  it('closes the evidence window when the media fetch fails', async () => {
+    mocks.getTeamStatus.mockResolvedValue({ data: { is_team: true } });
+    mocks.getReportEvidenceMedia.mockRejectedValue(new Error('gone'));
+    mocks.listReports.mockResolvedValue({
+      data: {
+        reports: [
+          {
+            id: 'rep-media-fail',
+            reason: 'harassment',
+            status: 'open',
+            created_at: '2026-09-20T10:00:00Z',
+            reporter_name: 'ReporterUser',
+            reported_name: 'BadUser',
+            evidence: [
+              {
+                id: 'ev-photo-fail',
+                kind: 'message',
+                media_type: 'image',
+                media_available: true,
+                from_reported: true,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const popup = {
+      closed: false,
+      close: vi.fn(),
+      opener: {} as unknown,
+      location: { href: '' },
+      addEventListener: vi.fn(),
+    };
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
+
+    render(
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
+    expect(popup.opener).toBeNull();
+    await waitFor(() => {
+      expect(popup.close).toHaveBeenCalled();
+    });
+    openSpy.mockRestore();
+  });
+
+  it('flags a failed snapshot as Evidence unavailable', async () => {
+    mocks.getTeamStatus.mockResolvedValue({ data: { is_team: true } });
+    mocks.listReports.mockResolvedValue({
+      data: {
+        reports: [
+          {
+            id: 'rep-unavailable',
+            reason: 'spam',
+            status: 'open',
+            created_at: '2026-09-20T10:00:00Z',
+            reporter_name: 'ReporterUser',
+            reported_name: 'BadUser',
+            evidence_unavailable: true,
+            evidence: [],
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Evidence unavailable')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Evidence unavailable').className).toMatch(/text-\[15px\]/);
   });
 
   it('renders team safety reports when user is a team member', async () => {

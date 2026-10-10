@@ -1,3 +1,4 @@
+import { eventMetaLine } from '../lib/eventWhen';
 import React, { useEffect, useState } from 'react';
 import { EventDTO, eventsAPI } from '../api/client';
 
@@ -32,15 +33,14 @@ export const EventsRail: React.FC<EventsRailProps> = ({ lat, lng, onSelect }) =>
           >
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[var(--copper)]">
-                  After Hours
-                </p>
-                <p className="mt-1 text-sm font-bold text-[var(--cream)]">{event.name}</p>
-                <p className="mt-1 text-xs text-[var(--cream-muted)]">
-                  {event.venue_name || 'Location shared after join'}
-                </p>
+                <p className="text-[15px] font-bold text-[var(--cream)]">{event.name}</p>
+                {eventMetaLine(event) ? (
+                  <p className="mt-1 text-[15px] text-[var(--cream-muted)]" data-testid={`events-rail-meta-${event.id}`}>
+                    {eventMetaLine(event)}
+                  </p>
+                ) : null}
               </div>
-              <span className="rounded-full bg-[var(--copper)]/15 px-2 py-1 text-[10px] font-bold text-[var(--copper)]">
+              <span className="rounded-full bg-[var(--copper)]/15 px-2 py-1 text-[15px] font-bold text-[var(--nn-accent-text)]">
                 {event.member_count} in
               </span>
             </div>

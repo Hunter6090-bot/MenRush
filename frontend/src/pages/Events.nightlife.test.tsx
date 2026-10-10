@@ -119,7 +119,7 @@ describe('Events nightlife check-in', () => {
     );
     await user.click(await screen.findByTestId('event-checkin-evt-uk-1'));
     const notice = await screen.findByTestId('event-checkin-notice');
-    expect(notice).toHaveTextContent("You're in Ghost or hidden, so no pin was added at The Copper Bar.");
+    expect(notice).toHaveTextContent("You're in Ghost or hidden, so you weren't checked in and no pin was added at The Copper Bar.");
     expect(notice).not.toHaveTextContent(/4 hours|pin stays/i);
     expect(notice.className).toContain('text-[15px]');
   });
