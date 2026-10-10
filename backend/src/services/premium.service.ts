@@ -111,8 +111,9 @@ async function syncUserEntitlements(
   tier: PremiumTier,
   active: boolean,
   until: Date | null,
+  db: Queryable = pool,
 ): Promise<void> {
-  await query(
+  await db.query(
     `UPDATE users
      SET premium_tier = $2,
          is_premium = $3,
@@ -121,6 +122,29 @@ async function syncUserEntitlements(
      WHERE id = $1`,
     [userId, tier, active, until],
   );
+}
+
+/**
+ * Webhook apply inside the replay-guard transaction: writes go through `db`
+ * (the transaction client); side effects outside the DB transaction, such as
+ * the referral record, run in `afterCommit` once the claim and writes commit.
+ */
+export type WebhookTx = { db: Queryable; afterCommit: Array<() => Promise<void>> };
+
+async function runReferralHook(
+  tx: WebhookTx | undefined,
+  label: string,
+  hook: () => Promise<void>,
+): Promise<void> {
+  const safe = async () => {
+    try {
+      await hook();
+    } catch (err) {
+      console.error(`[premium] referral ${label} hook failed`, err);
+    }
+  };
+  if (tx) tx.afterCommit.push(safe);
+  else await safe();
 }
 
 export const premiumService = {
@@ -329,7 +353,8 @@ export const premiumService = {
     ];
   },
 
-  async activateFromWebhook(event: PaymentWebhookEvent) {
+  async activateFromWebhook(event: PaymentWebhookEvent, tx?: WebhookTx) {
+    const db: Queryable = tx?.db ?? pool;
     if (!event.userId) {
       return { ok: false, reason: 'missing_user_id' };
     }
@@ -338,7 +363,7 @@ export const premiumService = {
     const periodEnd =
       event.periodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    await query(
+    await db.query(
       `UPDATE subscriptions
        SET status = 'canceled', canceled_at = NOW(), updated_at = NOW()
        WHERE user_id = $1 AND status = 'active'`,
@@ -347,7 +372,7 @@ export const premiumService = {
 
     const processor = event.processor || 'verotel';
 
-    await query(
+    await db.query(
       `INSERT INTO subscriptions (
          user_id, tier, status, processor,
          processor_subscription_id, processor_customer_id,
@@ -364,29 +389,28 @@ export const premiumService = {
       ],
     );
 
-    await syncUserEntitlements(event.userId, tier, true, periodEnd);
+    await syncUserEntitlements(event.userId, tier, true, periodEnd, db);
 
     // Referral commission — record only; never send money / call payout rails.
-    try {
+    // After commit when inside the webhook transaction.
+    const paidUserId = event.userId;
+    const amount = this.extractPaymentAmount(event.raw);
+    await runReferralHook(tx, 'paid-upgrade', async () => {
       const { referralService } = await import('./referral.service');
-      await referralService.onPaidUpgrade(
-        event.userId,
-        this.extractPaymentAmount(event.raw),
-      );
-    } catch (err) {
-      console.error('[premium] referral paid-upgrade hook failed', err);
-    }
+      await referralService.onPaidUpgrade(paidUserId, amount);
+    });
 
     return { ok: true, userId: event.userId, tier, periodEnd };
   },
 
-  async renewFromWebhook(event: PaymentWebhookEvent) {
+  async renewFromWebhook(event: PaymentWebhookEvent, tx?: WebhookTx) {
+    const db: Queryable = tx?.db ?? pool;
     if (!event.userId) return { ok: false, reason: 'missing_user_id' };
 
     const periodEnd =
       event.periodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    const existing = await query(
+    const existing = await db.query(
       `SELECT tier FROM subscriptions
        WHERE user_id = $1 AND status = 'active'
        ORDER BY created_at DESC LIMIT 1`,
@@ -395,7 +419,7 @@ export const premiumService = {
 
     const tier = (existing.rows[0]?.tier || tierFromPassthrough(event.raw)) as PremiumTier;
 
-    await query(
+    await db.query(
       `UPDATE subscriptions
        SET current_period_end = $2,
            processor_subscription_id = COALESCE($3, processor_subscription_id),
@@ -405,28 +429,26 @@ export const premiumService = {
       [event.userId, periodEnd, event.subscriptionId, JSON.stringify(event.raw)],
     );
 
-    await syncUserEntitlements(event.userId, tier, true, periodEnd);
+    await syncUserEntitlements(event.userId, tier, true, periodEnd, db);
 
-    try {
+    const renewUserId = event.userId;
+    const renewAmount = this.extractPaymentAmount(event.raw);
+    await runReferralHook(tx, 'renew', async () => {
       const { referralService } = await import('./referral.service');
-      await referralService.onPaidUpgrade(
-        event.userId,
-        this.extractPaymentAmount(event.raw),
-      );
-    } catch (err) {
-      console.error('[premium] referral renew hook failed', err);
-    }
+      await referralService.onPaidUpgrade(renewUserId, renewAmount);
+    });
 
     return { ok: true, userId: event.userId, tier, periodEnd };
   },
 
-  async deactivateFromWebhook(event: PaymentWebhookEvent) {
+  async deactivateFromWebhook(event: PaymentWebhookEvent, tx?: WebhookTx) {
+    const db: Queryable = tx?.db ?? pool;
     if (!event.userId) return { ok: false, reason: 'missing_user_id' };
 
     // Never strip always-Premium owner accounts.
-    const nameRow = await query(`SELECT name FROM users WHERE id = $1`, [event.userId]);
+    const nameRow = await db.query(`SELECT name FROM users WHERE id = $1`, [event.userId]);
     if (isAlwaysPremiumName(nameRow.rows[0]?.name)) {
-      await query(
+      await db.query(
         `UPDATE subscriptions
          SET status = 'expired', updated_at = NOW()
          WHERE user_id = $1 AND status = 'active'`,
@@ -435,14 +457,14 @@ export const premiumService = {
       return { ok: true, userId: event.userId, preserved: true };
     }
 
-    await query(
+    await db.query(
       `UPDATE subscriptions
        SET status = 'expired', updated_at = NOW()
        WHERE user_id = $1 AND status = 'active'`,
       [event.userId],
     );
 
-    await syncUserEntitlements(event.userId, 'free', false, null);
+    await syncUserEntitlements(event.userId, 'free', false, null, db);
     return { ok: true, userId: event.userId };
   },
 
@@ -486,40 +508,69 @@ export const premiumService = {
     };
 
     // Replay guard: a captured postback URL replayed later does nothing.
-    // One row per (processor, saleID, event, transaction); claimed before any
-    // write and released again if applying fails, so Verotel's retry still works.
+    // One row per (processor, saleID, event, transaction). The claim and the
+    // Premium writes are ONE transaction: if anything fails or the process
+    // dies before COMMIT, neither the claim nor the writes persist, so
+    // Verotel's retry applies normally. A concurrent duplicate blocks on the
+    // unique key until the first commits (then it is a duplicate) or rolls
+    // back (then it applies).
     const saleId = String(raw.saleID || '').trim();
     if (!saleId) return { ok: false, reason: 'missing_sale_id' };
     const transactionKey = String(raw.transactionID || raw.nextChargeOn || raw.expiresOn || '').trim();
-    const claim = await query(
-      `INSERT INTO billing_postback_events (processor, sale_id, event, transaction_key)
-       VALUES ('verotel', $1, $2, $3)
-       ON CONFLICT ON CONSTRAINT billing_postback_events_once DO NOTHING
-       RETURNING id`,
-      [saleId, eventName || 'unknown', transactionKey],
-    );
-    if (claim.rows.length === 0) {
-      return { ok: true, duplicate: true, eventType: event.eventType };
-    }
+    const client = await pool.connect();
+    // A dropped connection mid-transaction must not crash the process: the
+    // pending query rejects, we roll back (nothing committed) and discard it.
+    let broken: Error | undefined;
+    const onClientError = (err: Error) => {
+      broken = err;
+      console.error('[premium] webhook DB connection lost:', err.message);
+    };
+    client.on('error', onClientError);
+    const tx: WebhookTx = { db: client, afterCommit: [] };
+    let result: Record<string, unknown>;
     try {
-      return await this.applyVerotelEventOnce(eventName, event);
+      await client.query('BEGIN');
+      const claim = await client.query(
+        `INSERT INTO billing_postback_events (processor, sale_id, event, transaction_key)
+         VALUES ('verotel', $1, $2, $3)
+         ON CONFLICT ON CONSTRAINT billing_postback_events_once DO NOTHING
+         RETURNING id`,
+        [saleId, eventName || 'unknown', transactionKey],
+      );
+      if (claim.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return { ok: true, duplicate: true, eventType: event.eventType };
+      }
+      result = await this.applyVerotelEventOnce(eventName, event, tx);
+      await client.query('COMMIT');
     } catch (err) {
-      await query(`DELETE FROM billing_postback_events WHERE id = $1`, [claim.rows[0].id]).catch(() => undefined);
+      if (!broken) await client.query('ROLLBACK').catch(() => undefined);
+      broken = broken ?? (err instanceof Error ? err : new Error(String(err)));
       throw err;
+    } finally {
+      client.removeListener('error', onClientError);
+      // Discard the connection after any failure so a half-open session is never reused.
+      client.release(broken);
     }
+    for (const fn of tx.afterCommit) await fn();
+    return result;
   },
 
-  async applyVerotelEventOnce(eventName: string, event: PaymentWebhookEvent) {
+  async applyVerotelEventOnce(
+    eventName: string,
+    event: PaymentWebhookEvent,
+    tx?: WebhookTx,
+  ): Promise<Record<string, unknown>> {
     switch (eventName) {
       case 'initial':
-        return this.activateFromWebhook(event);
+        return this.activateFromWebhook(event, tx);
       case 'rebill':
       case 'extend':
-        return this.renewFromWebhook(event);
+        return this.renewFromWebhook(event, tx);
       case 'expiry':
       case 'credit':
       case 'chargeback':
-        return this.deactivateFromWebhook(event);
+        return this.deactivateFromWebhook(event, tx);
       // cancel only stops future rebills: Premium runs to the end of the paid
       // period, and Verotel sends "expiry" when it actually ends.
       default:

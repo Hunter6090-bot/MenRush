@@ -53,6 +53,7 @@ async function main() {
   const port = (server.address() as { port: number }).port;
 
   const id = randomUUID();
+  const extraUsers: string[] = [];
   await query(
     `INSERT INTO users (id, email, password_hash, name, age, is_premium, premium_tier)
      VALUES ($1, $2, 'x', 'PW Member', 30, FALSE, 'free')`,
@@ -144,11 +145,71 @@ async function main() {
     assert.strictEqual(await subRows(), 2, 'one new subscription for sale 778');
     ok('concurrent duplicate postbacks apply once');
 
+    // ── Atomic replay guard: a failure after the claim leaves nothing behind ──
+    const id2 = randomUUID();
+    extraUsers.push(id2);
+    await query(
+      `INSERT INTO users (id, email, password_hash, name, age, is_premium, premium_tier)
+       VALUES ($1, $2, 'x', 'PW Crash', 30, FALSE, 'free')`,
+      [id2, `pw-${id2.slice(0, 8)}@test.menrush.local`],
+    );
+    const p2 = async () => (await query(`SELECT is_premium FROM users WHERE id = $1`, [id2])).rows[0].is_premium;
+    const claims = async (sale: string) =>
+      Number((await query(`SELECT COUNT(*)::int AS n FROM billing_postback_events WHERE sale_id = $1`, [sale])).rows[0].n);
+    const subs2 = async () =>
+      Number((await query(`SELECT COUNT(*)::int AS n FROM subscriptions WHERE user_id = $1`, [id2])).rows[0].n);
+    const signedQs = (p: Record<string, string>) => new URLSearchParams({ ...p, signature: sign(p) }).toString();
+    const realApply = premiumService.applyVerotelEventOnce;
+
+    // (a) Premium writes run, then the apply throws before COMMIT.
+    const crashSale = { shopID: '123', saleID: '779', custom1: id2, type: 'subscription', event: 'initial', priceAmount: '6.99', priceCurrency: 'GBP', nextChargeOn: '2026-11-12' };
+    premiumService.applyVerotelEventOnce = async function (this: any, ...args: any[]) {
+      await (realApply as any).apply(this, args); // claim + Premium writes done inside the transaction
+      throw new Error('simulated crash after the Premium writes');
+    } as any;
+    assert.strictEqual(await get(port, signedQs(crashSale)), 500, 'failed apply answers 500 so Verotel retries');
+    assert.strictEqual(await claims('779'), 0, 'no claim row left behind');
+    assert.strictEqual(await p2(), false, 'no Premium written');
+    assert.strictEqual(await subs2(), 0, 'no subscription written');
+    premiumService.applyVerotelEventOnce = realApply;
+    assert.strictEqual(await get(port, signedQs(crashSale)), 200, 'Verotel retry');
+    assert.strictEqual(await p2(), true, 'retry grants Premium');
+    assert.strictEqual(await claims('779'), 1);
+    assert.strictEqual(await subs2(), 1, 'applied once');
+    assert.strictEqual(await get(port, signedQs(crashSale)), 200);
+    assert.strictEqual(await subs2(), 1, 'a later replay is still a duplicate');
+    ok('apply fails after the claim: nothing persists, the retry applies once');
+
+    // (b) The DB session dies mid-transaction (process-death case on the server side).
+    const deathSale = { shopID: '123', saleID: '780', custom1: id2, type: 'subscription', event: 'rebill', transactionID: 't-780', amount: '6.99', currency: 'GBP', nextChargeOn: '2026-12-12' };
+    premiumService.applyVerotelEventOnce = async function (this: any, ...args: any[]) {
+      await (realApply as any).apply(this, args);
+      const tx = args[2] as { db: { query: (sql: string) => Promise<unknown> } };
+      await tx.db.query('SELECT pg_terminate_backend(pg_backend_pid())'); // connection killed before COMMIT
+      return { ok: true };
+    } as any;
+    const before = (await query(`SELECT premium_until FROM users WHERE id = $1`, [id2])).rows[0].premium_until;
+    assert.strictEqual(await get(port, signedQs(deathSale)), 500);
+    assert.strictEqual(await claims('780'), 0, 'no claim row after the session died');
+    const mid = (await query(`SELECT premium_until FROM users WHERE id = $1`, [id2])).rows[0].premium_until;
+    assert.strictEqual(new Date(mid).getTime(), new Date(before).getTime(), 'rebill not half-applied');
+    premiumService.applyVerotelEventOnce = realApply;
+    assert.strictEqual(await get(port, signedQs(deathSale)), 200, 'Verotel retry');
+    const after = (await query(`SELECT premium_until FROM users WHERE id = $1`, [id2])).rows[0].premium_until;
+    assert.strictEqual(new Date(after).toISOString(), '2026-12-12T23:59:59.000Z', 'retry applies the rebill');
+    assert.strictEqual(await claims('780'), 1);
+    ok('session dies before COMMIT: nothing persists, the retry applies once');
+
     console.log(`premium-webhook-integration: ${passed} passed`);
   } finally {
     await query(`DELETE FROM referral_commissions WHERE referee_id = $1`, [id]).catch(() => undefined);
     await query(`DELETE FROM subscriptions WHERE user_id = $1`, [id]).catch(() => undefined);
-    await query(`DELETE FROM billing_postback_events WHERE sale_id IN ('777', '778')`).catch(() => undefined);
+    await query(`DELETE FROM billing_postback_events WHERE sale_id IN ('777', '778', '779', '780')`).catch(() => undefined);
+    for (const u of extraUsers) {
+      await query(`DELETE FROM referral_commissions WHERE referee_id = $1`, [u]).catch(() => undefined);
+      await query(`DELETE FROM subscriptions WHERE user_id = $1`, [u]).catch(() => undefined);
+      await query(`DELETE FROM users WHERE id = $1`, [u]).catch(() => undefined);
+    }
     await query(`DELETE FROM users WHERE id = $1`, [id]).catch(() => undefined);
     await new Promise<void>((r) => server.close(() => r()));
     await pool.end();
