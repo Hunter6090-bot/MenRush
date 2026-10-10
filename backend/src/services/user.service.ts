@@ -958,16 +958,11 @@ export const userService = {
     reason: string,
     details?: string,
     threadId?: string,
+    messageIds?: string[],
   ) {
-    const detailParts: string[] = [];
-    if (threadId) {
-      // Machine-readable marker for SENTINEL / team inbox — keep calm user copy elsewhere.
-      detailParts.push(`thread_id=${threadId}`);
-    }
-    if (details?.trim()) {
-      detailParts.push(details.trim());
-    }
-    const storedDetails = detailParts.length ? detailParts.join('\n') : null;
+    // Free-text stays on the report for moderators only. Do not copy thread
+    // ids or other raw ids into details — those belong in the evidence snapshot.
+    const storedDetails = details?.trim() ? details.trim() : null;
 
     const result = await query(
       `INSERT INTO reports (reporter_id, reported_id, reason, details)
@@ -977,100 +972,46 @@ export const userService = {
     );
     const report = result.rows[0] as { id: string; created_at: string };
 
-    // Best-effort notify team — never fail the report submission if mail is down.
-    void this.notifyTeamOfReport(
-      reporterId,
-      reportedId,
-      reason,
-      storedDetails ?? undefined,
-      report.id,
-      threadId,
-    ).catch((err) => console.error('[reports] notify failed', err));
+    try {
+      const { snapshotReportEvidence } = await import('./report-evidence.service');
+      await snapshotReportEvidence({
+        reportId: report.id,
+        reporterId,
+        reportedId,
+        threadId,
+        messageIds,
+      });
+    } catch {
+      console.error('[reports] evidence snapshot failed');
+    }
+
+    // Owner brief only — never fail the report if mail is down.
+    void this.notifyTeamOfReport(reason).catch(() => {
+      console.error('[reports] notify failed');
+    });
 
     return report;
   },
 
-  async notifyTeamOfReport(
-    reporterId: string,
-    reportedId: string,
-    reason: string,
-    details: string | undefined,
-    reportId: string,
-    threadId?: string,
-  ) {
+  async notifyTeamOfReport(reason: string) {
     const { sendEmail } = await import('./mailer.service');
     const { getReportNotifyEmails } = await import('./team.service');
-    const {
-      buildTransactionalEmail,
-      transactionalParagraph,
-    } = await import('./transactional-email.template');
-
-    const esc = (value: string) =>
-      value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-
-    const people = await query(
-      `SELECT id, name, email FROM users WHERE id = ANY($1::uuid[])`,
-      [[reporterId, reportedId]],
-    );
-    const byId = new Map(people.rows.map((r: { id: string }) => [r.id, r]));
-    const reporter = byId.get(reporterId) as { name?: string; email?: string } | undefined;
-    const reported = byId.get(reportedId) as { name?: string; email?: string } | undefined;
+    const { buildOwnerReportBrief } = await import('./report-owner-brief');
 
     const recipients = getReportNotifyEmails();
     if (!recipients.length) return;
 
-    const subject = `[MenRush][SENTINEL] Report: ${reason} — ${reported?.name ?? reportedId}`;
-    const bodyHtml =
-      transactionalParagraph(
-        `<strong style="color:#F0E0C0;">Reason:</strong> ${esc(reason)}`,
-        true,
-      ) +
-      transactionalParagraph(
-        `<strong style="color:#F0E0C0;">Reporter:</strong> ${esc(reporter?.name ?? 'unknown')} (${esc(reporter?.email ?? reporterId)})`,
-        true,
-      ) +
-      transactionalParagraph(
-        `<strong style="color:#F0E0C0;">Reported:</strong> ${esc(reported?.name ?? 'unknown')} (${esc(reported?.email ?? reportedId)})`,
-        true,
-      ) +
-      (threadId
-        ? transactionalParagraph(
-            `<strong style="color:#F0E0C0;">Thread ID (SENTINEL):</strong> ${esc(threadId)}`,
-            true,
-          )
-        : '') +
-      (details
-        ? transactionalParagraph(
-            `<strong style="color:#F0E0C0;">Details:</strong> ${esc(details)}`,
-            true,
-          )
-        : '') +
-      transactionalParagraph(`Report id: ${esc(reportId)}`, true);
-
-    const html = buildTransactionalEmail({
-      title: 'New MenRush safety report',
-      preheader: `${reason} report needs review`,
-      headlineHtml: '<span style="color:#C4832A;">New safety report</span>',
-      subheadline: 'A member submitted a report that needs review.',
-      bodyHtml,
-      ctaUrl: 'https://menrush.com/settings',
-      ctaLabel: 'Open Settings',
-    });
-
+    const brief = buildOwnerReportBrief(reason);
     for (const to of recipients) {
       try {
         await sendEmail({
           to,
-          subject,
-          html,
-          text: `MenRush report ${reportId}: ${reason}. Thread ${threadId ?? 'n/a'}. Reporter ${reporter?.email ?? reporterId} → ${reported?.email ?? reportedId}. ${details ?? ''}`.trim(),
+          subject: brief.subject,
+          html: brief.html,
+          text: brief.text,
         });
-      } catch (err) {
-        console.error('[reports] email to', to, 'failed', err);
+      } catch {
+        console.error('[reports] email failed');
       }
     }
   },
@@ -1082,19 +1023,20 @@ export const userService = {
          r.reason,
          r.details,
          r.status,
+         r.legal_hold,
          r.created_at,
          r.resolved_at,
-         reporter.id AS reporter_id,
+         r.closed_at,
+         r.reporter_id,
          reporter.name AS reporter_name,
          reporter.email AS reporter_email,
+         r.reporter_account_deleted_at,
          r.reported_id,
          reported.name AS reported_name,
          reported.email AS reported_email,
-         -- Set when the reported member deleted their account. The report and
-         -- its details stay; reported_id / name / email are then null.
          r.reported_account_deleted_at
        FROM reports r
-       JOIN users reporter ON reporter.id = r.reporter_id
+       LEFT JOIN users reporter ON reporter.id = r.reporter_id
        LEFT JOIN users reported ON reported.id = r.reported_id
        ORDER BY
          CASE WHEN r.status = 'open' THEN 0
@@ -1104,17 +1046,59 @@ export const userService = {
        LIMIT $1`,
       [Math.min(Math.max(limit, 1), 200)],
     );
-    return result.rows;
+
+    const { listEvidenceForReports } = await import('./report-evidence.service');
+    const evidenceByReport = await listEvidenceForReports(
+      result.rows.map((row: { id: string }) => row.id),
+    );
+
+    return result.rows.map((row: {
+      reporter_name?: string | null;
+      reported_name?: string | null;
+      reporter_account_deleted_at?: string | null;
+      reported_account_deleted_at?: string | null;
+      id: string;
+    }) => ({
+      ...row,
+      reporter_name:
+        row.reporter_name ??
+        (row.reporter_account_deleted_at ? 'Deleted account' : null),
+      reported_name:
+        row.reported_name ??
+        (row.reported_account_deleted_at ? 'Deleted account' : null),
+      evidence: evidenceByReport.get(row.id) ?? [],
+    }));
   },
 
-  async updateReportStatus(reportId: string, status: 'open' | 'reviewing' | 'actioned' | 'dismissed') {
+  async updateReportStatus(
+    reportId: string,
+    status: 'open' | 'reviewing' | 'actioned' | 'dismissed',
+  ) {
     const result = await query(
       `UPDATE reports
        SET status = $2,
-           resolved_at = CASE WHEN $2 IN ('actioned', 'dismissed') THEN NOW() ELSE resolved_at END
+           resolved_at = CASE
+             WHEN $2 IN ('actioned', 'dismissed') THEN COALESCE(resolved_at, NOW())
+             ELSE resolved_at
+           END,
+           closed_at = CASE
+             WHEN $2 IN ('actioned', 'dismissed') THEN COALESCE(closed_at, NOW())
+             ELSE NULL
+           END
        WHERE id = $1
-       RETURNING id, status, resolved_at`,
+       RETURNING id, status, resolved_at, closed_at, legal_hold, reporter_id, reporter_account_deleted_at`,
       [reportId, status],
+    );
+    return result.rows[0] ?? null;
+  },
+
+  async updateReportLegalHold(reportId: string, legalHold: boolean) {
+    const result = await query(
+      `UPDATE reports
+       SET legal_hold = $2
+       WHERE id = $1
+       RETURNING id, status, resolved_at, closed_at, legal_hold, reporter_id, reporter_account_deleted_at`,
+      [reportId, legalHold],
     );
     return result.rows[0] ?? null;
   },

@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Report evidence snapshot + reporter anonymise + gated purge | this branch `cursor/report-evidence-retention-b67e` | — | Cursor cloud — follow-up to merged #381: snapshot reported messages/media onto `report_evidence` at create (chats still cascade); reporter delete nulls id + Deleted account marker except open/legal_hold; owner brief is reason-only (no ids/details); purge behind `REPORT_PURGE_ENABLED` (off), `REPORT_RETENTION_MONTHS` default 12, skips legal_hold; mig 084 + lock_timeout. Draft PR. Do not merge. Do not turn the flag on. |
 | 2FA pending QC P2 (prune, totp step, generic 401) | this branch `cursor/2fa-pending-qc-p2-bcd2` | — | Cursor cloud — follow-up to merged #408: prune expired `two_factor_pending_used` on consume; claim last used TOTP step so one code cannot complete two pending tokens; `/2fa/verify` 401 is always `Invalid code or token`. Left `080_two_factor_pending_used.sql` named as-is (runner records the full filename). Quiet PR. Do not merge until CI green. |
 | 2FA pending single-use + session nbf | merged `#408` on main (`b8e7f6b`) | — | Cursor cloud — consume pending jti atomically after a successful 2FA code; enforce nbf on session tokens (missing nbf still valid). |
 | Auth token hardening (session-only verification) | merged `#407` on main (`72afc4d`) | — | Cursor cloud — session verify allow-list; raw JWT_SECRET for HMAC; 2FA completion still accepts pending. |

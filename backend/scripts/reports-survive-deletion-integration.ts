@@ -16,7 +16,9 @@ if (!process.env.DATABASE_URL) {
 process.env.JWT_SECRET ||= 'reports-survive-deletion-integration-secret';
 const MOD_EMAIL = `rsd-mod-${randomUUID().slice(0, 8)}@test.menrush.local`;
 process.env.TEAM_EMAILS = MOD_EMAIL;
+delete process.env.REPORT_PURGE_ENABLED;
 delete process.env.REPORT_RETENTION_PURGE_ENABLED;
+delete process.env.REPORT_RETENTION_MONTHS;
 delete process.env.REPORT_RETENTION_MONTHS_AFTER_CLOSE;
 
 async function main() {
@@ -108,17 +110,19 @@ async function main() {
     const seen = asMod.body.reports?.find((r) => r.id === reportId);
     assert.ok(seen, 'moderator sees the report');
     assert.equal(seen.reported_id, null);
-    assert.equal(seen.reported_name, null);
+    assert.equal(seen.reported_name, 'Deleted account');
     assert.equal(seen.reported_email, null);
     assert.ok(seen.reported_account_deleted_at, 'moderator sees the account was deleted');
     assert.equal(seen.details, 'thread_id=t-1\nsent threats');
 
     // ── Closed-report purge: config + behaviour ──
     assert.equal(reportRetentionMonthsAfterClose({}), 12, 'default 12 months');
-    assert.equal(reportRetentionMonthsAfterClose({ REPORT_RETENTION_MONTHS_AFTER_CLOSE: '18' }), 18);
+    assert.equal(reportRetentionMonthsAfterClose({ REPORT_RETENTION_MONTHS: '18' }), 18);
+    assert.equal(reportRetentionMonthsAfterClose({ REPORT_RETENTION_MONTHS_AFTER_CLOSE: '9' }), 9);
     assert.equal(reportRetentionMonthsAfterClose({ REPORT_RETENTION_MONTHS_AFTER_CLOSE: '0' }), 12, 'bad value -> default');
     assert.equal(reportRetentionMonthsAfterClose({ REPORT_RETENTION_MONTHS_AFTER_CLOSE: 'abc' }), 12);
     assert.equal(reportRetentionPurgeEnabled({}), false, 'purge job off by default');
+    assert.equal(reportRetentionPurgeEnabled({ REPORT_PURGE_ENABLED: 'true' }), true);
     assert.equal(reportRetentionPurgeEnabled({ REPORT_RETENTION_PURGE_ENABLED: 'true' }), true);
 
     const target = await makeUser('RSD Target');

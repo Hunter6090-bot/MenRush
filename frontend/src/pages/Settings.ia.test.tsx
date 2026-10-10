@@ -302,6 +302,41 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     expect(mocks.navigate).toHaveBeenCalledWith('/login');
   });
 
+  it('shows Deleted account when the reporter or reported member is gone', async () => {
+    mocks.getTeamStatus.mockResolvedValue({
+      data: { is_team: true },
+    });
+    mocks.listReports.mockResolvedValue({
+      data: {
+        reports: [
+          {
+            id: 'rep-deleted',
+            reason: 'spam',
+            status: 'actioned',
+            created_at: '2026-09-20T10:00:00Z',
+            reporter_name: 'Deleted account',
+            reporter_account_deleted_at: '2026-09-21T10:00:00Z',
+            reported_name: 'Deleted account',
+            reported_account_deleted_at: '2026-09-21T11:00:00Z',
+            details: 'Fixture notes for the team only',
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-reports')).toBeInTheDocument();
+      expect(screen.getByText('Deleted account → Deleted account')).toBeInTheDocument();
+      expect(screen.getByText('Fixture notes for the team only')).toBeInTheDocument();
+    });
+  });
+
   it('renders team safety reports when user is a team member', async () => {
     mocks.getTeamStatus.mockResolvedValue({
       data: { is_team: true },

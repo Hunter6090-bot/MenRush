@@ -513,8 +513,9 @@ router.get('/blocks', async (req: AuthRequest, res: Response) => {
 const ReportSchema = z.object({
   reason: z.enum(['spam', 'harassment', 'fake_profile', 'inappropriate_content', 'underage', 'other']),
   details: z.string().max(1000).optional(),
-  /** Conversation or room id for SENTINEL review — optional, free for all users. */
+  /** Conversation or room id — used only to snapshot messages onto the report. */
   thread_id: z.string().min(1).max(128).optional(),
+  message_ids: z.array(z.string().uuid()).max(50).optional(),
 });
 
 router.post('/report/:id', async (req: AuthRequest, res: Response) => {
@@ -532,6 +533,7 @@ router.post('/report/:id', async (req: AuthRequest, res: Response) => {
       parsed.data.reason,
       parsed.data.details,
       parsed.data.thread_id,
+      parsed.data.message_ids,
     );
     res.json({ reported: true, id: report.id });
   } catch (error: any) {
@@ -563,7 +565,10 @@ router.get('/reports', async (req: AuthRequest, res: Response) => {
 });
 
 const ReportStatusSchema = z.object({
-  status: z.enum(['open', 'reviewing', 'actioned', 'dismissed']),
+  status: z.enum(['open', 'reviewing', 'actioned', 'dismissed']).optional(),
+  legal_hold: z.boolean().optional(),
+}).refine((data) => data.status !== undefined || data.legal_hold !== undefined, {
+  message: 'status or legal_hold required',
 });
 
 router.patch('/reports/:id', async (req: AuthRequest, res: Response) => {
@@ -576,7 +581,13 @@ router.patch('/reports/:id', async (req: AuthRequest, res: Response) => {
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error.errors[0].message });
     }
-    const updated = await userService.updateReportStatus(req.params.id, parsed.data.status);
+    let updated = null;
+    if (parsed.data.status) {
+      updated = await userService.updateReportStatus(req.params.id, parsed.data.status);
+    }
+    if (parsed.data.legal_hold !== undefined) {
+      updated = await userService.updateReportLegalHold(req.params.id, parsed.data.legal_hold);
+    }
     if (!updated) return res.status(404).json({ error: 'Report not found' });
     res.json(updated);
   } catch (error: any) {
