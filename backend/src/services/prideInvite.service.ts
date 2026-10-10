@@ -92,7 +92,7 @@ export function buildPrideFlaggedInviteEmail(params: {
               If this email is late or you do not receive a code, reply to this message or use Support on menrush.com.
             </p>
             <p style="margin:0;font-size:11px;color:#3a2a1a;line-height:1.6;border-top:1px solid #1a1210;padding-top:20px;">
-              New Pride codes were issued only 21-31&nbsp;August&nbsp;2026 from /pride.
+              New Pride codes were issued only 21 to 31&nbsp;August&nbsp;2026 from /pride.
               18+ only. Bronze Apps UK Limited (trading as MenRush).
             </p>
           </td>
@@ -123,7 +123,7 @@ The bargain:
 
 If this email is late or missing, reply or use Support.
 
-New Pride codes issued only 21-31 August 2026 from /pride. 18+.
+New Pride codes issued only 21 to 31 August 2026 from /pride. 18+.
 Bronze Apps UK Limited (trading as MenRush).`;
 
   return { subject, html, text };

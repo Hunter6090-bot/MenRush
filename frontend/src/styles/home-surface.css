@@ -1,10 +1,12 @@
 /*
- * Public homepage surface. The homepage is always the dark brand surface
- * (night photo and gradient), whatever the member's light or dark setting.
- * Re-declare the dark tokens here so text stays readable (>= 4.5:1) when
- * <html> is in light mode.
+ * Dark brand surfaces on public pages. The homepage (night photo and
+ * gradient) and the shared public footer are always dark, whatever the
+ * member's light or dark setting. Re-declare the dark tokens here so text
+ * stays readable (>= 4.5:1) when <html> is in light mode.
+ * SiteFooter.contrast.test.ts checks these values.
  */
-.mr-home-surface {
+.mr-home-surface,
+.mr-dark-surface {
   --nn-bg: #0D0A06;
   --nn-copper: #C4832A;
   --nn-copper-bright: #E0A14A;

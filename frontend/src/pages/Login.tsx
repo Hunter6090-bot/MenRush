@@ -123,7 +123,7 @@ export const Login = () => {
     <PublicAuthShell>
       <PublicAuthHero
         title={pendingToken ? 'Enter your' : "Sign in and see who's"}
-        accent={pendingToken ? 'authenticator code.' : 'near you right now.'}
+        accent={pendingToken ? 'authenticator code.' : 'around on the map.'}
         copy={
           pendingToken
             ? `Two-factor authentication is on for ${pendingUser?.email ?? 'your account'}. Open your authenticator app and enter the current 6-digit code.`

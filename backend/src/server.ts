@@ -151,7 +151,7 @@ app.use('/api/map-feed', mapFeedRoutes);
 app.use('/api/location-privacy', locationPrivacyRoutes);
 app.use('/api/community', communityRoutes);
 
-// Waitlist signup — POSTs to /api/waitlist land here; the dripRoutes router
+// Legacy email capture: POSTs to /api/waitlist land here; the dripRoutes router
 // handles the rest (unsubscribe + admin endpoints). New signups get the
 // welcome email immediately when possible; the batch worker remains the
 // fallback/retry path for anything that fails or later drip steps.
@@ -172,15 +172,14 @@ app.post('/api/waitlist', async (req, res) => {
     } else if (!welcomeAlreadySent && isWaitlistEmailPaused()) {
       console.log('[drip] PAUSED — welcome held for', result.email);
     }
-    const paused = isWaitlistEmailPaused();
+    // There is no waitlist any more: MenRush is open. Keep the reply strictly
+    // true and point people at sign-up (guarded by frontend/src/test/retiredWaitlistPaths.test.ts).
     return res.json({
       success: true,
       already_subscribed: result.alreadySubscribed,
       message: result.alreadySubscribed
-        ? "You're already on the list. Check your inbox for your invite if you haven't used it yet."
-        : paused
-          ? "You're on the list."
-          : "You're on the list! Check your email for a link to join.",
+        ? 'We already have this email. MenRush is open now, so you can sign up free at menrush.com.'
+        : 'Thanks. MenRush is open now, so you can sign up free at menrush.com.',
     });
   } catch (err) {
     console.error('Waitlist insert error:', err);
