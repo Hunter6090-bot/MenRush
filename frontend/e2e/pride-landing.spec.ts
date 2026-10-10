@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { guardAgainstSideEffects } from './support/network-guard';
 
 test.describe('Pride promotion landing', () => {
-  test('/pride claim-only face + Terms apply (no conditions block, no Brighton)', async ({
+  test('/pride says the offer closed, no claim form, code holders sent to register', async ({
     page,
   }) => {
     const network = await guardAgainstSideEffects(page);
@@ -12,34 +12,31 @@ test.describe('Pride promotion landing', () => {
     await expect(page.getByTestId('brand-mark').first()).toBeVisible();
 
     const headline = page.getByTestId('pride-headline-lock');
-    await expect(headline).toContainText(/3 months/i);
-    await expect(headline).toContainText(/Premium/i);
-    await expect(headline).toContainText(/from the day you join/i);
+    await expect(headline).toHaveText(/Our Pride offer\s+closed\s+on 31 August/i);
+    await expect(headline).not.toContainText(/3 months/i);
+    await expect(headline).not.toContainText(/Premium/i);
+    await expect(headline).not.toContainText(/from the day you join/i);
     await expect(headline).not.toContainText(/launch/i);
-    await expect(headline).not.toContainText(/Claim with your email/i);
-    await expect(headline).not.toContainText(/closed beta/i);
-    await expect(headline).not.toContainText(/Path 1/i);
-    await expect(headline).not.toContainText(/Path 2/i);
-    await expect(headline).not.toContainText(/PRIDE 3MONTH FREE/i);
-    await expect(headline).not.toContainText(/public code/i);
-    await expect(headline).not.toContainText(/Nearby|Rooms|Matches/i);
+    await expect(page.getByText(/from the day you join/i)).toHaveCount(0);
 
     await expect(page.getByText(/PRIDE PROMOTION/i)).toBeVisible();
 
+    // No claim form or claim CTA for new visitors
     await expect(page.getByTestId('pride-invite-form')).toHaveCount(0);
-    await expect(page.getByTestId('pride-claim-cta')).toBeVisible();
-    await expect(page.getByTestId('pride-claim-cta')).toHaveText(/Claim Pride code/i);
-    await expect(page.getByText(/Resend my Pride code/i)).toHaveCount(0);
+    await expect(page.getByTestId('pride-claim-cta')).toHaveCount(0);
+    await expect(page.getByTestId('pride-invite-email')).toHaveCount(0);
+    await expect(page.getByText(/Email my Pride code|Claim Pride code|Resend my Pride code/i)).toHaveCount(0);
 
-    // Grant disclaimer next to the form / CTA (must not imply submit = Premium)
-    const bargain = page.getByTestId('pride-invite-bargain');
-    await expect(bargain).toBeVisible();
-    await expect(bargain).toContainText(/Submitting the form sends the invite/i);
-    await expect(bargain).toContainText(/It is not the grant/i);
-    await expect(bargain).toContainText(/Enter the code at register/i);
-    await expect(bargain).not.toContainText(/before launch/i);
-    await expect(bargain).not.toContainText(/PRIDE 3MONTH FREE/i);
-    await expect(bargain).not.toContainText(/Brighton/i);
+    await expect(page.getByTestId('pride-closed-note')).toHaveText('New Pride codes are no longer available.');
+    const redeem = page.getByTestId('pride-redeem-note');
+    await expect(redeem).toHaveText(
+      'Already have a Pride code from your email? Enter it at register with that same email.',
+    );
+    await expect(redeem).toHaveCSS('font-size', '15px');
+    const cta = page.getByTestId('pride-register-cta');
+    await expect(cta).toHaveAttribute('href', '/register');
+    const box = await cta.boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
 
     // Parade photo under night/copper wash (claim face, not brochure)
     const bg = page.getByTestId('pride-bg-photo');
@@ -51,15 +48,6 @@ test.describe('Pride promotion landing', () => {
     await expect(page.getByTestId('pride-public-redeem-note')).toHaveCount(0);
     await expect(page.getByText(/PRIDE 3MONTH FREE/i)).toHaveCount(0);
     await expect(page.getByText(/Already have the printed public code/i)).toHaveCount(0);
-
-    await page.getByTestId('pride-claim-cta').click();
-    await expect(page.getByTestId('pride-invite-form')).toBeVisible();
-    await expect(page.getByTestId('pride-invite-adult')).toBeVisible();
-    await expect(page.getByTestId('pride-invite-email')).toBeVisible();
-    await expect(page.getByTestId('pride-invite-submit')).toContainText(/Email my Pride code/i);
-    await expect(page.getByText(/Resend my Pride code/i)).toHaveCount(0);
-    await expect(page.getByText(/I confirm I am 18 or over/i)).toBeVisible();
-    await expect(page.getByTestId('pride-invite-bargain')).toBeVisible();
 
     // No Path 2 card / second gold CTA
     await expect(page.getByTestId('pride-promo-code')).toHaveCount(0);
@@ -105,8 +93,8 @@ test.describe('Pride promotion landing', () => {
     await expect(page.getByText(/Path 1/i)).toHaveCount(0);
     await expect(page.getByText(/Path 2/i)).toHaveCount(0);
 
-    // Only one gold primary CTA on the page (Claim / Email my Pride code)
-    await expect(page.getByTestId('pride-claim-cta').or(page.getByTestId('pride-invite-submit'))).toHaveCount(1);
+    // Only one gold primary CTA on the page (Create your account)
+    await expect(page.getByTestId('pride-register-cta')).toHaveCount(1);
 
     expect(network.expectNoSideEffects()).toEqual([]);
   });

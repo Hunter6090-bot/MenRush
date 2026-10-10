@@ -25,7 +25,7 @@ const PRIDE_WELCOME_TEMPLATE_KEY = 'mr-pride-invite-2026';
 
 /**
  * Email body for Pride-flagged MENRUSH invites from /pride.
- * One code = closed beta + booked 3 months Premium from launch.
+ * One code = 3 months Premium from the day the holder registers with it.
  */
 export function buildPrideFlaggedInviteEmail(params: {
   to: string;
@@ -58,7 +58,7 @@ export function buildPrideFlaggedInviteEmail(params: {
               You claimed this from menrush.com/pride. This one code is your
               <strong style="color:#8a7a6a;">invite</strong>
               and gives you <strong style="color:#8a7a6a;">3 months of Premium</strong>.
-              Enter it at register on the same email. Your 3 months start the day you register.
+              Your 3 months start the day you register.
             </p>
             <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
               <tr>
@@ -71,27 +71,25 @@ export function buildPrideFlaggedInviteEmail(params: {
             <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
               <tr>
                 <td style="border:1px solid #2a2010;padding:14px 18px;border-radius:4px;">
-                  <p style="margin:0;font-size:13px;color:#5a4a3a;line-height:1.6;">
+                  <p style="margin:0;font-size:15px;color:#5a4a3a;line-height:1.6;">
                     <strong style="color:#C4832A;">Create your account with this same email</strong>
-                    (<strong style="color:#8a7a6a;">${to}</strong>).
-                    Enter this code at
+                    (<strong style="color:#8a7a6a;">${to}</strong>)
+                    and enter this code at register:
                     <a href="${registerUrl}" style="color:#C4832A;">menrush.com/register</a>
-                    (link includes your invite). Entering it at register applies your Pride Premium.
+                    (the link includes your code).
                     One person gets one Pride grant.
                   </p>
                 </td>
               </tr>
             </table>
             <h2 style="margin:0 0 12px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#C4832A;font-weight:700;">The bargain</h2>
-            <ul style="margin:0 0 28px;padding-left:20px;color:#7a6a5a;font-size:14px;line-height:1.8;">
-              <li>One code unlocks two things: access, plus 3 months of Premium</li>
+            <ul style="margin:0 0 28px;padding-left:20px;color:#7a6a5a;font-size:15px;line-height:1.8;">
               <li>Premium switches on when you register with your code and runs for 3 months from that day</li>
               <li>One code per person/email</li>
               <li>Does not stack with other Premium offers</li>
             </ul>
-            <p style="margin:0 0 24px;font-size:13px;color:#5a4a3a;line-height:1.6;">
+            <p style="margin:0 0 24px;font-size:15px;color:#5a4a3a;line-height:1.6;">
               If this email is late or you do not receive a code, reply to this message or use Support on menrush.com.
-              You can resend from /pride to this same email.
             </p>
             <p style="margin:0;font-size:11px;color:#3a2a1a;line-height:1.6;border-top:1px solid #1a1210;padding-top:20px;">
               New Pride codes were issued only 21-31&nbsp;August&nbsp;2026 from /pride.
@@ -112,20 +110,18 @@ You claimed this from menrush.com/pride.
 
 YOUR CODE: ${code}
 
-This one code is your invite AND gives you 3 months of Premium. Enter it at register on the same email. Your 3 months start the day you register.
+This one code is your invite and gives you 3 months of Premium. Your 3 months start the day you register.
 
-Create your account with this same email (${to}).
-Enter the code at ${registerUrl}
-Entering it at register applies your Pride Premium.
+Create your account with this same email (${to}) and enter the code at register:
+${registerUrl}
 One person gets one Pride grant.
 
 The bargain:
-- One code unlocks two things: access, plus 3 months of Premium
 - Premium switches on when you register with your code and runs for 3 months from that day
 - One code per person/email
 - Does not stack with other Premium offers
 
-If this email is late or missing, reply or use Support. You can resend from /pride to this same email.
+If this email is late or missing, reply or use Support.
 
 New Pride codes issued only 21-31 August 2026 from /pride. 18+.
 Bronze Apps UK Limited (trading as MenRush).`;
