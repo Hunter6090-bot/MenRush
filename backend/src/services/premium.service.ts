@@ -2,6 +2,7 @@ import type { PoolClient } from 'pg';
 import pool, { query } from '../db';
 import { isInviteRequired } from './invite-code.service';
 import { isAlwaysPremiumName } from '../lib/always-premium';
+import { verifyVerotelPostback } from '../lib/verotelSignature';
 
 type Queryable = PoolClient | typeof pool;
 
@@ -16,6 +17,16 @@ export type PaymentWebhookEvent = {
   processor?: string;
   raw: Record<string, string>;
 };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Verotel dates are yyyy-mm-dd; Premium runs to the end of that day (UTC). */
+function verotelPeriodEnd(value: unknown): Date | null {
+  const s = typeof value === 'string' ? value.trim() : '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(`${s}T23:59:59Z`);
+  return Number.isFinite(d.getTime()) ? d : null;
+}
 
 export class BillingNotConfiguredError extends Error {
   constructor(message = 'Billing is not configured') {
@@ -241,6 +252,8 @@ export const premiumService = {
   /** Parse billed amount from a webhook body; fallback to list price. */
   extractPaymentAmount(raw: Record<string, string>): number {
     const keys = [
+      // Verotel: priceAmount on initial, amount on rebill.
+      'priceAmount',
       'billedAmount',
       'BilledAmount',
       'accountingAmount',
@@ -434,73 +447,58 @@ export const premiumService = {
   },
 
   /**
-   * Live checkout is disabled and no processor signature check is wired.
-   * Until that check exists, every billing callback is untrusted.
+   * Billing postback (Verotel FlexPay). `rawParams` is the exact query string
+   * or form body Verotel sent. Nothing is read or written until the Verotel
+   * signature over those bytes checks out (VEROTEL_SIGNATURE_KEY). Unsigned,
+   * badly signed, duplicate-key or unconfigured callbacks throw
+   * invalid_signature before any entitlement or payout write.
    */
-  webhookSignatureVerified(_body: Record<string, unknown>): boolean {
-    return false;
-  },
-
-  async handleWebhook(body: Record<string, unknown>) {
-    if (!this.webhookSignatureVerified(body)) {
-      const err = new Error('Billing webhook signature is not configured');
-      (err as { code?: string }).code = 'invalid_signature';
+  async handleWebhook(rawParams: string) {
+    const verified = verifyVerotelPostback(typeof rawParams === 'string' ? rawParams : '');
+    if (!verified.ok) {
+      const err = new Error(`Billing webhook rejected: ${verified.reason}`);
+      (err as { code?: string; reason?: string }).code = 'invalid_signature';
+      (err as { code?: string; reason?: string }).reason = verified.reason;
       throw err;
     }
+    return this.applyVerotelEvent(verified.params);
+  },
 
-    const raw: Record<string, string> = {};
-    for (const [key, value] of Object.entries(body)) {
-      if (typeof value === 'string') raw[key] = value;
-    }
-
-    const eventType =
-      (typeof body.eventType === 'string' && body.eventType) ||
-      (typeof body.event_type === 'string' && body.event_type) ||
-      'unknown';
-
-    const userId =
-      (typeof body['X-userId'] === 'string' && body['X-userId']) ||
-      (typeof body.userId === 'string' && body.userId) ||
-      (typeof body.custom1 === 'string' && body.custom1) ||
-      null;
-
-    const subscriptionId =
-      (typeof body.subscriptionId === 'string' && body.subscriptionId) ||
-      (typeof body.subscription_id === 'string' && body.subscription_id) ||
-      null;
-
-    const customerId =
-      (typeof body.customerId === 'string' && body.customerId) ||
-      (typeof body.consumerId === 'string' && body.consumerId) ||
-      null;
-
+  /**
+   * Apply a signature-verified Verotel postback. Verotel fields:
+   * event (initial | rebill | extend | cancel | uncancel | expiry | credit |
+   * chargeback | upgrade | downgrade), saleID, custom1 (our user id, passed
+   * through checkout), priceAmount / amount, nextChargeOn / expiresOn.
+   * Not exported to the route: only handleWebhook (after the check) calls it.
+   */
+  async applyVerotelEvent(raw: Record<string, string>) {
+    const eventName = String(raw.event || '').toLowerCase();
+    const custom1 = String(raw.custom1 || '').trim();
+    const userId = UUID_RE.test(custom1) ? custom1 : null;
     const event: PaymentWebhookEvent = {
-      eventType,
+      eventType: eventName || 'unknown',
       userId,
-      subscriptionId,
-      customerId,
-      periodEnd: null,
+      subscriptionId: raw.saleID ? String(raw.saleID) : null,
+      customerId: null,
+      periodEnd: verotelPeriodEnd(raw.nextChargeOn || raw.expiresOn),
       processor: 'verotel',
-      raw,
+      raw: { ...raw },
     };
 
-    const type = event.eventType.toLowerCase();
-
-    if (type.includes('newsale') || type.includes('new_sale')) {
-      return this.activateFromWebhook(event);
+    switch (eventName) {
+      case 'initial':
+        return this.activateFromWebhook(event);
+      case 'rebill':
+      case 'extend':
+        return this.renewFromWebhook(event);
+      case 'expiry':
+      case 'credit':
+      case 'chargeback':
+        return this.deactivateFromWebhook(event);
+      // cancel only stops future rebills: Premium runs to the end of the paid
+      // period, and Verotel sends "expiry" when it actually ends.
+      default:
+        return { ok: true, ignored: true, eventType: event.eventType };
     }
-    if (type.includes('renewal')) {
-      return this.renewFromWebhook(event);
-    }
-    if (
-      type.includes('cancel') ||
-      type.includes('expir') ||
-      type.includes('refund') ||
-      type.includes('chargeback')
-    ) {
-      return this.deactivateFromWebhook(event);
-    }
-
-    return { ok: true, ignored: true, eventType: event.eventType };
   },
 };
