@@ -50,12 +50,12 @@ import {
   adultAssuranceService,
   isAdultAssuranceRequiredAtSignup,
 } from './adult-assurance.service';
+import { resolveJwtSecret } from '../lib/jwtSecret';
 
 const EMAIL_NOT_CONFIRMED_MESSAGE =
   'Confirm your email before signing in. Check your inbox for the link.';
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
+const JWT_SECRET = resolveJwtSecret();
 const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 const HANDOFF_TOKEN_TTL_SECONDS = 30 * 60;
 const TWO_FACTOR_PENDING_TTL_SECONDS = 5 * 60;
@@ -63,7 +63,11 @@ const TWO_FACTOR_PENDING_TTL_SECONDS = 5 * 60;
 type TokenPayload = {
   userId: string;
   exp: number;
+  type?: 'session';
 };
+
+/** Claims that mark a token as something other than a login session. */
+const PURPOSE_CLAIM_KEYS = ['type', 'typ', 'purpose', 'scope', 'token_type', 'tokenType'] as const;
 
 type HandoffTokenPayload = {
   sessionId: string;
@@ -93,9 +97,39 @@ const base64UrlDecode = (input: string): Buffer => {
   return Buffer.from(padded, 'base64');
 };
 
+const isSessionPurposeValue = (value: unknown): boolean =>
+  value === undefined || value === 'session';
+
+const assertSessionPayload = (payload: unknown): TokenPayload => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('Invalid token');
+  }
+  const record = payload as Record<string, unknown>;
+  if (typeof record.userId !== 'string' || record.userId.length === 0) {
+    throw new Error('Invalid token');
+  }
+  if (typeof record.exp !== 'number') {
+    throw new Error('Invalid token');
+  }
+  if (record.exp < Math.floor(Date.now() / 1000)) {
+    throw new Error('Token expired');
+  }
+  for (const key of PURPOSE_CLAIM_KEYS) {
+    if (!isSessionPurposeValue(record[key])) {
+      throw new Error('Invalid token');
+    }
+  }
+  return {
+    userId: record.userId,
+    exp: record.exp,
+    ...(record.type === 'session' ? { type: 'session' as const } : {}),
+  };
+};
+
 const signToken = (userId: string): string => {
   const payload: TokenPayload = {
     userId,
+    type: 'session',
     exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS,
   };
   const payloadJson = JSON.stringify(payload);
@@ -128,12 +162,7 @@ const verifyTokenInternal = (token: string): TokenPayload => {
     throw new Error('Invalid token');
   }
 
-  const payload = JSON.parse(payloadJson) as TokenPayload;
-  if (payload.exp < Math.floor(Date.now() / 1000)) {
-    throw new Error('Token expired');
-  }
-
-  return payload;
+  return assertSessionPayload(JSON.parse(payloadJson));
 };
 
 export const authService = {

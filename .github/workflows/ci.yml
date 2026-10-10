@@ -71,6 +71,8 @@ jobs:
         run: npm run test:edge-proxy-secret
       - name: Auth and signup rate limits (loose per IP, per-account caps)
         run: npm run test:auth-rate-limits
+      - name: Auth token hardening (session-only verification)
+        run: npm run test:auth-token-hardening
       - name: Veriff checks
         run: npm run test:veriff
       - name: Hot-spot counts stay rounded for Free (no exact number)
@@ -190,6 +192,8 @@ jobs:
         run: npm run test:hot-spot-ghost-live-count
       - name: Pride code holders can register (real PG)
         run: npm run test:pride-invite-register-integration
+      - name: Auth token hardening on protected routes (real PG)
+        run: npm run test:auth-token-hardening-integration
       - name: Referrals grant 1 month Premium every 3 (real PG)
         run: npm run test:referral-grant-integration
       - name: Referral checks (real PG)
