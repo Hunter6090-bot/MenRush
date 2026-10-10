@@ -41,6 +41,7 @@
     "test:travel": "ts-node scripts/travel-checks.ts",
     "test:travel-cache-headers": "ts-node scripts/travel-cache-headers-checks.ts",
     "test:travel-integration": "ts-node scripts/travel-integration.ts",
+    "test:travel-account-deletion-integration": "ts-node scripts/travel-account-deletion-integration.ts",
     "test:my-photos": "ts-node scripts/my-photos-checks.ts",
     "test:map-photo-hosting": "ts-node scripts/map-photo-hosting-checks.ts",
     "test:chat-attach-my-photos": "ts-node scripts/chat-attach-my-photos-checks.ts",
