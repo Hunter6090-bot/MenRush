@@ -13,6 +13,7 @@ import {
 } from '../types/validation';
 import { PremiumRequiredError } from '../services/premium.service';
 import { getUploadSubdir } from '../lib/uploads-root';
+import { viewerStoredLocation } from '../lib/viewerOrigin';
 
 const router = Router();
 
@@ -81,11 +82,14 @@ router.post('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// GET / — list user's rooms (+ optionally nearby public rooms via ?lat=&lng=&radius=)
+// GET /: the user's rooms, plus nearby public rooms with ?nearby=1&radius=, around
+// the viewer's stored location; coordinates never travel in the URL)
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    const lat = req.query.lat !== undefined ? parseFloat(req.query.lat as string) : undefined;
-    const lng = req.query.lng !== undefined ? parseFloat(req.query.lng as string) : undefined;
+    const wantsNearby = req.query.nearby === '1' || req.query.nearby === 'true';
+    const origin = wantsNearby ? await viewerStoredLocation(req.userId!) : null;
+    const lat = origin?.lat;
+    const lng = origin?.lng;
     const radius = req.query.radius !== undefined ? parseFloat(req.query.radius as string) : undefined;
     const limit = req.query.limit !== undefined ? parseInt(req.query.limit as string, 10) : undefined;
 

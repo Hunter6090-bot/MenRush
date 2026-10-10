@@ -232,13 +232,8 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
       discoveryScope,
     };
 
-    const queryLat = typeof req.query.lat === 'string' ? Number.parseFloat(req.query.lat) : NaN;
-    const queryLng = typeof req.query.lng === 'string' ? Number.parseFloat(req.query.lng) : NaN;
-    const clientLocation =
-      Number.isFinite(queryLat) && Number.isFinite(queryLng)
-        ? { lat: queryLat, lng: queryLng }
-        : undefined;
-
+    // Origin is the stored location only (POST /api/users/location sets it,
+    // through the jump gate). Coordinates in the URL are stripped upstream and never read.
     const pageNum = page ? Math.max(1, Number.parseInt(String(page), 10) || 1) : 1;
     const limitNum = limit
       ? Math.min(Math.max(1, Number.parseInt(String(limit), 10) || 60), 200)
@@ -251,7 +246,7 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
       req.userId!,
       discoveryScope === 'uk_ie' ? 0 : Math.min(Math.max(requestedRadius, 0.8), 161),
       filters,
-      clientLocation,
+      undefined,
       { page: pageNum, limit: limitNum, offset: offsetNum },
     );
 
@@ -278,14 +273,8 @@ router.get('/profile/:id', verifiedMiddleware, async (req: AuthRequest, res: Res
   try {
     const viewerId = req.userId!;
     const targetId = req.params.id;
-    const queryLat = typeof req.query.lat === 'string' ? Number.parseFloat(req.query.lat) : NaN;
-    const queryLng = typeof req.query.lng === 'string' ? Number.parseFloat(req.query.lng) : NaN;
-    const clientLocation =
-      Number.isFinite(queryLat) && Number.isFinite(queryLng)
-        ? { lat: queryLat, lng: queryLng }
-        : undefined;
-
-    const user = await userService.getPublicProfile(viewerId, targetId, clientLocation);
+    // Distance uses the viewer's stored location (set by POST /api/users/location).
+    const user = await userService.getPublicProfile(viewerId, targetId);
     if (!user) {
       return res.status(404).json({ error: 'User not found', code: 'user_not_found' });
     }
@@ -419,9 +408,14 @@ router.get('/likes/sent', verifiedMiddleware, async (req: AuthRequest, res: Resp
 router.post('/location', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const data = LocationSchema.parse(req.body);
-    await userService.updateLocation(req.userId!, data.lat, data.lng);
+    const accepted = await userService.updateLocation(req.userId!, data.lat, data.lng);
     // Privacy: location updates power Nearby distance only.
     // Do not fan out continuous live pins to matches — chat uses one-shot location messages.
+    if (!accepted) {
+      // Jump gate refused the fix: nothing stored, the last location stands.
+      // 200 so old app builds treat it like a skipped update, not an error.
+      return res.json({ success: false, code: 'location_not_accepted' });
+    }
     res.json({ success: true });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
