@@ -3,15 +3,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { EventDTO, eventsAPI } from '../api/client';
 import { Layout } from '../components/Layout';
 import { useAuthStore, useLocationStore } from '../hooks/store';
+import { eventCheckInNotice } from '../lib/eventCheckIn';
 import { isBetaPremiumFree } from '../lib/betaInvite';
 import { mondayFirstLeadingBlanks, MONDAY_FIRST_WEEKDAY_LABELS } from '../lib/calendarGrid';
 import { eventTicketUrl } from '../lib/eventTickets';
+import { eventWhenLabel } from '../lib/eventWhen';
 import { resolveLocaleTag } from '../lib/localeUnits';
 
 const CATEGORIES = ['All', 'Nightclub', 'Drag', 'Live', 'Bar', 'Pride', 'Fetish'] as const;
 
-/** Matches backend ACTIVE_CHECKIN_TTL_HOURS — venue pins expire after this many hours. */
-const CHECKIN_TTL_HOURS = 4;
 
 function eventCategory(ev: EventDTO): string {
   const name = `${ev.name} ${ev.description ?? ''}`.toLowerCase();
@@ -210,6 +210,11 @@ export const Events = () => {
                       <p className="text-[13px] text-[var(--cream-muted)]">
                         {ev.venue_name || 'Venue TBC'} · {ev.member_count} in
                       </p>
+                      {eventWhenLabel(ev) ? (
+                        <p className="text-[15px] text-[var(--cream-muted)]" data-testid={`event-when-${ev.id}`}>
+                          {eventWhenLabel(ev)}
+                        </p>
+                      ) : null}
                       {ev.description ? (
                         <p className="text-[13px] leading-relaxed text-[var(--cream-muted)]">{ev.description}</p>
                       ) : null}
@@ -225,7 +230,7 @@ export const Events = () => {
                             target="_blank"
                             rel="noopener noreferrer"
                             data-testid="event-tickets"
-                            className="mr-cta-gradient flex-1 rounded-full py-2 text-center text-[13px] font-bold"
+                            className="mr-cta-gradient inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full px-3 text-center text-[15px] font-bold"
                           >
                             Tickets
                           </a>
@@ -236,8 +241,8 @@ export const Events = () => {
                           data-testid="event-whos-going"
                           className={
                             ticketUrl
-                              ? 'flex-1 rounded-full border border-[var(--border-default)] py-2 text-[13px] font-bold text-[var(--cream-muted)] hover:border-[var(--copper)]/40 hover:text-[#E0A14A]'
-                              : 'mr-cta-gradient flex-1 rounded-full py-2 text-[13px] font-bold'
+                              ? 'inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full border border-[var(--border-default)] px-3 text-[15px] font-bold text-[var(--cream)] hover:border-[var(--copper)]/40 hover:text-[var(--nn-accent-text)]'
+                              : 'mr-cta-gradient inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full px-3 text-[15px] font-bold'
                           }
                         >
                           Who&apos;s going
@@ -252,18 +257,14 @@ export const Events = () => {
                             void eventsAPI
                               .checkIn(ev.id)
                               .then((res) => {
-                                setCheckInNotice(
-                                  res.data.spot
-                                    ? `Checked in at ${ev.venue_name || ev.name}. Pin stays on the map for ${CHECKIN_TTL_HOURS} hours.`
-                                    : `You're in Ghost or hidden, so no pin was added at ${ev.venue_name || ev.name}.`,
-                                );
+                                setCheckInNotice(eventCheckInNotice(res.data, ev.venue_name || ev.name));
                               })
                               .catch((err: { response?: { data?: { error?: string } } }) => {
                                 setCheckInNotice(err.response?.data?.error || 'Check-in failed.');
                               })
                               .finally(() => setCheckingInId(null));
                           }}
-                          className="flex-1 rounded-full border border-[rgba(196,131,42,0.5)] py-2 text-[13px] font-bold text-[#C4832A] hover:bg-[rgba(196,131,42,0.12)] disabled:opacity-50"
+                          className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full border border-[var(--copper)]/50 px-3 text-[15px] font-bold text-[var(--nn-accent-text)] hover:bg-[var(--copper)]/10 disabled:opacity-50"
                         >
                           {checkingInId === ev.id ? 'Checking in…' : 'Check in'}
                         </button>

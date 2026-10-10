@@ -1804,6 +1804,8 @@ export const Discover = () => {
         id: spot.id,
         name: spot.name,
         category_icon: spot.category_icon,
+        category_slug: spot.category_slug,
+        category_name: spot.category_name,
         live_count_exact: spot.live_count_exact,
         live_count: spot.live_count,
         has_active_checkins: spot.has_active_checkins,
@@ -1826,7 +1828,7 @@ export const Discover = () => {
           existing.spot.live_count_exact !== spot.live_count_exact ||
           existing.spot.live_count !== spot.live_count ||
           existing.spot.name !== spot.name ||
-          existing.spot.category_icon !== spot.category_icon ||
+          existing.spot.category_slug !== spot.category_slug ||
           labelChanged
         ) {
           existing.root.render(<HotSpotPin spot={pinData} size={52} showLabel={showLabel} />);
@@ -2293,7 +2295,7 @@ export const Discover = () => {
         </div>
         {nearbyView === 'grid' && !needsLocationGate ? (
           <details className="mb-3 shrink-0 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/70 px-4 py-2.5">
-            <summary className="cursor-pointer text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]">
+            <summary className="flex min-h-[44px] cursor-pointer items-center text-[15px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]" data-testid="discover-filters-mood-summary">
               Mood & filters
             </summary>
             <div className="mt-3 space-y-3" data-testid="discover-mood-strip">
@@ -2383,7 +2385,7 @@ export const Discover = () => {
                 data-live-count={liveCount}
                 className="mb-3 inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
               >
-                <p className="text-[13px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
+                <p className="text-[15px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
                   {loading && nearbyCount === 0 ? (
                     <span className="text-[var(--cream-muted)]">Scanning…</span>
                   ) : nearbyCount === 0 && allScope ? (
@@ -2401,7 +2403,7 @@ export const Discover = () => {
                     <>
                       <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
                       {liveCount > 0 ? (
-                        <span className="ml-1.5 font-semibold text-[#8FC773]" data-testid="nearby-live-count">
+                        <span className="ml-1.5 font-semibold text-[var(--status-online)]" data-testid="nearby-live-count">
                           · {liveCount} live
                         </span>
                       ) : nearbyCount > 0 ? (
@@ -2568,7 +2570,7 @@ export const Discover = () => {
                 data-live-count={liveCount}
                 className="inline-flex min-h-[36px] max-w-full items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
               >
-                <p className="text-[13px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
+                <p className="text-[15px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
                   {loading && nearbyCount === 0 ? (
                     <span className="text-[var(--cream-muted)]">Scanning…</span>
                   ) : nearbyCount === 0 && allScope ? (
@@ -2586,7 +2588,7 @@ export const Discover = () => {
                     <>
                       <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
                       {liveCount > 0 ? (
-                        <span className="ml-1.5 font-semibold text-[#8FC773]" data-testid="nearby-live-count">
+                        <span className="ml-1.5 font-semibold text-[var(--status-online)]" data-testid="nearby-live-count">
                           · {liveCount} live
                         </span>
                       ) : nearbyCount > 0 ? (
@@ -2634,7 +2636,7 @@ export const Discover = () => {
 
             {/* Compact filters + mood (grid view) */}
             <details className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/60 px-3 py-2">
-              <summary className="cursor-pointer text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]">
+              <summary className="flex min-h-[44px] cursor-pointer items-center text-[15px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]" data-testid="discover-filters-mood-summary">
                 Filters & mood
               </summary>
               <div className="mt-3 space-y-3">

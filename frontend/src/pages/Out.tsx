@@ -16,6 +16,9 @@ import { HotSpotSheet } from '../components/HotSpotSheet';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { spotAfterCheckToggle } from '../lib/hotSpotCounts';
 import { formatDistanceFromKm } from '../lib/localeUnits';
+import { eventMetaLine } from '../lib/eventWhen';
+import { eventCheckInNotice } from '../lib/eventCheckIn';
+import { eventTicketUrl } from '../lib/eventTickets';
 import { getDirectionsUrl } from '../lib/cruising';
 import { IconCommunity, SpotTypeIcon, spotTypeKey } from '../components/icons';
 
@@ -201,6 +204,18 @@ export function Out() {
       >
         <div className="mb-3 flex items-center justify-between gap-3">
           <h1 className="text-2xl font-extrabold text-[var(--cream)]">Out</h1>
+          {/* Board state 09: Map pill top-right opens the existing Cruise map. */}
+          <Link
+            to="/hot-spots"
+            data-testid="out-map-pill"
+            aria-label="Open the Cruise map"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-4 text-[15px] font-bold text-[var(--cream)]"
+          >
+            <span className="text-[var(--nn-accent-text)]" aria-hidden>
+              <SpotTypeIcon type="pin" size={18} />
+            </span>
+            Map
+          </Link>
         </div>
 
         <div className="mb-3 shrink-0">
@@ -365,9 +380,9 @@ function OutSpotRow({ spot, onOpen }: { spot: HotSpotDTO; onOpen: () => void }) 
             data-testid={`out-spot-open-${spot.id}`}
             aria-haspopup="dialog"
             aria-label={`${spot.name}, open details`}
-            className="block w-full truncate text-left after:absolute after:inset-0 after:rounded-2xl after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-[var(--copper)]"
+            className="flex min-h-[44px] w-full items-center text-left after:absolute after:inset-0 after:rounded-2xl after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-[var(--copper)]"
           >
-            {spot.name}
+            <span className="truncate">{spot.name}</span>
           </button>
         </h2>
         <p className="mt-0.5 truncate text-[15px] font-medium text-[var(--cream-muted)]">
@@ -391,30 +406,121 @@ function OutSpotRow({ spot, onOpen }: { spot: HotSpotDTO; onOpen: () => void }) 
   );
 }
 
+/**
+ * Out event row. Tapping it opens the same actions the Events card had before the
+ * redesign (#316): Tickets when the event has a URL, Who's going (the event room)
+ * and Check in. Nothing new; only the old Events flow, reachable from Out again.
+ */
 function OutEventRow({ event }: { event: EventDTO }) {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [checkingIn, setCheckingIn] = useState(false);
+  const [notice, setNotice] = useState('');
+  const ticketUrl = eventTicketUrl(event);
+  const meta = eventMetaLine(event);
+  const panelId = `out-event-actions-${event.id}`;
+
   return (
     <article
-      className="flex min-h-[72px] gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-3"
+      className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]"
       data-testid={`out-event-${event.id}`}
     >
-      <div
-        className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-[var(--bg-elevated)] text-[var(--nn-accent-text)]"
-        aria-hidden
+      <button
+        type="button"
+        className="flex min-h-[72px] w-full gap-3 p-3 text-left"
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-label={`${event.name}, show event actions`}
+        data-testid={`out-event-open-${event.id}`}
+        onClick={() => setOpen((v) => !v)}
       >
-        <SpotTypeIcon type="event" size={28} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <h2 className="truncate text-[15px] font-extrabold text-[var(--cream)]">{event.name}</h2>
-        <p className="mt-0.5 truncate text-[15px] font-medium text-[var(--cream-muted)]">
-          {[event.venue_name, event.starts_at].filter(Boolean).join(' · ')}
-        </p>
-      </div>
-      <span className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--copper)]/40 px-3 text-[15px] font-extrabold uppercase tracking-wide text-[var(--copper)]">
-        Event
-      </span>
+        <span
+          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-[var(--bg-elevated)] text-[var(--nn-accent-text)]"
+          aria-hidden
+        >
+          <SpotTypeIcon type="event" size={28} />
+        </span>
+        {/* Name and 'venue · date' wrap (no truncate) so the date always shows at 360px. */}
+        <span className="min-w-0 flex-1">
+          <span
+            className="block whitespace-normal break-words text-[15px] font-extrabold text-[var(--cream)]"
+            data-testid={`out-event-name-${event.id}`}
+          >
+            {event.name}
+          </span>
+          {meta ? (
+            <span
+              className="mt-0.5 block whitespace-normal break-words text-[15px] font-medium text-[var(--cream-muted)]"
+              data-testid={`out-event-meta-${event.id}`}
+            >
+              {meta}
+            </span>
+          ) : null}
+          {/* Board style: copper line type icon + small label, same as the spot rows (no pill). */}
+          <span
+            className="mt-1 flex items-center gap-1.5 text-[15px] text-[var(--cream-soft)]"
+            data-testid={`out-event-type-${event.id}`}
+          >
+            <SpotTypeIcon type="event" size={16} className="shrink-0 text-[var(--nn-accent-text)]" />
+            <span>Event</span>
+          </span>
+        </span>
+      </button>
+      {open ? (
+        <div id={panelId} className="border-t border-[var(--border-default)] p-3" data-testid={panelId}>
+          <div className="flex flex-wrap gap-2">
+            {ticketUrl ? (
+              <a
+                href={ticketUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="event-tickets"
+                className="mr-cta-gradient inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full px-4 text-[15px] font-bold"
+              >
+                Tickets
+              </a>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => navigate(`/rooms/${event.id}`)}
+              data-testid="event-whos-going"
+              className={`inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full px-4 text-[15px] font-bold ${
+                ticketUrl
+                  ? 'border border-[var(--border-default)] text-[var(--cream)]'
+                  : 'mr-cta-gradient'
+              }`}
+            >
+              Who&apos;s going
+            </button>
+            <button
+              type="button"
+              disabled={checkingIn || event.lat == null || event.lng == null}
+              data-testid={`event-checkin-${event.id}`}
+              onClick={() => {
+                setCheckingIn(true);
+                setNotice('');
+                void eventsAPI
+                  .checkIn(event.id)
+                  .then((res) => setNotice(eventCheckInNotice(res.data, event.venue_name || event.name)))
+                  .catch((err: { response?: { data?: { error?: string } } }) =>
+                    setNotice(err.response?.data?.error || 'Check-in failed.'),
+                  )
+                  .finally(() => setCheckingIn(false));
+              }}
+              className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full border border-[var(--copper)]/50 px-4 text-[15px] font-bold text-[var(--nn-accent-text)] disabled:opacity-50"
+            >
+              {checkingIn ? 'Checking in…' : 'Check in'}
+            </button>
+          </div>
+          {notice ? (
+            <p className="mt-2 text-[15px] text-[var(--cream-muted)]" role="status" data-testid="out-event-notice">
+              {notice}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </article>
   );
 }
-
 
 export default Out;
