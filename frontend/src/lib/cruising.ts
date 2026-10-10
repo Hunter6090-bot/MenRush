@@ -7,6 +7,7 @@
  * - Mapbox static thumbnail URL
  */
 import type { HotSpotDTO } from '../api/client';
+import { activeHotSpotCountLabel, isHotSpotActive } from './hotSpotCounts';
 
 export type CruisingCategory = 'woods' | 'beach' | 'layby' | 'park' | 'sauna';
 
@@ -129,16 +130,15 @@ export function mapToCruisingCategory(spot: {
  */
 export function formatLastActiveTime(spot: {
   has_active_checkins?: boolean;
-  live_count_exact?: number;
-  live_count?: number | string;
+  live_count_exact?: number | null;
+  live_count?: number | string | null;
   last_activity_at?: string | null;
 }): string {
-  if (spot.has_active_checkins || (spot.live_count_exact ?? 0) > 0) {
-    const count = spot.live_count_exact ?? spot.live_count;
-    if (typeof count === 'number' && count > 1) {
-      return `${count} checked in now`;
-    }
-    return 'Active now';
+  if (isHotSpotActive(spot)) {
+    // Server display count only (Free is rounded to 5+); never live_count_exact.
+    // Same number as the pin and sheet, including 1; 'Active now' only with no count.
+    const count = activeHotSpotCountLabel(spot);
+    return count ? `${count} checked in now` : 'Active now';
   }
 
   if (spot.last_activity_at) {

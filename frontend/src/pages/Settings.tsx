@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { NotificationSettings } from '../components/NotificationSettings';
+import { HideLocationList } from '../components/HideLocationList';
 import { TwoFactorSettings } from '../components/TwoFactorSettings';
 import { PasswordInput } from '../components/PasswordInput';
 import { authAPI, usersAPI } from '../api/client';
@@ -409,6 +410,15 @@ export const Settings = () => {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }, [location.hash, blockedLoading, blocked.length]);
+
+  useEffect(() => {
+    if (location.hash !== '#hide-location') return;
+    const el = document.getElementById('hide-location');
+    if (!el) return;
+    window.requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [location.hash]);
 
   const handleReportStatus = async (
     reportId: string,
@@ -827,23 +837,22 @@ export const Settings = () => {
               data-testid="settings-device-location"
             >
               <p className="text-[15px] font-bold text-[var(--cream)]">Device location</p>
-              <p className="mt-1 text-[13px] leading-relaxed text-[var(--cream-muted)]">
-                Needed for Nearby. Others see approximate distance only — not your exact public pin.
-                In chat you can still send a one-time location message when you choose.
+              <p className="mt-1 text-[15px] leading-relaxed text-[var(--cream-muted)]">
+                Needed for Nearby. In chat you can send a one-time location message when you choose.
               </p>
-              <p className="mt-2 text-[12px] font-semibold text-[var(--cream-muted)]">
+              <p className="mt-2 text-[15px] font-semibold text-[var(--cream-muted)]">
                 Status:{' '}
                 <span className={hasPin ? 'text-[#8FC773]' : 'text-[#E0A14A]'}>
                   {hasPin == null
                     ? '…'
                     : hasPin
-                      ? `Active — within ${formatRadiusMiles(savedRadius)}`
-                      : 'Off — invisible nearby'}
+                      ? `Active, within ${formatRadiusMiles(savedRadius)}`
+                      : 'Off, invisible nearby'}
                 </span>
               </p>
               {hasPin === false ? (
-                <p className="mt-1 text-[12px] leading-relaxed text-[#E0A14A]">
-                  Without location you cannot appear near men. We use the pin privately for distance.
+                <p className="mt-1 text-[15px] leading-relaxed text-[#E0A14A]">
+                  Without location you can&apos;t show up nearby.
                   On iPhone Safari: aA (or …) → Website Settings → Location → Allow. Also check Settings
                   → Privacy & Security → Location Services → Safari Websites.
                 </p>
@@ -866,6 +875,9 @@ export const Settings = () => {
                 {locating ? 'Locating…' : hasPin ? 'Refresh location' : 'Allow location'}
               </button>
             </section>
+            <div className="mt-3">
+              <HideLocationList />
+            </div>
           </div>
 
           {/* ── DISCOVERY ── */}
@@ -997,7 +1009,7 @@ export const Settings = () => {
                     <div>
                       <p className="text-[15px] font-bold text-[var(--cream)]">Safety reports</p>
                       <p className="mt-0.5 text-[13px] text-[var(--cream-muted)]">
-                        Team inbox — new reports also email the team.
+                        Team inbox. New reports also email the team.
                       </p>
                     </div>
                     <button
@@ -1126,8 +1138,8 @@ export const Settings = () => {
               >
                 <div>
                   <p className="text-[15px] font-bold text-[var(--cream)]">Privacy policy</p>
-                  <p className="mt-0.5 text-[13px] text-[var(--cream-muted)]">
-                    How coordinates are obfuscated and data handled.
+                  <p className="mt-0.5 text-[15px] text-[var(--cream-muted)]">
+                    How we handle your data.
                   </p>
                 </div>
                 <ChevronRight />

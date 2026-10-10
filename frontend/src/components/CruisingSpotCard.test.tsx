@@ -149,6 +149,45 @@ describe('CruisingSpotCard', () => {
     expect(onCheckIn).toHaveBeenCalledWith(checkedInSpot, false);
   });
 
+  it('Free card label uses the rounded server count, never the exact number', () => {
+    const freeBusySpot: HotSpotDTO = {
+      ...mockSpot,
+      has_active_checkins: true,
+      live_count: '5+',
+      live_count_exact: null,
+    };
+    render(<CruisingSpotCard spot={freeBusySpot} />);
+    expect(screen.getByTestId('cruising-last-active')).toHaveTextContent('5+ checked in now');
+  });
+
+  it('card reads "1 checked in now" at count 1, matching the pin and sheet', () => {
+    render(<CruisingSpotCard spot={{ ...mockSpot, has_active_checkins: true, live_count: 1, live_count_exact: null }} />);
+    const line = screen.getByTestId('cruising-last-active');
+    expect(line).toHaveTextContent('1 checked in now');
+    expect(line).not.toHaveTextContent('Active now');
+  });
+
+  it('activity line is 15px, including the signal note', () => {
+    render(<CruisingSpotCard spot={mockSpot} />);
+    const line = screen.getByTestId('cruising-last-active');
+    expect(line).toHaveClass('text-[15px]');
+    expect(line).not.toHaveClass('text-xs');
+    expect(line.innerHTML).not.toMatch(/text-\[(10|11|12|13|14)px\]/);
+  });
+
+  it('card label ignores live_count_exact even when present', () => {
+    const premiumSpot: HotSpotDTO = {
+      ...mockSpot,
+      has_active_checkins: true,
+      live_count: 3,
+      live_count_exact: 9,
+    };
+    render(<CruisingSpotCard spot={premiumSpot} />);
+    const label = screen.getByTestId('cruising-last-active');
+    expect(label).toHaveTextContent('3 checked in now');
+    expect(label.textContent ?? '').not.toContain('9');
+  });
+
   it('renders reviews button and triggers onOpenReviews', () => {
     const onOpenReviews = vi.fn();
     const ratedSpot: HotSpotDTO = {

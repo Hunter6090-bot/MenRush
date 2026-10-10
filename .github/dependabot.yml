@@ -1,0 +1,24 @@
+# Dependabot config.
+#
+# Version updates are switched off (open-pull-requests-limit: 0), so this
+# file only shapes Dependabot security updates, which stay on.
+#
+# Tailwind CSS 4 and above is ignored: Tailwind 4 drops the v3 PostCSS plugin
+# and breaks the frontend build, so it needs its own planned migration.
+# The ignore uses `versions`, not `update-types`, because security-update runs
+# do not honour `update-types` ignores. Tailwind 3.x updates still come through.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directories:
+      - "/frontend"
+      - "/backend"
+      - "/social-studio"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: "tailwindcss"
+        versions: [">=4.0.0"]
+      - dependency-name: "@tailwindcss/*"
+        versions: [">=4.0.0"]

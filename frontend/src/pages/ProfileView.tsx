@@ -15,7 +15,7 @@ import { ProfileAlbumsSection } from '../components/ProfileAlbumsSection';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { IconMatches, IconChat, IconUnmatch } from '../components/icons';
 import { formatHeight, formatWeight } from '../lib/age';
-import { formatDistanceFromKm } from '../lib/localeUnits';
+import { getDistanceLabel } from '../lib/discovery';
 import {
   matchCtaAriaLabel,
   matchCtaDisabled,
@@ -248,18 +248,8 @@ export const ProfileView = () => {
   const realPhoto = realAvatarUrl(user.photo_url);
   const coverSrc = realCover ? getPhotoUrl(realCover) : undefined;
   const photoSrc = realPhoto ? getPhotoUrl(realPhoto) : undefined;
-  const distanceKmVal =
-    user.distance_km != null && user.distance_km !== ''
-      ? parseFloat(String(user.distance_km))
-      : user.distance_label != null && user.distance_label.trim() !== ''
-        ? parseFloat(user.distance_label.replace(/[^0-9.]/g, ''))
-        : null;
-  const distLabel =
-    distanceKmVal != null && Number.isFinite(distanceKmVal)
-      ? formatDistanceFromKm(distanceKmVal)
-      : user.distance_label != null && user.distance_label.trim() !== ''
-        ? user.distance_label
-        : null;
+  // Coarse, Discretion-fuzzed label from the server. None reads "Nearby".
+  const distLabel = getDistanceLabel(user);
 
   return (
     <Layout>
@@ -350,6 +340,7 @@ export const ProfileView = () => {
                   <ChatSafetyMenu
                     peerId={user.id}
                     peerName={user.name}
+                    showHideLocation
                     onNotice={(msg, tone) => {
                       setSafetyNotice({ msg, tone: tone ?? 'success' });
                       window.setTimeout(() => setSafetyNotice(null), 4000);
@@ -366,8 +357,9 @@ export const ProfileView = () => {
               )}
               {distLabel && (
                 <DistancePill
-                  km={distanceKmVal ?? 0}
+                  km={0}
                   label={distLabel}
+                  testId="profile-distance"
                   className="bg-black/40 text-[var(--cream)]/90"
                 />
               )}

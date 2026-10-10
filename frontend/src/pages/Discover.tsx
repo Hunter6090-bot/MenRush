@@ -98,6 +98,7 @@ import {
   nearestMapPinFuzzStep,
   privateMapPointAround,
 } from '../lib/mapPinFuzz';
+import { adjustHotSpotLiveCount, isHotSpotActive } from '../lib/hotSpotCounts';
 
 /** Map panel: swipe up to hide, swipe down to show, expand for large map. */
 type MapPanelMode = 'hidden' | 'default' | 'expanded';
@@ -1042,7 +1043,7 @@ export const Discover = () => {
         saved.lat,
         saved.lng,
         window.isSecureContext
-          ? 'Using your last saved location — refreshing GPS…'
+          ? 'Using your last saved location. Refreshing GPS…'
           : INSECURE_GPS_NOTICE,
         true,
       );
@@ -1414,8 +1415,7 @@ export const Discover = () => {
           updatedSpot = {
             ...spot,
             is_checked_in: false,
-            live_count_exact: Math.max(0, spot.live_count_exact - 1),
-            has_active_checkins: Math.max(0, spot.live_count_exact - 1) > 0,
+            ...adjustHotSpotLiveCount(spot, -1),
           };
         } else {
           const res = await hotSpotsAPI.checkIn(spot.id, anonymous);
@@ -1423,8 +1423,7 @@ export const Discover = () => {
             ...spot,
             is_checked_in: true,
             my_checkin_anonymous: anonymous,
-            live_count_exact: spot.live_count_exact + 1,
-            has_active_checkins: true,
+            ...adjustHotSpotLiveCount(spot, 1),
           };
         }
         if (selectedHotSpot && selectedHotSpot.id === spot.id && updatedSpot) {
@@ -1858,8 +1857,9 @@ export const Discover = () => {
         category_icon: spot.category_icon,
         live_count_exact: spot.live_count_exact,
         live_count: spot.live_count,
+        has_active_checkins: spot.has_active_checkins,
       };
-      const occupied = spot.live_count_exact > 0;
+      const occupied = isHotSpotActive(spot);
 
       if (existing) {
         const prevLat = Number(existing.spot.latitude);
@@ -1868,7 +1868,7 @@ export const Discover = () => {
           // Keep true lng/lat — never spiderfy into a vertical column (#254).
           existing.marker.setLngLat(lngLat);
         }
-        const prevOccupied = existing.spot.live_count_exact > 0;
+        const prevOccupied = isHotSpotActive(existing.spot);
         const nextOccupied = occupied;
         const el = existing.marker.getElement();
         const labelChanged = el.dataset.showLabel !== (showLabel ? '1' : '0');
@@ -2012,7 +2012,7 @@ export const Discover = () => {
           id,
           lng: spot.longitude,
           lat: spot.latitude,
-          radiusPx: hotSpotPinHitRadiusPx(spot.live_count_exact > 0),
+          radiusPx: hotSpotPinHitRadiusPx(isHotSpotActive(spot)),
         });
       });
 
@@ -2285,8 +2285,8 @@ export const Discover = () => {
           <p id="location-gate-title" className="text-[17px] font-extrabold text-[var(--cream)]">
             Allow location to unlock Nearby
           </p>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--cream-muted)]">
-            Others see roughly where you are, not your exact pin.
+          <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-[var(--cream-muted)]">
+            We use your location to show who&apos;s nearby.
           </p>
           <button
             type="button"
@@ -2296,7 +2296,7 @@ export const Discover = () => {
             Allow location
           </button>
           {locationNotice ? (
-            <p className="mt-3 text-[11px] text-[var(--cream-muted)]">{locationNotice}</p>
+            <p className="mt-3 text-[15px] leading-snug text-[var(--cream-muted)]">{locationNotice}</p>
           ) : null}
         </div>
       ) : null}
@@ -2368,7 +2368,7 @@ export const Discover = () => {
           <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
           {!needsLocationGate && !tokenMissing ? (
             <p
-              className="pointer-events-none absolute top-[4.75rem] left-1/2 z-[4] max-w-[min(78%,280px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-xs font-medium leading-snug"
+              className="pointer-events-none absolute top-[4.75rem] left-1/2 z-[4] max-w-[min(78%,280px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-[15px] font-medium leading-snug"
               style={{
                 background: 'rgba(13,10,6,0.55)',
                 color: 'rgba(240,224,192,0.65)',
@@ -2526,7 +2526,7 @@ export const Discover = () => {
 
           {mapPanelMode !== 'hidden' && !needsLocationGate && !tokenMissing ? (
             <p
-              className="pointer-events-none absolute left-1/2 z-[4] max-w-[min(78%,260px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-xs font-medium leading-snug"
+              className="pointer-events-none absolute left-1/2 z-[4] max-w-[min(78%,260px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-[15px] font-medium leading-snug"
               style={{
                 top: hotSpotsLayerOn ? '4.75rem' : '3.25rem',
                 background: 'rgba(13,10,6,0.55)',
@@ -2624,14 +2624,14 @@ export const Discover = () => {
               <div
                 role="status"
                 data-testid="location-notice"
-                className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-3 py-2 text-[11px] font-medium leading-snug text-[var(--cream-soft)] shadow-md backdrop-blur-sm"
+                className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-3.5 py-2.5 text-[15px] font-medium leading-snug text-[var(--cream-soft)] shadow-md backdrop-blur-sm"
               >
                 <p>{locationNotice}</p>
                 <button
                   type="button"
                   onClick={handleEnableLocation}
                   data-testid="enable-location"
-                  className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-2.5 py-1 text-[11px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
+                  className="mt-2 inline-flex min-h-[44px] items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-4 py-2 text-[15px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
                 >
                   {locationNotice.startsWith('Using your last saved location') ||
                   locationNotice === INSECURE_GPS_NOTICE

@@ -293,6 +293,8 @@ export const usersAPI = {
     show_height?: boolean;
     show_weight?: boolean;
     show_relationship?: boolean;
+    /** Off = no distance shown to others ("Nearby"). Turning off is Premium (402). */
+    show_distance?: boolean;
   }) =>
     apiClient.post('/users/profile', data),
   uploadPhoto: (file: File) => {
@@ -865,8 +867,10 @@ export interface HotSpotDTO {
   category_name: string;
   category_icon: string;
   distance_km: number | null;
+  /** Display count from the server: exact for Premium; 0 to 4 exact, then '5+', for Free. */
   live_count: number | string;
-  live_count_exact: number;
+  /** Exact count, Premium only. Null for Free. Never render this; use live_count. */
+  live_count_exact: number | null;
   is_checked_in: boolean;
   my_checkin_anonymous: boolean | null;
   /** Short-lived check-in window in hours (product default: 4). */
@@ -1164,8 +1168,10 @@ export interface CommunityPostDTO {
   created_at: string;
   author_name: string;
   author_photo_url: string | null;
-  distance_km: string;
-  distance_label: string;
+  /** Coarse bucket (sorting). Absent when the author hides distance. */
+  distance_km?: string;
+  /** "<1 mi" or whole miles, to the author's fuzzed pin. Absent with distance_km. */
+  distance_label?: string;
   comment_count?: number;
 }
 
@@ -1229,6 +1235,23 @@ export const aiAPI = {
       '/ai/generate-image',
       { prompt, numberOfImages }
     ),
+};
+
+export interface LocationHiddenPerson {
+  id: string;
+  name: string;
+  photo_url?: string | null;
+  hidden_at: string;
+}
+
+/** "Hide my location from" list. Premium to add; removing is always allowed. */
+export const locationPrivacyAPI = {
+  listHidden: () =>
+    apiClient.get<{ hidden: LocationHiddenPerson[]; limit: number }>('/location-privacy/hidden'),
+  hide: (id: string) =>
+    apiClient.post<{ hidden: true }>(`/location-privacy/hidden/${encodeURIComponent(id)}`),
+  unhide: (id: string) =>
+    apiClient.delete<{ hidden: false }>(`/location-privacy/hidden/${encodeURIComponent(id)}`),
 };
 
 export { apiClient };

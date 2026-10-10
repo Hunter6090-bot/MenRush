@@ -130,6 +130,7 @@ export const ProfileSchema = z.object({
   show_height: z.boolean().optional(),
   show_weight: z.boolean().optional(),
   show_relationship: z.boolean().optional(),
+  show_distance: z.boolean().optional(),
 });
 
 export const DeleteAccountSchema = z.object({

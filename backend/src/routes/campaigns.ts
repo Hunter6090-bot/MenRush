@@ -29,6 +29,7 @@ import {
   prideInviteService,
 } from '../services/prideInvite.service';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 
 const router = Router();
 
@@ -36,29 +37,24 @@ const router = Router();
 // Rate limits
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Generous for signups — someone may refresh the form — but not brute-forceable */
+/**
+ * Waitlist signups. Per IP, and web users share a Vercel egress IP, so this
+ * is sized for many people behind one address (was 5).
+ */
 const signupLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
-  max: 5,
-  keyGenerator: (req) => {
-    const forwarded = req.headers['x-forwarded-for'];
-    const ip = Array.isArray(forwarded) ? forwarded[0] : (forwarded ?? req.ip ?? '');
-    return ip;
-  },
+  max: 30,
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please wait a few minutes and try again.' },
 });
 
-/** Tight limit for validation — prevent code enumeration */
+/** Promo code checks. Still well below enumeration speed; was 20 per IP. */
 const validateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
-  keyGenerator: (req) => {
-    const forwarded = req.headers['x-forwarded-for'];
-    const ip = Array.isArray(forwarded) ? forwarded[0] : (forwarded ?? req.ip ?? '');
-    return ip;
-  },
+  max: 60,
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests.' },

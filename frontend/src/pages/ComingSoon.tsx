@@ -85,7 +85,7 @@ export const ComingSoon = () => {
 
           <p className="mt-5 text-sm text-[var(--cream-muted)]">
             Already have an invite?{' '}
-            <Link to="/beta" className={publicLinkClass}>
+            <Link to="/invite" className={publicLinkClass}>
               Enter your code
             </Link>
           </p>

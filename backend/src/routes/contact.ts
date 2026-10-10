@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 import { ContactFormSchema } from '../types/validation';
 import {
   sendContactInquiryEmail,
@@ -12,6 +13,7 @@ const contactLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 8,
   message: { error: 'Too many contact submissions. Please try again later.' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
