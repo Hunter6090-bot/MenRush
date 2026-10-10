@@ -27,6 +27,8 @@ export interface NavItem {
   desktopNav?: boolean;
   /** Reachable on mobile via the "More" sheet instead of the primary tab row. */
   mobileMore?: boolean;
+  /** Fill the icon when the tab is active. Default true; Chat is outline-only (board). */
+  fillWhenActive?: boolean;
 }
 
 /**
@@ -49,6 +51,7 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.messages,
       shortLabel: 'Chat',
       Icon: IconChat,
+      fillWhenActive: false,
       badgeKey: 'messages',
       mobileTab: true,
       desktopNav: true,

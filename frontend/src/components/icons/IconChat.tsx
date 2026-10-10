@@ -1,13 +1,15 @@
 import { SVGProps } from 'react';
 
 /**
- * Chat: speech bubble, as drawn on the Claude Design board
- * (MenRush Phone App, 9 states). Outline idle, filled when the tab is active.
+ * Chat: round speech bubble, outlined, as drawn on the Claude Design board
+ * (MenRush Phone App, 9 states). Always an outline: the active tab shows it in
+ * the copper accent, never filled. Path is Lucide's message-circle.
  * Replaces the old envelope + wax seal glyph everywhere it was used.
  */
 export function IconChat({
   size = 24,
-  filled = false,
+  // Nav items may pass `filled`; Chat ignores it so it stays an outline (board).
+  filled: _outlineOnly,
   ...props
 }: SVGProps<SVGSVGElement> & { size?: number; filled?: boolean }) {
   return (
@@ -25,10 +27,7 @@ export function IconChat({
       data-icon="chat-bubble"
       {...props}
     >
-      <path
-        d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
-        fill={filled ? 'currentColor' : 'none'}
-      />
+      <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" fill="none" />
     </svg>
   );
 }
