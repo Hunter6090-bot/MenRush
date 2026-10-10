@@ -1,25 +1,31 @@
-import { SVGProps } from "react";
+import { SVGProps } from 'react';
 
 /**
- * MenRush — Profile icon
- * Single classical bust silhouette. The user as a coin face.
- * Mirrors the medallion language.
+ * You: person (head + shoulders), as drawn on the Claude Design board
+ * (MenRush Phone App, 9 states). Outline idle, filled when active.
  */
-export function IconProfile({ size = 24, ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
+export function IconProfile({
+  size = 24,
+  filled = false,
+  ...props
+}: SVGProps<SVGSVGElement> & { size?: number; filled?: boolean }) {
   return (
     <svg
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      fill="currentColor"
+      fill="none"
       xmlns="http://www.w3.org/2000/svg"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      data-icon="person"
       {...props}
     >
-      {/* Head */}
-      <circle cx="12" cy="8.5" r="3.8" />
-
-      {/* Shoulders / bust */}
-      <path d="M3.5 22 L3.5 17.5 C3.5 14.5 7 13 12 13 C17 13 20.5 14.5 20.5 17.5 L20.5 22 Z" />
+      <circle cx="12" cy="8" r="4" fill={filled ? 'currentColor' : 'none'} />
+      <path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" fill={filled ? 'currentColor' : 'none'} />
     </svg>
   );
 }
