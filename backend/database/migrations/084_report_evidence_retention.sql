@@ -68,8 +68,12 @@ CREATE INDEX IF NOT EXISTS idx_reports_purge_closed
 -- case is still open/reviewing or on legal hold.
 CREATE OR REPLACE FUNCTION reports_on_account_delete() RETURNS trigger AS $$
 BEGIN
+  -- Null reported_id here. A BEFORE DELETE UPDATE of the referencing row
+  -- makes Postgres skip the FK ON DELETE SET NULL, and a later reporter
+  -- update would then fail the FK against the already-deleted user.
   UPDATE reports
-     SET reported_account_deleted_at = COALESCE(reported_account_deleted_at, NOW())
+     SET reported_account_deleted_at = COALESCE(reported_account_deleted_at, NOW()),
+         reported_id = NULL
    WHERE reported_id = OLD.id;
 
   UPDATE reports
