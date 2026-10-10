@@ -83,6 +83,8 @@ jobs:
         run: npm run test:no-query-coordinates
       - name: Welcome emails use the official mark (no typed wordmark)
         run: npm run test:welcome-email-brand
+      - name: Social drafts say no waitlist, no dating app, no em dashes
+        run: npm run test:social-copy-guard
 
   frontend-build:
     name: Frontend build
