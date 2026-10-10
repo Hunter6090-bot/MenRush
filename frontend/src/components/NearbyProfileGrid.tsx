@@ -144,7 +144,7 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
         <p className="text-[16px] font-extrabold text-[var(--cream)]">
           {hideExpandRadius ? 'No men in the UK and Ireland yet' : 'No men in this radius yet'}
         </p>
-        <p className="mx-auto mt-2 max-w-sm text-[13px] leading-relaxed text-[var(--cream-muted)]">
+        <p className="mx-auto mt-2 max-w-sm text-[15px] leading-relaxed text-[var(--cream-muted)]">
           {hideExpandRadius ? (
             <>Turn on location and finish your profile so others can find you.</>
           ) : beyondRadiusCount > 0 ? (
@@ -169,7 +169,7 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
               type="button"
               onClick={onExpandRadius}
               data-testid="empty-expand-radius"
-              className="min-h-[44px] rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+              className="min-h-[44px] rounded-full bg-[#C4832A] px-4 py-2 text-[15px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
             >
               {beyondRadiusCount > 0 ? 'Expand to find them' : 'Expand radius'}
             </button>
@@ -185,7 +185,7 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
                   : 'Start Pulse'
               }
               title={pulseBlockedReason ?? 'Start Pulse'}
-              className={`min-h-[44px] rounded-full border px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide transition-colors ${
+              className={`min-h-[44px] rounded-full border px-4 py-2 text-[15px] font-extrabold uppercase tracking-wide transition-colors ${
                 pulseBlockedReason
                   ? 'border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.08)] text-[rgba(196,131,42,0.75)] hover:bg-[rgba(196,131,42,0.16)]'
                   : 'border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.22)] text-[#E0A14A] hover:bg-[rgba(196,131,42,0.35)]'
@@ -196,7 +196,7 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
           ) : null}
           {onStartPulse && !pulseOn && pulseBlockedReason ? (
             <p
-              className="basis-full text-[12px] leading-relaxed text-[var(--cream-muted)]"
+              className="basis-full text-[15px] leading-relaxed text-[var(--cream-muted)]"
               data-testid="empty-pulse-blocked"
             >
               {pulseBlockedReason}{' '}
@@ -214,7 +214,7 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
               type="button"
               onClick={onOpenHotSpots}
               data-testid="empty-hot-spots"
-              className="min-h-[44px] rounded-full border border-[rgba(196,131,42,0.5)] bg-transparent px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+              className="min-h-[44px] rounded-full border border-[rgba(196,131,42,0.5)] bg-transparent px-4 py-2 text-[15px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
             >
               Cruise
             </button>
@@ -223,16 +223,16 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
             <button
               type="button"
               onClick={onFinishProfile}
-              className="min-h-[44px] rounded-full border border-[rgba(196,131,42,0.5)] bg-transparent px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+              className="min-h-[44px] rounded-full border border-[rgba(196,131,42,0.5)] bg-transparent px-4 py-2 text-[15px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
             >
               Finish profile
             </button>
           ) : null}
         </div>
-        <p className="mt-3 text-[13px] text-[var(--cream-muted)]">
+        <p className="mt-3 text-[15px] text-[var(--cream-muted)]">
           Pulse gives you 90 minutes of priority visibility.
         </p>
-        <p className="mt-2 text-[12px] font-medium tracking-wide text-[var(--text-secondary)]">
+        <p className="mt-2 text-[15px] font-medium tracking-wide text-[var(--text-secondary)]">
           Consent first · Report anytime
         </p>
       </div>
@@ -274,7 +274,7 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
             onClick={onLoadMore}
             disabled={loadingMore}
             data-testid="nearby-load-more"
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-[var(--copper)]/60 bg-[var(--bg-elevated)]/90 px-6 py-2.5 text-[12px] font-extrabold uppercase tracking-wider text-[var(--cream)] shadow-md transition-all hover:border-[var(--copper)] hover:bg-[var(--copper)]/20 active:scale-[0.98] disabled:opacity-50"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-[var(--copper)]/60 bg-[var(--bg-elevated)]/90 px-6 py-2.5 text-[15px] font-extrabold uppercase tracking-wider text-[var(--cream)] shadow-md transition-all hover:border-[var(--copper)] hover:bg-[var(--copper)]/20 active:scale-[0.98] disabled:opacity-50"
           >
             {loadingMore ? 'Loading more men…' : 'Load more men'}
           </button>
@@ -290,11 +290,11 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
             onClick={onExpandRadius}
             data-testid="nearby-widen-search"
             title="Show men farther away"
-            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border border-[var(--copper)]/60 bg-[var(--bg-elevated)]/90 px-6 py-2.5 text-[12px] font-extrabold uppercase tracking-wider text-[var(--cream)] shadow-md transition-all hover:border-[var(--copper)] hover:bg-[var(--copper)]/20 active:scale-[0.98]"
+            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border border-[var(--copper)]/60 bg-[var(--bg-elevated)]/90 px-6 py-2.5 text-[15px] font-extrabold uppercase tracking-wider text-[var(--cream)] shadow-md transition-all hover:border-[var(--copper)] hover:bg-[var(--copper)]/20 active:scale-[0.98]"
           >
             End of this range · Widen search
           </button>
-          <p className="text-[11px] font-medium text-[var(--cream-muted)]">
+          <p className="text-[15px] font-medium text-[var(--cream-muted)]">
             Show men farther away
           </p>
         </div>
@@ -372,7 +372,7 @@ const NearbyGridCard = memo(function NearbyGridCard({
               if (matchDisabled) return;
               void onMatch(user);
             }}
-            className={`w-full rounded-lg py-1.5 text-xs font-extrabold tracking-wide transition-colors flex items-center justify-center gap-1.5 md:rounded-xl md:py-2 md:text-sm ${
+            className={`w-full rounded-lg py-1.5 text-[15px] font-extrabold tracking-wide transition-colors flex items-center justify-center gap-1.5 md:rounded-xl md:py-2 md:text-[15px] ${
               matchState === 'none' || matching ? 'uppercase' : ''
             } ${matchCtaCompactToneClasses(matchState)}`}
           >
@@ -411,17 +411,17 @@ const GridCardFace = memo(function GridCardFace({
       <GridPhoto name={user.name} photoUrl={user.photo_url} age={user.age} />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent pl-1.5 pr-9 pb-1.5 pt-8 md:pl-2.5 md:pr-10 md:pb-2 md:pt-10">
         <div className="flex items-center gap-0.5 md:gap-1">
-          <span className="truncate text-[13px] font-bold leading-tight text-[#FFF6E6] md:text-sm lg:text-[15px]">
+          <span className="truncate text-[15px] font-bold leading-tight text-[#FFF6E6] md:text-[15px] lg:text-[15px]">
             {user.name}{typeof user.age === 'number' ? ` ${user.age}` : ''}
           </span>
 
         </div>
-        <p className="mt-0.5 truncate text-xs font-semibold text-[var(--cream)] md:text-[13px]">
+        <p className="mt-0.5 truncate text-[15px] font-semibold text-[var(--cream)] md:text-[15px]">
           <span data-testid={`nearby-grid-distance-${user.id}`}>{distLabel}</span>
           {metaRest ? ` · ${metaRest}` : ''}
         </p>
         {user.looking_for ? (
-          <p className="mt-0.5 truncate text-xs font-bold text-[#E0A14A] md:text-[13px]">{user.looking_for}</p>
+          <p className="mt-0.5 truncate text-[15px] font-bold text-[#E0A14A] md:text-[15px]">{user.looking_for}</p>
         ) : null}
       </div>
     </DiscoveryPhotoFrame>

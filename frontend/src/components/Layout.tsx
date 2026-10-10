@@ -283,7 +283,7 @@ function LayoutInner({ children }: LayoutProps) {
                 <Link
                   to="/discover"
                   aria-label="MenRush home"
-                  className="inline-flex items-center justify-center gap-2"
+                  className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-2"
                 >
                   <BrandMark size="sm" className="shadow-[0_0_0_2px_rgba(196,131,42,0.35)] rounded-full" />
                 </Link>
@@ -303,7 +303,7 @@ function LayoutInner({ children }: LayoutProps) {
               </button>
               <Link
                 to="/notifications"
-                className="relative flex h-10 w-10 items-center justify-center rounded-full text-[var(--cream-soft)] active:bg-[var(--bg-card)]"
+                className="relative flex h-11 w-11 items-center justify-center rounded-full text-[var(--cream-soft)] active:bg-[var(--bg-card)]"
                 aria-label="Alerts"
               >
                 <IconNotifications size={22} />

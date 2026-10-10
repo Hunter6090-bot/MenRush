@@ -31,7 +31,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   if (online) {
     return (
       <span
-        className={`inline-flex items-center gap-1.5 rounded-full font-medium border border-nn-online/35 bg-nn-online/13 text-[#8FC773] ${pad} ${className}`}
+        className={`inline-flex items-center gap-1.5 rounded-full font-medium border border-[color-mix(in_srgb,var(--status-online)_45%,transparent)] bg-[var(--bg-card)] text-[var(--cream)] ${pad} ${className}`}
       >
         <span className="w-1.5 h-1.5 rounded-full bg-nn-online shadow-[0_0_8px_var(--nn-online)]" />
         Active now

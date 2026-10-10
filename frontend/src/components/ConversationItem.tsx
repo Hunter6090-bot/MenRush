@@ -126,7 +126,7 @@ export const ConversationItem = memo(function ConversationItem({
               <p className="truncate text-base font-bold text-nn-text">{name}</p>
               <div className="flex shrink-0 items-center gap-1.5">
                 {lastMessageTime ? (
-                  <span className="text-xs text-nn-faint">{formatRelative(lastMessageTime)}</span>
+                  <span className="text-[15px] text-nn-faint">{formatRelative(lastMessageTime)}</span>
                 ) : null}
                 {unreadCount ? (
                   <span className="h-[9px] w-[9px] rounded-full bg-nn-copper" aria-label="Unread" />
