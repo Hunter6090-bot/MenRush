@@ -1051,7 +1051,7 @@ export const eventsAPI = {
     ),
   /** Free venue check-in — creates/uses a Cruise (Hot Spot) pin that expires after 4 hours. */
   checkIn: (id: string, anonymous = false) =>
-    apiClient.post<{ ok: boolean; spot: HotSpotDTO | null; deferred?: boolean }>(`/events/${id}/check-in`, {
+    apiClient.post<{ ok: boolean; spot: HotSpotDTO | null; deferred?: boolean; unseen?: boolean }>(`/events/${id}/check-in`, {
       anonymous,
     }),
 };

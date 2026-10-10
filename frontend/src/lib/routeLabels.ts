@@ -9,6 +9,8 @@ export const ROUTE_LABELS = {
   liveProfileList: 'Community',
   matches: 'Matches',
   messages: 'Messages',
+  /** Tab and desktop sidebar name for /conversations (board). */
+  chat: 'Chat',
   alerts: 'Alerts',
   profile: 'Profile',
   rooms: 'Rooms',

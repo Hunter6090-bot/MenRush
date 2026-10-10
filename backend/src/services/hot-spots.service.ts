@@ -705,6 +705,15 @@ export const hotSpotsService = {
     return { ok: true, spot: updatedSpot };
   },
 
+  /** True when this member is in Ghost or hidden (members with no profile row count as visible). */
+  async isUnseen(userId: string): Promise<boolean> {
+    const me = await query(
+      `SELECT (is_ghost IS TRUE OR is_visible IS FALSE) AS unseen FROM profiles WHERE user_id = $1`,
+      [userId],
+    );
+    return me.rows[0]?.unseen === true;
+  },
+
   /**
    * Nightlife Integration: find or create a Hot Spot pin for an event venue,
    * then check in. Pin activity uses the same 4-hour TTL as other Hot Spots.
