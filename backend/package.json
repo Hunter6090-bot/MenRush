@@ -29,6 +29,7 @@
     "verification:purge-sensitive": "ts-node src/scripts/purge-verification-files.ts",
     "test:security": "ts-node scripts/security-checks.ts",
     "test:totp-crypto": "ts-node scripts/totp-crypto-checks.ts",
+    "test:totp-startup": "ts-node scripts/totp-startup-checks.ts",
     "test:totp-rotation-integration": "ts-node --transpile-only scripts/totp-rotation-integration.ts",
     "totp:rotate": "ts-node --transpile-only scripts/rotate-totp-key.ts",
     "test:veriff": "ts-node --transpile-only scripts/veriff-checks.ts",

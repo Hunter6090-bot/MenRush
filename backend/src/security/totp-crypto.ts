@@ -62,8 +62,65 @@ export function deriveV1Key(raw: string): Buffer {
   return sha256(raw);
 }
 
-function currentRaw(): string | null {
+const isProduction = () => process.env.NODE_ENV === 'production';
+
+/**
+ * Current wrap key. In production only TOTP_ENCRYPTION_KEY counts (no JWT_SECRET fallback);
+ * elsewhere JWT_SECRET is still a convenience fallback for local dev and tests.
+ */
+export function currentTotpKeyRaw(): string | null {
+  if (isProduction()) return process.env.TOTP_ENCRYPTION_KEY || null;
   return process.env.TOTP_ENCRYPTION_KEY || process.env.JWT_SECRET || null;
+}
+
+function currentRaw(): string | null {
+  return currentTotpKeyRaw();
+}
+
+/**
+ * SHA-256 fingerprints of known placeholder values (the old dev default and the .env.example
+ * placeholders). Fingerprints only, so the values themselves are not in the code.
+ */
+const PLACEHOLDER_KEY_FINGERPRINTS = new Set([
+  '10e6d89d6d7eebfd625259c422fce843606b2949c67786f21312ea5eaadb90ff',
+  '103ab5dd9769664c34bb4dcecdbe1aa52a55f75a4a62243238c9abb3bc3d9e02',
+  'b3cf5152a10b7a596ff461bfb6e04203341d08239fc80a56ce135f187ef29e6e',
+]);
+
+export type TotpKeyProblem = 'unset' | 'too-short' | 'dev-default';
+
+/** Key strength in bytes: decoded length for a base64 value, else UTF-8 length. */
+export function totpKeyByteLength(raw: string): number {
+  const v = raw.trim();
+  if (v.length > 0 && v.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(v)) {
+    return Buffer.from(v, 'base64').length;
+  }
+  return Buffer.byteLength(v, 'utf8');
+}
+
+/** Why a key value is not fit for production, or null when it is. Never echoes the value. */
+export function totpKeyProblem(raw: string | undefined | null): TotpKeyProblem | null {
+  if (!raw || !raw.trim()) return 'unset';
+  if (PLACEHOLDER_KEY_FINGERPRINTS.has(crypto.createHash('sha256').update(raw.trim()).digest('hex'))) {
+    return 'dev-default';
+  }
+  if (totpKeyByteLength(raw) < 32) return 'too-short';
+  return null;
+}
+
+/**
+ * Production startup guard: refuse to start when TOTP_ENCRYPTION_KEY is unset, under 32 bytes,
+ * or a dev default. No-op outside production. The message names the problem, never the value.
+ */
+export function assertTotpKeyForProduction(env: NodeJS.ProcessEnv = process.env): void {
+  if (env.NODE_ENV !== 'production') return;
+  const problem = totpKeyProblem(env.TOTP_ENCRYPTION_KEY);
+  if (problem) {
+    throw new Error(
+      `Refusing to start: TOTP_ENCRYPTION_KEY is ${problem}. Set a 32-byte key (openssl rand -base64 32) ` +
+        'after running the TOTP rotation (npm run totp:rotate -- --verify).',
+    );
+  }
 }
 
 function previousRaw(): string | null {

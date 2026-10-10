@@ -15,6 +15,7 @@
  */
 import type { Pool, PoolClient } from 'pg';
 import {
+  currentTotpKeyRaw,
   decryptTotpSecretDetailed,
   decryptTotpSecretWith,
   encryptTotpSecretWith,
@@ -51,9 +52,7 @@ interface Row {
   totp_enabled: boolean;
 }
 
-function currentRaw(): string | null {
-  return process.env.TOTP_ENCRYPTION_KEY || process.env.JWT_SECRET || null;
-}
+const currentRaw = currentTotpKeyRaw;
 
 async function loadRows(client: PoolClient, lock: boolean, opts: RotationOptions): Promise<Row[]> {
   const params: unknown[] = [];
