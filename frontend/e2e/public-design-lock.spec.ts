@@ -39,13 +39,14 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   await expect(page.getByText(/LONDON · MANCHESTER · BIRMINGHAM · BRIGHTON/i)).toHaveCount(0);
 
   await expect(page.getByRole('heading', { name: /What you get/i })).toBeVisible();
-  // What you get: the app as it is now. Rooms are Premium only and say so.
+  // What you get: the app as it is now. Free members can join official and nearby rooms; only private groups need Premium.
   for (const name of ['Map', 'Chat', 'Rooms', 'Out']) {
     await expect(page.getByRole('heading', { level: 3, name, exact: true })).toBeVisible();
   }
   await expect(page.getByText("Your home screen. Browse who's around.")).toBeVisible();
   await expect(page.getByText('One-to-one messages.')).toBeVisible();
-  await expect(page.getByText('Group chats. Premium only.')).toBeVisible();
+  await expect(page.getByText('Group chats. Private groups need Premium.')).toBeVisible();
+  await expect(page.getByText(/premium only/i)).toHaveCount(0);
   await expect(page.getByText('Cruising spots, hot spots and events.')).toBeVisible();
   await expect(page.getByRole('heading', { name: /^Video rooms$/i })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: /^Nearby$/i })).toHaveCount(0);

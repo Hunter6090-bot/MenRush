@@ -14,7 +14,7 @@ const COMING_SOON_GRADIENT =
 const WHAT_YOU_GET = [
   { title: 'Map', body: "Your home screen. Browse who's around." },
   { title: 'Chat', body: 'One-to-one messages.' },
-  { title: 'Rooms', body: 'Group chats. Premium only.' },
+  { title: 'Rooms', body: 'Group chats. Private groups need Premium.' },
   { title: 'Out', body: 'Cruising spots, hot spots and events.' },
 ] as const;
 

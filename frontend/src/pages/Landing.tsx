@@ -119,7 +119,7 @@ export const Landing = () => {
 
             <p className="mr-copy mt-5 max-w-md lg:max-w-none">
               For gay, bi, trans and curious men. 18+ only.
-              Map, one-to-one chat, Rooms (Premium only) and Out.
+              Map, one-to-one chat, Rooms and Out. Private groups need Premium.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-4 lg:justify-start">

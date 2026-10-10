@@ -36,13 +36,15 @@ describe('ComingSoon homepage', () => {
     expect(codeLink).toHaveAttribute('href', '/invite');
   });
 
-  it('lists what the app does now: map, chat, Rooms (Premium only) and Out', () => {
+  it('lists what the app does now: map, chat, Rooms (private groups need Premium) and Out', () => {
     renderHome();
     const list = screen.getByRole('region', { name: /what you get/i });
     for (const title of ['Map', 'Chat', 'Rooms', 'Out']) {
       expect(within(list).getByRole('heading', { level: 3, name: title })).toBeInTheDocument();
     }
-    expect(within(list).getByText(/premium only/i)).toBeInTheDocument();
+    expect(within(list).getByText('Group chats. Private groups need Premium.')).toBeInTheDocument();
+    // Free members can self-join official and nearby rooms; only private groups need Premium.
+    expect(within(list).queryByText(/premium only/i)).not.toBeInTheDocument();
     expect(within(list).getByText('Cruising spots, hot spots and events.')).toBeInTheDocument();
     expect(within(list).getAllByRole('listitem')).toHaveLength(4);
   });
@@ -76,6 +78,7 @@ const UNTRUE_CLAIMS = [
   /meet is real/i,
   /real-time presence/i,
   /LIVE NOW/i,
+  /premium only/i,
 ];
 
 function expectOnlyTrueClaims(text: string) {
@@ -98,7 +101,7 @@ describe('public landings make only true claims', () => {
       </MemoryRouter>,
     );
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent("See who's around.On the map.");
-    expect(screen.getByText(/Rooms \(Premium only\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Rooms and Out\. Private groups need Premium\./)).toBeInTheDocument();
     expectOnlyTrueClaims(container.textContent ?? '');
   });
 
