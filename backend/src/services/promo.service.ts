@@ -764,11 +764,12 @@ export const promoService = {
   async validateSharedBsf26(
     code: string,
     email: string,
+    now = new Date(),
   ): Promise<SharedBsf26ValidateResult> {
     if (!isSharedBsf26Code(code)) {
       return { valid: false, reason: 'not_found' };
     }
-    if (!isBsf26EnterOpen()) {
+    if (!isBsf26EnterOpen(now)) {
       return { valid: false, reason: 'expired' };
     }
 

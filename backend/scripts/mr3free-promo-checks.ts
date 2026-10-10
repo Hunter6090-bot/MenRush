@@ -27,6 +27,14 @@ import {
   SHARED_MR3FREE_NORMALIZED,
 } from '../src/services/promo.service';
 import { classifyForeignCode } from '../src/services/referral.service';
+import { ALWAYS_PREMIUM_NAMES } from '../src/lib/always-premium';
+
+/**
+ * Fixed clock for the DB checks so they never depend on the real date.
+ * 1 Oct 2026 12:00 London: MR3FREE (17 Sep to 31 Oct) and BSF26 (until 5 Oct)
+ * are both open, so the stacking checks test stacking, not expiry.
+ */
+const FIXED_NOW = new Date('2026-10-01T11:00:00Z');
 
 type Test = { name: string; run: () => void | Promise<void> };
 const tests: Test[] = [];
@@ -116,7 +124,7 @@ test('MR3FREE DB registration, 3 months premium, case insensitivity, one use per
       age: 26,
       date_of_birth: '2000-01-15',
       promo_code: 'MR3FREE',
-    });
+    }, { now: FIXED_NOW });
     assert.ok('user' in res1 && res1.user);
     const user1 = (res1 as any).user;
     assert.ok(user1.id);
@@ -124,7 +132,7 @@ test('MR3FREE DB registration, 3 months premium, case insensitivity, one use per
     assert.strictEqual(user1.is_premium, true);
     assert.strictEqual(user1.premium_tier, 'premium');
     assert.ok(user1.premium_starts_at);
-    assert.ok(new Date(user1.premium_starts_at as string).getTime() <= Date.now());
+    assert.ok(new Date(user1.premium_starts_at as string).getTime() <= FIXED_NOW.getTime());
     assert.ok(user1.premium_until);
     const monthsDiff =
       (new Date(user1.premium_until as string).getTime() - new Date(user1.premium_starts_at as string).getTime()) /
@@ -141,7 +149,7 @@ test('MR3FREE DB registration, 3 months premium, case insensitivity, one use per
     assert.strictEqual(redemptionRow.rows[0].code_normalized, 'MR3FREE');
 
     // 2. Validate for already-redeemed email fails
-    const reval = await promoService.validateSharedMr3Free('MR3FREE', email1);
+    const reval = await promoService.validateSharedMr3Free('MR3FREE', email1, FIXED_NOW);
     assert.strictEqual(reval.valid, false);
     if (!reval.valid) {
       assert.strictEqual(reval.reason, 'already_redeemed');
@@ -155,7 +163,7 @@ test('MR3FREE DB registration, 3 months premium, case insensitivity, one use per
       age: 28,
       date_of_birth: '1998-03-20',
       promo_code: 'mr3free',
-    });
+    }, { now: FIXED_NOW });
     assert.ok('user' in res2 && res2.user);
     const user2 = (res2 as any).user;
     assert.ok(user2.id);
@@ -164,7 +172,7 @@ test('MR3FREE DB registration, 3 months premium, case insensitivity, one use per
     assert.strictEqual(user2.premium_tier, 'premium');
 
     // 4. Stacking: attempt to use BSF26 on email that redeemed MR3FREE fails with other_promo_path
-    const bsfCheck = await promoService.validateSharedBsf26('BSF26', email1);
+    const bsfCheck = await promoService.validateSharedBsf26('BSF26', email1, FIXED_NOW);
     assert.strictEqual(bsfCheck.valid, false);
     if (!bsfCheck.valid) {
       assert.strictEqual(bsfCheck.reason, 'other_promo_path');
@@ -177,14 +185,14 @@ test('MR3FREE DB registration, 3 months premium, case insensitivity, one use per
        VALUES ($1, 'BSF26', $2, $3)`,
       ['bsf26_public', user1.id, hashEmail(emailBsf)],
     );
-    const mr3CheckStack = await promoService.validateSharedMr3Free('MR3FREE', emailBsf);
+    const mr3CheckStack = await promoService.validateSharedMr3Free('MR3FREE', emailBsf, FIXED_NOW);
     assert.strictEqual(mr3CheckStack.valid, false);
     if (!mr3CheckStack.valid) {
       assert.strictEqual(mr3CheckStack.reason, 'other_promo_path');
     }
 
     // 5. Does not cancel 12-month beta promises (preserves longer premium_until)
-    const beta12MoDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    const beta12MoDate = new Date(FIXED_NOW.getTime() + 365 * 24 * 60 * 60 * 1000);
     const betaUserRes = await authService.register({
       name: `BetaPromise ${suffix}`,
       email: emailBeta,
@@ -204,7 +212,7 @@ test('MR3FREE DB registration, 3 months premium, case insensitivity, one use per
     );
 
     // Applying MR3FREE does not wipe or shorten existing 12-month promise
-    const grantRes = await promoService.applyMr3FreePremiumGrant(betaUser.id as string, 3);
+    const grantRes = await promoService.applyMr3FreePremiumGrant(betaUser.id as string, 3, undefined, FIXED_NOW);
     assert.ok(grantRes.premiumUntil);
     assert.strictEqual(grantRes.premiumUntil.toISOString(), beta12MoDate.toISOString());
 
@@ -214,17 +222,17 @@ test('MR3FREE DB registration, 3 months premium, case insensitivity, one use per
       beta12MoDate.toISOString(),
     );
 
-    // 6. Does not wipe lifetime Premium for always-premium owners (e.g. BOA90)
+    // 6. Does not wipe lifetime Premium for always-premium owner accounts
     const alwaysUserRes = await query(
       `INSERT INTO users (id, email, password_hash, name, age, is_premium, premium_tier, premium_until)
-       VALUES ($1, $2, 'x', 'BOA90', 32, TRUE, 'premium', NULL)
+       VALUES ($1, $2, 'x', $3, 32, TRUE, 'premium', NULL)
        RETURNING id`,
-      [randomUUID(), `always-${suffix}@test.menrush.local`],
+      [randomUUID(), `always-${suffix}@test.menrush.local`, ALWAYS_PREMIUM_NAMES[0]],
     );
     const alwaysId = alwaysUserRes.rows[0].id;
     userIds.push(alwaysId);
 
-    const alwaysGrant = await promoService.applyMr3FreePremiumGrant(alwaysId, 3);
+    const alwaysGrant = await promoService.applyMr3FreePremiumGrant(alwaysId, 3, undefined, FIXED_NOW);
     assert.strictEqual(alwaysGrant.premiumUntil, null);
 
     const alwaysDbRow = await query(`SELECT is_premium, premium_until FROM users WHERE id = $1`, [alwaysId]);

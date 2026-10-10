@@ -198,6 +198,11 @@ jobs:
         run: npm run test:referral-grant-integration
       - name: Referral checks (real PG)
         run: npm run test:referrals
+      - name: MR3FREE promo checks on a fixed clock (real PG)
+        env:
+          # Throwaway value for the CI database only; not a real secret.
+          JWT_SECRET: mr3free-ci-only-not-a-secret
+        run: npm run test:mr3free
       - name: Earned referral months survive renewal and cancel, cap, Gmail dedupe, read-only card (real PG)
         run: npm run test:referral-earned-months-integration
       - name: Deleting a member who created a room works (real PG)

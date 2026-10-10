@@ -182,7 +182,11 @@ const verifyTokenInternal = (token: string): TokenPayload => {
 };
 
 export const authService = {
-  async register(data: RegisterInput) {
+  /**
+   * `opts.now` is for tests only: it fixes the clock for the MR3FREE window so
+   * checks do not depend on the real date. Live callers never pass it.
+   */
+  async register(data: RegisterInput, opts: { now?: Date } = {}) {
     const id = uuidv4();
     const hashedPassword = await bcryptjs.hash(data.password, 10);
     const inviteCode = data.invite_code?.trim();
@@ -218,7 +222,7 @@ export const authService = {
     }
 
     if (usingSharedMr3Free) {
-      const mr3Check = await promoService.validateSharedMr3Free(promoCode!, data.email);
+      const mr3Check = await promoService.validateSharedMr3Free(promoCode!, data.email, opts.now);
       if (!mr3Check.valid) {
         if (mr3Check.reason === 'expired') {
           throw new Error(SHARED_MR3FREE_EXPIRED_MESSAGE);
@@ -457,7 +461,7 @@ export const authService = {
       } else if (usingSharedMr3Free) {
         // MR3FREE = MenRush launch ad campaign. 3 months Premium free, unlocked day one.
         // Replaces waitlist gift. No Pride/BSF26 stack. Double-claim rejected in redeem.
-        await promoService.redeemSharedMr3Free(promoCode!, data.email, user!.id as string, client);
+        await promoService.redeemSharedMr3Free(promoCode!, data.email, user!.id as string, client, opts.now);
       } else if (usingSharedBsf26) {
         // BSF26 = BearScotsFest 2026 only. Al CLOCK LOCK via bsf26PremiumWindow (London calendar).
         // Replaces waitlist gift. No Pride stack. Double-claim rejected in redeem.
