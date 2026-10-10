@@ -450,8 +450,8 @@ router.post('/2fa/verify', twoFactorLimiter, twoFactorAccountLimiter, async (req
       userAgent: req.get('user-agent') || undefined,
     });
     res.json(await withBrowserSession(result, req.get('user-agent') || undefined));
-  } catch (error: any) {
-    res.status(401).json({ error: error.message });
+  } catch {
+    res.status(401).json({ error: 'Invalid code or token' });
   }
 });
 

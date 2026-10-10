@@ -77,7 +77,7 @@ async function request(
   port: number,
   pathName: string,
   opts: { method?: string; token?: string; body?: unknown } = {},
-): Promise<{ status: number }> {
+): Promise<{ status: number; json: Record<string, unknown> }> {
   const method = opts.method || 'GET';
   const data = opts.body === undefined ? undefined : JSON.stringify(opts.body);
   return new Promise((resolve, reject) => {
@@ -95,8 +95,18 @@ async function request(
         },
       },
       (res) => {
-        res.resume();
-        resolve({ status: res.statusCode || 0 });
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => {
+          const raw = Buffer.concat(chunks).toString('utf8');
+          let json: Record<string, unknown> = {};
+          try {
+            json = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+          } catch {
+            json = {};
+          }
+          resolve({ status: res.statusCode || 0, json });
+        });
       },
     );
     req.on('error', reject);
@@ -169,6 +179,14 @@ function verifyTokenChecks() {
   throwsInvalid(() => authService.verifyToken(futureNbf), 'future nbf as session');
   const pastNbf = purposeToken(MEMBER_ID, { nbf: Math.floor(Date.now() / 1000) - 60 });
   assert.equal(authService.verifyToken(pastNbf).userId, MEMBER_ID, 'past nbf is valid');
+  throwsInvalid(
+    () => authService.verifyToken(purposeToken(MEMBER_ID, { nbf: 'now' })),
+    'string nbf as session',
+  );
+  throwsInvalid(
+    () => authService.verifyToken(purposeToken(MEMBER_ID, { nbf: null })),
+    'null nbf as session',
+  );
 
   throwsInvalid(
     () => authService.verifyTwoFactorPendingToken(session),
@@ -366,12 +384,49 @@ async function httpAuthChecks() {
       body: { pendingToken: session, code: '123456' },
     });
     assert.equal(verifySession.status, 401, '2FA completion rejects session token');
+    assert.equal(verifySession.json.error, 'Invalid code or token');
 
     const verifyLegacy = await request(srv.port, '/api/auth/2fa/verify', {
       method: 'POST',
       body: { pendingToken: legacy, code: '123456' },
     });
     assert.equal(verifyLegacy.status, 401, '2FA completion rejects legacy session token');
+    assert.equal(verifyLegacy.json.error, 'Invalid code or token');
+
+    assert.equal(
+      (
+        await request(srv.port, '/api/users/me', {
+          token: purposeToken(MEMBER_ID, { nbf: 'now' }),
+        })
+      ).status,
+      401,
+      'string nbf refused on a protected route',
+    );
+    assert.equal(
+      (
+        await request(srv.port, '/api/users/me', {
+          token: purposeToken(MEMBER_ID, { nbf: null }),
+        })
+      ).status,
+      401,
+      'null nbf refused on a protected route',
+    );
+
+    authService.completeTwoFactorLogin = async () => {
+      throw new Error('relation "two_factor_pending_used" does not exist');
+    };
+    const leaked = await request(srv.port, '/api/auth/2fa/verify', {
+      method: 'POST',
+      body: { pendingToken: pending, code: '123456' },
+    });
+    assert.equal(leaked.status, 401, '2FA verify stays 401 when the handler throws');
+    assert.equal(leaked.json.error, 'Invalid code or token');
+    const leakedBody = JSON.stringify(leaked.json);
+    assert.ok(!leakedBody.includes('relation'), '2FA verify 401 never includes a raw DB error');
+    assert.ok(
+      !leakedBody.includes('two_factor_pending_used'),
+      '2FA verify 401 never names the pending table',
+    );
   } finally {
     authService.completeTwoFactorLogin = originalComplete;
     authSessionService.create = originalCreate;
@@ -387,10 +442,26 @@ function sourceGuards() {
   assert.match(auth, /verifyTwoFactorPendingToken/);
   assert.match(auth, /consumeTwoFactorPendingJti/);
   assert.match(auth, /record\.nbf/);
-  assert.match(
-    fs.readFileSync(path.join(__dirname, '../src/routes/auth.ts'), 'utf8'),
-    /completeTwoFactorLogin\(data\.pendingToken/,
-  );
+  assert.match(auth, /DELETE FROM two_factor_pending_used WHERE expires_at < NOW\(\)/);
+
+  const twoFactor = fs.readFileSync(path.join(__dirname, '../src/services/two-factor.service.ts'), 'utf8');
+  assert.match(twoFactor, /totp_last_step/);
+  assert.match(twoFactor, /checkDelta/);
+  assert.match(twoFactor, /totp_last_step < \$2/);
+
+  const routes = fs.readFileSync(path.join(__dirname, '../src/routes/auth.ts'), 'utf8');
+  const verifyStart = routes.indexOf("'/2fa/verify'");
+  const verifyEnd = routes.indexOf("router.post('/refresh'");
+  assert.ok(verifyStart >= 0 && verifyEnd > verifyStart, '2fa/verify handler is present');
+  const verifyHandler = routes.slice(verifyStart, verifyEnd);
+  assert.match(verifyHandler, /completeTwoFactorLogin\(data\.pendingToken/);
+  assert.match(verifyHandler, /Invalid code or token/);
+  assert.doesNotMatch(verifyHandler, /error\.message|err\.message/);
+
+  const root080 = path.join(__dirname, '../../database/migrations/080_two_factor_pending_used.sql');
+  const backend080 = path.join(__dirname, '../database/migrations/080_two_factor_pending_used.sql');
+  assert.ok(fs.existsSync(root080), '080 filename stays put — runner records the full name');
+  assert.ok(fs.existsSync(backend080), '080 backend copy stays put');
 }
 
 async function main() {
