@@ -559,15 +559,18 @@ export const hotSpotsService = {
           WHERE user_id = $1 AND spot_id = $2 AND checked_out_at IS NULL`,
         [userId, spotId],
       );
-    } else {
-      await query(
-        `UPDATE hot_spot_checkins
-            SET checked_out_at = NOW()
-          WHERE user_id = $1 AND checked_out_at IS NULL`,
-        [userId],
-      );
+      // The server's own count after leaving, so clients never guess it (a Ghost or
+      // hidden member was never counted, so their check-out must not lower it).
+      const spot = await this.getSpot(userId, spotId);
+      return { ok: true, spot };
     }
-    return { ok: true };
+    await query(
+      `UPDATE hot_spot_checkins
+          SET checked_out_at = NOW()
+        WHERE user_id = $1 AND checked_out_at IS NULL`,
+      [userId],
+    );
+    return { ok: true, spot: null };
   },
 
   async getMyCheckIn(userId: string) {
@@ -706,6 +709,12 @@ export const hotSpotsService = {
    * Nightlife Integration: find or create a Hot Spot pin for an event venue,
    * then check in. Pin activity uses the same 4-hour TTL as other Hot Spots.
    * Check-in is free (no premium gate).
+   *
+   * A Ghost or hidden member never creates the pin: a brand-new public spot
+   * appearing at the venue would reveal that someone hidden just arrived. If no
+   * spot exists yet, their check-in is deferred (returns null, nothing written)
+   * and the pin is created by the first visible check-in instead. Where a spot
+   * already exists they check in as usual.
    */
   async checkInAtEvent(
     userId: string,
@@ -747,6 +756,13 @@ export const hotSpotsService = {
     }
 
     if (!spotId) {
+      // Members with no profile row count as visible, as elsewhere.
+      const me = await query(
+        `SELECT (is_ghost IS TRUE OR is_visible IS FALSE) AS unseen FROM profiles WHERE user_id = $1`,
+        [userId],
+      );
+      if (me.rows[0]?.unseen) return null;
+
       const cat = await query(`SELECT id FROM hot_spot_categories WHERE slug = 'nightlife'`);
       const categoryId = cat.rows[0]?.id;
       if (!categoryId) throw new Error('Nightlife category missing');

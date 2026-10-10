@@ -101,7 +101,7 @@ import {
   nearestMapPinFuzzStep,
   privateMapPointAround,
 } from '../lib/mapPinFuzz';
-import { adjustHotSpotLiveCount, isHotSpotActive } from '../lib/hotSpotCounts';
+import { isHotSpotActive, spotAfterCheckToggle } from '../lib/hotSpotCounts';
 
 /**
  * Pete lock (8 Oct 2026): Map is home. One toggle swaps the whole screen between
@@ -198,7 +198,7 @@ function MapFloatingChrome({
           data-testid="hotspots-map-helper"
         >
           <div
-            className="pointer-events-auto relative max-w-sm rounded-lg border py-1 pl-2.5 pr-6"
+            className="pointer-events-auto relative max-w-sm rounded-lg border py-1.5 pl-3 pr-11"
             style={{
               background: 'rgba(13,10,6,0.82)',
               borderColor: 'rgba(196,131,42,0.28)',
@@ -206,7 +206,7 @@ function MapFloatingChrome({
             role="status"
           >
             <p
-              className="text-center text-xs font-semibold leading-snug tracking-wide"
+              className="text-center text-[15px] font-semibold leading-snug tracking-wide"
               style={{ color: 'rgba(240,224,192,0.82)' }}
               data-testid="hotspots-map-helper-copy"
             >
@@ -221,7 +221,7 @@ function MapFloatingChrome({
                 setMapBannerDismissed(true);
                 dismissHotSpotsMapBanner();
               }}
-              className="absolute -right-0.5 -top-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[15px] leading-none text-[rgba(240,224,192,0.85)] transition-colors hover:bg-[rgba(196,131,42,0.18)] hover:text-[rgba(240,224,192,1)]"
+              className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-full text-[20px] leading-none text-[rgba(240,224,192,0.85)] transition-colors hover:bg-[rgba(196,131,42,0.18)] hover:text-[rgba(240,224,192,1)]"
             >
               ×
             </button>
@@ -1295,22 +1295,17 @@ export const Discover = () => {
       setHotSpotActing(true);
       setHotSpotActionError('');
       try {
+        // Server count only: no optimistic +1 / -1, which was wrong for a Ghost or hidden
+        // viewer (never counted, so their check-out dropped the number) (#368).
         let updatedSpot: HotSpotDTO | undefined;
         if (spot.is_checked_in) {
-          await hotSpotsAPI.checkOut(spot.id);
-          updatedSpot = {
-            ...spot,
-            is_checked_in: false,
-            ...adjustHotSpotLiveCount(spot, -1),
-          };
+          const res = await hotSpotsAPI.checkOut(spot.id);
+          updatedSpot = spotAfterCheckToggle(spot, res.data?.spot, false);
         } else {
           const res = await hotSpotsAPI.checkIn(spot.id, anonymous);
-          updatedSpot = res.data?.spot ?? {
-            ...spot,
-            is_checked_in: true,
+          updatedSpot = spotAfterCheckToggle(spot, res.data?.spot, true, {
             my_checkin_anonymous: anonymous,
-            ...adjustHotSpotLiveCount(spot, 1),
-          };
+          });
         }
         if (selectedHotSpot && selectedHotSpot.id === spot.id && updatedSpot) {
           setSelectedHotSpot(updatedSpot);

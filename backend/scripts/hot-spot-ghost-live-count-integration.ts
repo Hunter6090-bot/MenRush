@@ -138,17 +138,29 @@ async function main() {
     await query(`UPDATE profiles SET is_visible = TRUE WHERE user_id = $1`, [hidden]);
     assert.strictEqual((await counts(SPOT.near)).premium, 6, 'no longer hidden: counted');
 
-    // ── Events share the spot count: a Ghost event check-in shows 0, a normal one 1.
+    // ── Events share the spot count. Since #375 a Ghost first check-in at an event with no
+    // spot is deferred: no pin is created and nothing is written. The visible member then
+    // creates the pin at 1, and the Ghost checking in after that adds 0.
     const event = { id: randomUUID(), name: 'HSGL Night', venue_name: 'HSGL Event Venue', lat: LAT + 5 * KM_LAT, lng: LNG };
+    const evGhostFirst = await hotSpotsService.checkInAtEvent(premiumGhost, event, false);
+    assert.strictEqual(evGhostFirst, null, 'Ghost first event check-in is deferred (no spot)');
+    const evSpotRows = await query(`SELECT id FROM hot_spots WHERE event_id = $1`, [event.id]);
+    assert.strictEqual(evSpotRows.rows.length, 0, 'deferred Ghost check-in creates no event spot');
+    const evVisible = await hotSpotsService.checkInAtEvent(newcomer, event, true);
+    assert.ok(evVisible?.id, 'visible member creates the event spot');
+    spotIds.push(evVisible!.id);
+    assert.deepStrictEqual(await counts(evVisible!.id), { free: 1, premium: 1, active: true }, 'visible event check-in: 1');
     const evGhost = await hotSpotsService.checkInAtEvent(premiumGhost, event, false);
-    assert.ok(evGhost?.id, 'event spot created');
-    spotIds.push(evGhost!.id);
-    assert.strictEqual(evGhost?.is_checked_in, true);
-    assert.strictEqual((await counts(evGhost!.id)).premium, 0, 'Ghost event check-in: 0 for Premium');
-    assert.strictEqual((await counts(evGhost!.id)).free, 0, 'Ghost event check-in: 0 for Free');
-    assert.strictEqual((await counts(evGhost!.id)).active, false, 'no visible activity at the event');
-    await hotSpotsService.checkInAtEvent(newcomer, event, true);
-    assert.deepStrictEqual(await counts(evGhost!.id), { free: 1, premium: 1, active: true }, 'normal event check-in adds 1');
+    assert.strictEqual(evGhost?.id, evVisible!.id, 'Ghost now checks in to the existing event spot');
+    assert.strictEqual(evGhost?.is_checked_in, true, 'Ghost sees their own event check-in');
+    assert.deepStrictEqual(await counts(evVisible!.id), { free: 1, premium: 1, active: true }, 'Ghost event check-in adds 0');
+
+    // ── Check-out returns the server's count: a Ghost leaving does not drop it.
+    const ghostOut = await hotSpotsService.checkOut(premiumGhost, evVisible!.id);
+    assert.strictEqual(ghostOut.spot?.is_checked_in, false, 'Ghost check-out: no longer checked in');
+    assert.strictEqual(ghostOut.spot?.live_count_exact, 1, 'Ghost check-out leaves the count at 1');
+    const visibleOut = await hotSpotsService.checkOut(newcomer, evVisible!.id);
+    assert.strictEqual(visibleOut.spot?.live_count, 0, 'visible check-out drops the count to 0');
 
     console.log('hot-spot-ghost-live-count-integration: ok');
   } finally {
