@@ -202,3 +202,7 @@ jobs:
         run: npm run --if-present test:community-ghost-hidden
       - name: Reports survive when the reported member deletes their account (real PG)
         run: npm run test:reports-survive-deletion-integration
+      # Keep last: its fake 2027 clock clears every live location and strips
+      # old post coordinates in this test database.
+      - name: Location retention purge (fake clock)
+        run: npm run test:location-retention-integration
