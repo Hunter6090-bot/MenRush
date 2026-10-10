@@ -123,6 +123,8 @@ jobs:
         run: npm ci
       - name: Edge secret middleware (no IP no secret, override list, forged copies deleted)
         run: npm run test:edge-proxy-secret
+      - name: No coordinates in /api GET URLs (fix only in the POST body)
+        run: npm run test:no-coords-in-urls
       # vercel build, then import and call the exact built middleware.js under
       # plain Node ESM from an isolated copy (catches ERR_MODULE_NOT_FOUND /
       # MIDDLEWARE_INVOCATION_FAILED that vitest and tsc cannot see). No
@@ -180,8 +182,12 @@ jobs:
         run: npm run test:hot-spot-live-sort-integration
       - name: Personal Pride codes end 31 October (real PG)
         run: npm run test:pride-personal-expiry-integration
+      - name: Ghost and hidden check-ins do not add to live counts
+        run: npm run test:hot-spot-ghost-live-count
       - name: Pride code holders can register (real PG)
         run: npm run test:pride-invite-register-integration
+      - name: Deleting a member who created a room works (real PG)
+        run: npm run test:delete-room-creator-integration
       - name: Ghost or hidden first event check-in creates no public spot (real PG)
         run: npm run test:events-ghost-first-checkin
       # --if-present: these scripts arrive with their own PRs (#333, #327,
@@ -194,3 +200,5 @@ jobs:
         run: npm run --if-present test:hide-location-integration
       - name: Community leaves out Ghost and hidden members
         run: npm run --if-present test:community-ghost-hidden
+      - name: Reports survive when the reported member deletes their account (real PG)
+        run: npm run test:reports-survive-deletion-integration
