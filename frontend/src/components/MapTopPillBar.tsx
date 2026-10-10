@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import {
   MAP_OVERLAY_BOTTOM_CLEARANCE_CLASS,
   MAP_OVERLAY_PINNED_MAX_CLASS,
+  MAP_SHORT_HEIGHT_PX,
   useClearanceBelowTopPrompt,
 } from '../lib/topPromptOverlay';
 /**
@@ -20,6 +21,7 @@ export function MapTopPillBar({
   onFiltersClick,
   filtersActive = false,
   leading,
+  layers,
   children,
   notes,
   footer,
@@ -28,11 +30,13 @@ export function MapTopPillBar({
   onRadiusClick: () => void;
   onFiltersClick: () => void;
   filtersActive?: boolean;
-  /** Quiet-map Pulse. Scrolls under the Radius / Filters row. */
+  /** Quiet-map Pulse. Tall maps only; sits under Radius / Filters. */
   leading?: ReactNode;
-  /** Layer chrome + Map spots note. Scrolls under the pills. */
+  /** People / spots icon buttons. Same row as the pills on a short map. */
+  layers?: ReactNode;
+  /** Map spots 18+ note. Tall maps only; after Pulse and layers. */
   children?: ReactNode;
-  /** Closeable pin note. Scrolls with the top stack; never owns the footer. */
+  /** Closeable pin note. Tall maps only. */
   notes?: ReactNode;
   /** Compact empty-radius pill. Pinned, max ~25% of the map. */
   footer?: ReactNode;
@@ -40,12 +44,24 @@ export function MapTopPillBar({
   const radiusLabel = formatRadiusControlLabel(radiusKm);
   const columnRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const { offset, ready } = useClearanceBelowTopPrompt(columnRef);
+  const { offset, ready, animate } = useClearanceBelowTopPrompt(columnRef);
+  const [mapHeight, setMapHeight] = useState(0);
   const [moreBelow, setMoreBelow] = useState(false);
+  const short = mapHeight > 0 && mapHeight < MAP_SHORT_HEIGHT_PX;
+
+  useLayoutEffect(() => {
+    const el = columnRef.current;
+    if (!el) return;
+    const update = () => setMapHeight(el.getBoundingClientRect().height);
+    update();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, []);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (!el) {
+    if (!el || short) {
       setMoreBelow(false);
       return;
     }
@@ -60,7 +76,33 @@ export function MapTopPillBar({
       el.removeEventListener('scroll', check);
       ro?.disconnect();
     };
-  }, [leading, children, notes, offset]);
+  }, [leading, layers, children, notes, offset, short]);
+
+  const pills = (
+    <>
+      <button
+        type="button"
+        data-testid="map-pill-radius"
+        aria-label={`Radius ${radiusLabel}`}
+        onClick={onRadiusClick}
+        className={pillClass}
+      >
+        <RadiusGlyph />
+        <span>Radius {radiusLabel.replace(/^Radius\s+/i, '')}</span>
+      </button>
+      <button
+        type="button"
+        data-testid="map-pill-filters"
+        aria-label="Filters"
+        aria-pressed={filtersActive}
+        onClick={onFiltersClick}
+        className={`${pillClass} ${filtersActive ? 'border-[var(--copper)] text-[var(--copper)]' : ''}`}
+      >
+        <FiltersGlyph />
+        <span>Filters</span>
+      </button>
+    </>
+  );
 
   return (
     <div
@@ -69,68 +111,66 @@ export function MapTopPillBar({
       data-testid="map-overlay-column"
       data-offset-for-banner={offset}
       data-overlay-ready={ready ? 'true' : 'false'}
+      data-map-short={short ? 'true' : 'false'}
+      style={{ visibility: ready ? 'visible' : 'hidden' }}
     >
       <div
         className="shrink-0 overflow-hidden will-change-transform"
         data-testid="map-overlay-shift"
         data-offset-for-banner={offset}
+        data-shift-animated={animate ? 'true' : 'false'}
         style={{
           height: offset,
           transform: 'translateY(0)',
-          transition: 'height 200ms ease-out, transform 200ms ease-out',
+          transition: animate ? 'height 200ms ease-out, transform 200ms ease-out' : 'none',
         }}
       />
       <div
         className="flex min-h-[44px] min-w-0 flex-1 flex-col overflow-hidden"
         data-testid="map-overlay-top"
       >
+        <div
+          className={`flex shrink-0 flex-col gap-2 px-3 pt-3 ${short ? 'pr-14' : ''}`}
+          data-testid="map-top-stack"
+          data-offset-for-banner={offset}
+        >
           <div
-            className="flex shrink-0 flex-col gap-2 px-3 pt-3"
-            data-testid="map-top-stack"
-            data-offset-for-banner={offset}
+            className="pointer-events-none flex max-w-full flex-nowrap items-center justify-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            data-testid="map-top-pill-bar"
           >
-            {/* Pills first: always in the non-scrolling header so they stay on screen. */}
-            <div
-              className="pointer-events-auto flex max-w-full flex-nowrap items-center justify-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              data-testid="map-top-pill-bar"
-            >
-              <button
-                type="button"
-                data-testid="map-pill-radius"
-                aria-label={`Radius ${radiusLabel}`}
-                onClick={onRadiusClick}
-                className={pillClass}
-              >
-                <RadiusGlyph />
-                <span>Radius {radiusLabel.replace(/^Radius\s+/i, '')}</span>
-              </button>
-              <button
-                type="button"
-                data-testid="map-pill-filters"
-                aria-label="Filters"
-                aria-pressed={filtersActive}
-                onClick={onFiltersClick}
-                className={`${pillClass} ${filtersActive ? 'border-[var(--copper)] text-[var(--copper)]' : ''}`}
-              >
-                <FiltersGlyph />
-                <span>Filters</span>
-              </button>
+            <div className="pointer-events-auto flex flex-nowrap items-center gap-2">
+              {pills}
+              {short && layers ? (
+                <div
+                  className="flex shrink-0 items-center gap-1.5 [&_[data-layer-label]]:hidden [&_[data-testid^='layer-toggle']]:h-11 [&_[data-testid^='layer-toggle']]:w-11 [&_[data-testid^='layer-toggle']]:min-h-[44px] [&_[data-testid^='layer-toggle']]:min-w-[44px] [&_[data-testid^='layer-toggle']]:px-0"
+                  data-testid="map-top-stack-layers"
+                >
+                  {layers}
+                </div>
+              ) : null}
             </div>
           </div>
+        </div>
+        {short ? null : (
           <div className="relative min-h-0 flex-1">
             <div
               ref={scrollRef}
               className="flex h-full min-h-0 flex-col gap-2 overflow-y-auto overscroll-y-contain px-3 pb-2"
               data-testid="map-overlay-scroll"
             >
-              {children ? (
-                <div className="pointer-events-none w-full" data-testid="map-top-stack-below">
-                  {children}
-                </div>
-              ) : null}
               {leading ? (
                 <div className="pointer-events-auto w-full" data-testid="map-top-stack-leading">
                   {leading}
+                </div>
+              ) : null}
+              {layers ? (
+                <div className="flex w-full justify-end" data-testid="map-top-stack-layers">
+                  {layers}
+                </div>
+              ) : null}
+              {children ? (
+                <div className="pointer-events-none w-full" data-testid="map-top-stack-below">
+                  {children}
                 </div>
               ) : null}
               {notes ? (
@@ -141,12 +181,13 @@ export function MapTopPillBar({
             </div>
             {moreBelow ? (
               <div
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#0D0A06] via-[rgba(240,224,192,0.22)] to-transparent"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[var(--bg-primary)] to-transparent"
                 data-testid="map-overlay-scroll-cue"
                 aria-hidden
               />
             ) : null}
           </div>
+        )}
       </div>
       {footer ? (
         <div

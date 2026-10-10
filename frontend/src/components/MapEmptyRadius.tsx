@@ -12,7 +12,7 @@ export function MapEmptyRadius({
 }: {
   nextRadiusKm: number;
   onWiden: () => void;
-  /** Single-line "Nobody nearby" + Widen. Used as the pinned footer. */
+  /** Compact pill: "Nobody in this radius" (15px, may wrap) + Widen. */
   compact?: boolean;
 }) {
   const label = formatRadiusControlLabel(nextRadiusKm);
@@ -20,10 +20,12 @@ export function MapEmptyRadius({
     return (
       <div className="pointer-events-none flex justify-center px-2 py-1">
         <div
-          className="pointer-events-auto inline-flex min-h-[44px] max-w-[calc(100%-7.5rem)] flex-nowrap items-center gap-2 rounded-full border border-[var(--border-default)] bg-[rgba(30,21,8,0.95)] py-0 pl-3 pr-1 shadow-lg backdrop-blur-md"
+          className="pointer-events-auto inline-flex min-h-[44px] max-w-[calc(100%-7.5rem)] flex-nowrap items-center gap-2 rounded-full border border-[var(--border-default)] bg-[rgba(30,21,8,0.95)] py-1 pl-3 pr-1 shadow-lg backdrop-blur-md"
           data-testid="map-empty-radius"
         >
-          <span className="truncate text-[15px] font-extrabold text-[#F0E0C0]">Nobody nearby</span>
+          <span className="min-w-0 text-left text-[15px] font-extrabold leading-tight text-[#F0E0C0]">
+            Nobody in this radius
+          </span>
           <button
             type="button"
             data-testid="map-widen-radius"

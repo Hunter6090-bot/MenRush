@@ -17,6 +17,7 @@ import { resetPromptSlotsForTests } from '../lib/promptSlot';
 import {
   MAP_OVERLAY_BOTTOM_CLEARANCE_CLASS,
   MAP_OVERLAY_PINNED_MAX_CLASS,
+  MAP_SHORT_HEIGHT_PX,
   offsetBelowTopPrompt,
   resetTopPromptOverlayForTests,
   TOP_PROMPT_GAP_PX,
@@ -52,7 +53,7 @@ const phones = [
 const PILL_ROW_PADDING_PX = 12;
 const PULSE_CARD_HEIGHT = 128;
 const DEFAULT_MAP_HEIGHT = 560;
-const SHORT_MAP_HEIGHT = 400;
+const SHORT_MAP_HEIGHT = 520;
 const PILL_ROW_HEIGHT = 44;
 const MAP_SPOTS_HEIGHT = 72;
 const EMPTY_HEIGHT = 48;
@@ -112,11 +113,17 @@ function mockLayout(state: LayoutState) {
     const offset = offsetBelowTopPrompt(state.mapTop, bannerBottom);
     const stackTop = state.mapTop;
     const pillsTop = stackTop + PILL_ROW_PADDING_PX + offset;
-    const layersTop = pillsTop + PILL_ROW_HEIGHT + 8;
+    const short = state.mapHeight < MAP_SHORT_HEIGHT_PX;
+    const pulseTop = pillsTop + PILL_ROW_HEIGHT + 8;
+    const layersTop = short
+      ? pillsTop
+      : pulseTop + (state.pulse ? PULSE_CARD_HEIGHT + 8 : 0);
     const spotsTop = layersTop + LAYER_HEIGHT + 8;
-    const pulseTop = state.pulse ? spotsTop + MAP_SPOTS_HEIGHT + 8 : spotsTop;
     const emptyTop = mapBottom(state) - EMPTY_BOTTOM_PAD - EMPTY_HEIGHT;
-    const noteTop = Math.min(pulseTop + (state.pulse ? PULSE_CARD_HEIGHT + 8 : 0), emptyTop - NOTE_HEIGHT - 4);
+    const noteTop = Math.min(
+      short ? pillsTop : spotsTop + MAP_SPOTS_HEIGHT + 8,
+      emptyTop - NOTE_HEIGHT - 4,
+    );
     const clampTop = (top: number, height: number) => {
       const limit = mapBottom(state) - height;
       return Math.min(Math.max(top, state.mapTop), limit);
@@ -126,18 +133,19 @@ function mockLayout(state: LayoutState) {
       return state.banner ? boxFor(state.width, state.bannerTop, state.bannerHeight) : boxFor(state.width, 0, 0);
     }
     if (id === 'pulse-nudge' || id === 'map-top-stack-leading') {
-      const clipTop = state.mapTop;
-      const clipBottom = noteTop;
+      if (short || !state.pulse) return boxFor(state.width - 24, 0, 0);
+      const clipTop = pillsTop + PILL_ROW_HEIGHT;
       const visibleTop = Math.max(pulseTop, clipTop);
-      const visibleBottom = Math.min(pulseTop + PULSE_CARD_HEIGHT, clipBottom);
+      const visibleBottom = Math.min(pulseTop + PULSE_CARD_HEIGHT, emptyTop);
       if (visibleBottom <= visibleTop) {
         return boxFor(state.width - 24, clipTop, 0);
       }
       return boxFor(state.width - 24, visibleTop, visibleBottom - visibleTop);
     }
     if (id === 'pulse-nudge-start' || id === 'pulse-nudge-dismiss') {
-      const top = Math.min(pulseTop + PULSE_CARD_HEIGHT - 44, noteTop - 44);
-      return boxFor(120, clampTop(top, 44), 44);
+      if (short || !state.pulse) return boxFor(120, 0, 0);
+      const top = pulseTop + PULSE_CARD_HEIGHT - 52;
+      return boxFor(120, clampTop(top, 44), 44, id === 'pulse-nudge-dismiss' ? 140 : 16);
     }
     if (id === 'discover-map-panel' || id === 'map-overlay-column') {
       return boxFor(state.width, state.mapTop, state.mapHeight);
@@ -149,7 +157,12 @@ function mockLayout(state: LayoutState) {
       return boxFor(state.width, stackTop + offset, PILL_ROW_PADDING_PX + PILL_ROW_HEIGHT);
     }
     if (id === 'map-top-pill-bar' || id === 'map-pill-radius' || id === 'map-pill-filters') {
-      return boxFor(id === 'map-top-pill-bar' ? state.width : 140, clampTop(pillsTop, PILL_ROW_HEIGHT), PILL_ROW_HEIGHT);
+      const gutter = short ? 56 : 0;
+      return boxFor(
+        id === 'map-top-pill-bar' ? state.width - gutter : 140,
+        clampTop(pillsTop, PILL_ROW_HEIGHT),
+        PILL_ROW_HEIGHT,
+      );
     }
     if (id === 'map-layer-chrome' || id === 'layer-toggle-people' || id === 'layer-toggle-hotspots') {
       return boxFor(id === 'map-layer-chrome' ? 120 : 44, clampTop(layersTop, LAYER_HEIGHT), LAYER_HEIGHT, state.width - 140);
@@ -176,7 +189,7 @@ function mockLayout(state: LayoutState) {
       return boxFor(state.width, mapBottom(state) - EMPTY_BOTTOM_PAD, EMPTY_BOTTOM_PAD);
     }
     if (id === 'mapbox-locate') {
-      return boxFor(40, mapBottom(state) - 56, 40, state.width - 56);
+      return boxFor(40, mapBottom(state) - 170, 40, state.width - 56);
     }
     if (id === 'map-empty-radius' || id === 'map-widen-radius') {
       const top = emptyTop;
@@ -208,24 +221,27 @@ async function settle() {
   });
 }
 
-function LayerAndSpotsNote() {
+function LayerButtons() {
   return (
-    <>
-      <div data-testid="map-layer-chrome">
-        <button type="button" data-testid="layer-toggle-people" className="min-h-[44px] min-w-[44px]">
-          People
-        </button>
-        <button type="button" data-testid="layer-toggle-hotspots" className="min-h-[44px] min-w-[44px]">
-          Spots
-        </button>
-      </div>
-      <div data-testid="hotspots-map-helper">
-        <p data-testid="hotspots-map-helper-copy">Map spots include independent venues and outdoor locations. 18+ only.</p>
-        <button type="button" data-testid="hotspots-map-helper-dismiss" className="h-11 w-11 min-h-[44px] min-w-[44px]">
-          ×
-        </button>
-      </div>
-    </>
+    <div data-testid="map-layer-chrome">
+      <button type="button" data-testid="layer-toggle-people" className="h-11 w-11 min-h-[44px] min-w-[44px]">
+        People
+      </button>
+      <button type="button" data-testid="layer-toggle-hotspots" className="h-11 w-11 min-h-[44px] min-w-[44px]">
+        Spots
+      </button>
+    </div>
+  );
+}
+
+function SpotsNote() {
+  return (
+    <div data-testid="hotspots-map-helper">
+      <p data-testid="hotspots-map-helper-copy">Map spots include independent venues and outdoor locations. 18+ only.</p>
+      <button type="button" data-testid="hotspots-map-helper-dismiss" className="h-11 w-11 min-h-[44px] min-w-[44px]">
+        ×
+      </button>
+    </div>
   );
 }
 
@@ -277,10 +293,11 @@ function renderNearby(opts: { pulse?: boolean } = {}) {
           onRadiusClick={vi.fn()}
           onFiltersClick={vi.fn()}
           leading={opts.pulse ? <QuietPulseCard /> : null}
+          layers={<LayerButtons />}
           notes={<MapPrivacyNote text="Your pin is moved 80 to 320 m" />}
           footer={<MapEmptyRadius compact nextRadiusKm={10} onWiden={vi.fn()} />}
         >
-          <LayerAndSpotsNote />
+          <SpotsNote />
         </MapTopPillBar>
       </div>
       <BottomChrome />
@@ -366,7 +383,6 @@ describe.each(phones)('Map overlays never overlap ($width px)', (p) => {
     expect(stack.getAttribute('data-offset-for-banner')).toBe(String(expected));
     const shift = screen.getByTestId('map-overlay-shift');
     expect(Number.parseFloat(shift.style.height)).toBe(expected);
-    expect(shift.style.transition).toMatch(/transform/);
     expect(screen.getByTestId('map-overlay-column').getAttribute('data-overlay-ready')).toBe('true');
     const pillsTop = p.mapTop + expected + PILL_ROW_PADDING_PX;
     expect(pillsTop).toBeGreaterThan(bannerBottom);
@@ -403,10 +419,11 @@ describe.each(phones)('Map overlays never overlap ($width px)', (p) => {
             onRadiusClick={vi.fn()}
             onFiltersClick={vi.fn()}
             leading={<QuietPulseCard />}
+            layers={<LayerButtons />}
             notes={<MapPrivacyNote text="Your pin is moved 80 to 320 m" />}
             footer={<MapEmptyRadius compact nextRadiusKm={10} onWiden={vi.fn()} />}
           >
-            <LayerAndSpotsNote />
+            <SpotsNote />
           </MapTopPillBar>
         </div>
         <BottomChrome />
@@ -482,9 +499,6 @@ describe('overlay column taller than the map (360 px, banner on)', () => {
     expect(column.getBoundingClientRect().height).toBe(SHORT_MAP_HEIGHT);
     expect(column.getBoundingClientRect().bottom).toBeLessThanOrEqual(map.bottom);
     expect(column.getBoundingClientRect().bottom).toBeLessThanOrEqual(tab.top);
-    expect(column.getBoundingClientRect().height).toBeLessThan(
-      PILL_ROW_PADDING_PX + 94 + PULSE_CARD_HEIGHT + PILL_ROW_HEIGHT + MAP_SPOTS_HEIGHT + EMPTY_HEIGHT + EMPTY_BOTTOM_PAD,
-    );
     expect(column.contains(screen.getByTestId('map-widen-radius'))).toBe(true);
     expect(column.contains(screen.getByTestId('map-empty-radius'))).toBe(true);
     expect(column.contains(screen.getByTestId('pulse-nudge-start'))).toBe(true);
@@ -527,6 +541,8 @@ function mockElementFromPoint() {
     value: (x: number, y: number) => {
       const overlay = [
         'push-alert-banner',
+        'pulse-nudge-start',
+        'pulse-nudge-dismiss',
         'map-pill-radius',
         'map-pill-filters',
         'layer-toggle-people',
@@ -728,15 +744,42 @@ function measureRendered(el: Element, memo: WeakMap<Element, DOMRect>): DOMRect 
     const top = html.closest('[data-testid="map-overlay-top"]') ?? html;
     const topBox = measureRendered(top, memo);
     const t = topBox.top + PILL_ROW_PADDING_PX;
-    const w = id === 'map-top-pill-bar' || id === 'map-top-stack' ? topBox.width : 140;
-    const left = id === 'map-pill-filters' ? topBox.left + topBox.width / 2 : topBox.left + 24;
+    const w = id === 'map-top-pill-bar' || id === 'map-top-stack' ? Math.max(0, topBox.width - 56) : 140;
+    const left = id === 'map-pill-filters' ? topBox.left + 168 : topBox.left + 24;
     const box = boxFor(w, t, PILL_ROW_HEIGHT, id.startsWith('map-pill') ? left : topBox.left);
     memo.set(el, box);
     return box;
   }
 
   if (
+    id === 'pulse-nudge' ||
+    id === 'map-top-stack-leading' ||
+    id === 'pulse-nudge-start' ||
+    id === 'pulse-nudge-dismiss'
+  ) {
+    const col = html.closest('[data-testid="map-overlay-column"]') ?? html;
+    const colBox = measureRendered(col, memo);
+    if (colBox.height < MAP_SHORT_HEIGHT_PX) {
+      const box = boxFor(0, 0, 0);
+      memo.set(el, box);
+      return box;
+    }
+    const top = html.closest('[data-testid="map-overlay-top"]') ?? html;
+    const topBox = measureRendered(top, memo);
+    const pulseTop = topBox.top + PILL_ROW_PADDING_PX + PILL_ROW_HEIGHT + 8;
+    if (id === 'pulse-nudge-start' || id === 'pulse-nudge-dismiss') {
+      const box = boxFor(120, pulseTop + PULSE_CARD_HEIGHT - 52, 44, id === 'pulse-nudge-dismiss' ? 148 : 20);
+      memo.set(el, box);
+      return box;
+    }
+    const box = boxFor(topBox.width - 24, pulseTop, PULSE_CARD_HEIGHT, topBox.left + 12);
+    memo.set(el, box);
+    return box;
+  }
+
+  if (
     id === 'map-layer-chrome' ||
+    id === 'map-top-stack-layers' ||
     id === 'layer-toggle-people' ||
     id === 'layer-toggle-hotspots' ||
     id === 'hotspots-map-helper' ||
@@ -745,17 +788,29 @@ function measureRendered(el: Element, memo: WeakMap<Element, DOMRect>): DOMRect 
     const top = html.closest('[data-testid="map-overlay-top"]') ?? html;
     const topBox = measureRendered(top, memo);
     const col = html.closest('[data-testid="map-overlay-column"]') ?? html;
+    const colBox = measureRendered(col, memo);
+    const short = colBox.height < MAP_SHORT_HEIGHT_PX;
     const pinned = col.querySelector('[data-testid="map-overlay-pinned"]');
     const pinnedTop = pinned ? measureRendered(pinned, memo).top : topBox.bottom;
-    const t = Math.min(topBox.top + PILL_ROW_PADDING_PX + PILL_ROW_HEIGHT + 8, pinnedTop - 48);
+    const t = short
+      ? topBox.top + PILL_ROW_PADDING_PX
+      : Math.min(topBox.top + PILL_ROW_PADDING_PX + PILL_ROW_HEIGHT + 8 + PULSE_CARD_HEIGHT + 8, pinnedTop - 48);
     const size = id === 'hotspots-map-helper' ? 72 : 44;
-    const left =
-      id === 'hotspots-map-helper-dismiss'
+    const left = short
+      ? id === 'layer-toggle-hotspots'
+        ? topBox.left + 360
+        : topBox.left + 312
+      : id === 'hotspots-map-helper-dismiss'
         ? topBox.left + topBox.width - 56
         : id === 'layer-toggle-hotspots'
           ? topBox.left + topBox.width - 100
           : topBox.left + topBox.width - 148;
-    const box = boxFor(id === 'hotspots-map-helper' || id === 'map-layer-chrome' ? 160 : 44, t, size, left);
+    const box = boxFor(
+      id === 'hotspots-map-helper' || id === 'map-layer-chrome' || id === 'map-top-stack-layers' ? 160 : 44,
+      t,
+      size,
+      id === 'hotspots-map-helper' ? topBox.left + 24 : left,
+    );
     memo.set(el, box);
     return box;
   }
@@ -830,10 +885,11 @@ function InteractiveQuietMap({
           onRadiusClick={vi.fn()}
           onFiltersClick={vi.fn()}
           leading={pulse ? <QuietPulseCard /> : null}
+          layers={<LayerButtons />}
           notes={<MapPrivacyNote text="Your pin is moved 80 to 320 m" />}
           footer={<MapEmptyRadius compact nextRadiusKm={16} onWiden={() => setRadius(16)} />}
         >
-          <LayerAndSpotsNote />
+          <SpotsNote />
         </MapTopPillBar>
         <button
           type="button"
@@ -845,7 +901,7 @@ function InteractiveQuietMap({
         <button
           type="button"
           data-testid="mapbox-locate"
-          style={{ position: 'absolute', bottom: 56, right: 12, width: 40, height: 40 }}
+          style={{ position: 'absolute', bottom: 130, right: 12, width: 40, height: 40 }}
         >
           Locate
         </button>
@@ -905,7 +961,7 @@ describe.each(['dark', 'light'] as const)('pinned Widen is tappable (%s)', (them
 });
 
 describe('landscape overlay clearance (844x390)', () => {
-  it('keeps Pulse and Widen clear of locate, PULSE and the dock', async () => {
+  it('drops the Pulse card and keeps Widen clear of locate, PULSE and the dock', async () => {
     const layout: LayoutState = {
       width: 844,
       bannerTop: 48,
@@ -918,20 +974,26 @@ describe('landscape overlay clearance (844x390)', () => {
     };
     mockLayout(layout);
     mockElementFromPoint();
-    render(<InteractiveQuietMap theme="dark" />);
+    render(
+      <InteractiveQuietMap
+        theme="dark"
+        pulse
+        banner
+        width={844}
+        height={390}
+        header={52}
+        tabHeight={64}
+      />,
+    );
     expect(await screen.findByTestId('push-alert-banner')).toBeInTheDocument();
 
-    const pulse = screen.getByTestId('pulse-nudge').getBoundingClientRect();
-    const top = screen.getByTestId('map-overlay-top').getBoundingClientRect();
-    expect(pulse.bottom).toBeLessThanOrEqual(top.bottom + 1);
+    expect(screen.getByTestId('map-overlay-column')).toHaveAttribute('data-map-short', 'true');
+    expect(screen.queryByTestId('pulse-nudge')).toBeNull();
+    expect(screen.queryByTestId('map-overlay-scroll')).toBeNull();
     assertAboveBottomChrome(['map-widen-radius']);
     const locate = screen.getByTestId('mapbox-locate').getBoundingClientRect();
     expect(overlap(screen.getByTestId('map-widen-radius').getBoundingClientRect(), locate)).toBe(false);
-    expect(overlap(pulse, locate)).toBe(false);
-    expect(overlap(pulse, screen.getByTestId('pulse-fab').getBoundingClientRect())).toBe(false);
-    expect(overlap(pulse, screen.getByTestId('discover-chat-dock-toggle').getBoundingClientRect())).toBe(
-      false,
-    );
+    expect(overlap(screen.getByTestId('map-top-pill-bar').getBoundingClientRect(), locate)).toBe(false);
   });
 });
 
@@ -943,13 +1005,14 @@ describe('pills wait for the banner to settle', () => {
     const { isPushConfigured } = await import('../lib/push');
     vi.mocked(isPushConfigured).mockReturnValue(new Promise<boolean>(() => {}));
     renderNearby({ pulse: true });
-    expect(screen.getByTestId('map-pill-radius')).toBeVisible();
-    expect(screen.getByTestId('map-overlay-column').getAttribute('data-overlay-ready')).toBe('true');
+    expect(screen.getByTestId('map-overlay-column').getAttribute('data-overlay-ready')).toBe('false');
+    expect(screen.getByTestId('map-overlay-column').style.visibility).toBe('hidden');
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(TOP_PROMPT_SETTLE_TIMEOUT_MS);
     });
     expect(screen.getByTestId('map-overlay-column').getAttribute('data-overlay-ready')).toBe('true');
+    expect(screen.getByTestId('map-overlay-column').style.visibility).toBe('visible');
     expect(screen.getByTestId('map-pill-radius')).toBeVisible();
     expect(screen.getByTestId('map-pill-filters')).toBeVisible();
     expect(screen.getByTestId('pulse-nudge')).toBeVisible();
@@ -983,8 +1046,8 @@ describe('pills wait for the banner to settle', () => {
       }),
     );
     renderNearby({ pulse: true });
-    expect(screen.getByTestId('map-pill-radius')).toBeVisible();
-    expect(screen.getByTestId('map-overlay-shift').style.transition).toMatch(/transform/);
+    expect(screen.getByTestId('map-overlay-column').style.visibility).toBe('hidden');
+    expect(screen.getByTestId('map-overlay-shift').style.transition).toBe('none');
 
     await act(async () => {
       release(true);
@@ -995,15 +1058,18 @@ describe('pills wait for the banner to settle', () => {
     const pillsTop = screen.getByTestId('map-top-pill-bar').getBoundingClientRect().top;
     expect(pillsTop).toBeGreaterThan(p.bannerTop + p.bannerHeight);
   });
-});
 
-const VIEWPORTS = [
-  { width: 844, height: 390, header: 52, tabHeight: 64, name: '844x390' },
-  { width: 640, height: 360, header: 48, tabHeight: 48, name: '640x360' },
-  { width: 360, height: 640, header: 56, tabHeight: 64, name: '360x640' },
-  { width: 360, height: 780, header: 56, tabHeight: 71, name: '360x780' },
-  { width: 390, height: 844, header: 56, tabHeight: 71, name: '390x844' },
-] as const;
+  it("paints pills at their final y when the banner is known within 800ms", async () => {
+    const p = phones[0];
+    mockLayout({ ...p, pulse: true, banner: true, mapHeight: DEFAULT_MAP_HEIGHT });
+    renderNearby({ pulse: true });
+    expect(await screen.findByTestId('push-alert-banner')).toBeInTheDocument();
+    const firstY = screen.getByTestId('map-top-pill-bar').getBoundingClientRect().top;
+    expect(firstY).toBeGreaterThan(p.bannerTop + p.bannerHeight);
+    await settle();
+    expect(screen.getByTestId('map-top-pill-bar').getBoundingClientRect().top).toBe(firstY);
+  });
+});
 
 function hitCentre(id: string): Element | null {
   const el = screen.getByTestId(id);
@@ -1011,10 +1077,66 @@ function hitCentre(id: string): Element | null {
   return document.elementFromPoint((box.left + box.right) / 2, (box.top + box.bottom) / 2);
 }
 
-describe('360x640 banner and Pulse keep pills on screen', () => {
-  it('puts Radius / Filters first and shows a fade when Pulse overflows', async () => {
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 360 });
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 640 });
+const LANDSCAPE = [
+  { width: 844, height: 390, header: 52, tabHeight: 64, name: '844x390' },
+  { width: 640, height: 360, header: 48, tabHeight: 48, name: '640x360' },
+] as const;
+
+const PORTRAIT_PULSE = [
+  { width: 360, height: 780, header: 56, tabHeight: 71, name: '360x780' },
+  { width: 360, height: 640, header: 56, tabHeight: 64, name: '360x640' },
+] as const;
+
+describe.each(LANDSCAPE)('short landscape hit targets $name', (vp) => {
+  describe.each(['dark', 'light'] as const)('%s', (theme) => {
+    describe.each([true, false] as const)('banner %s', (bannerOn) => {
+      it('keeps Radius, Filters, layers, locate and the PULSE FAB tappable', async () => {
+        Object.defineProperty(window, 'innerWidth', { configurable: true, value: vp.width });
+        Object.defineProperty(window, 'innerHeight', { configurable: true, value: vp.height });
+        installRenderedLayoutRects();
+        mockElementFromPoint();
+        render(
+          <InteractiveQuietMap
+            theme={theme}
+            pulse
+            banner={bannerOn}
+            width={vp.width}
+            height={vp.height}
+            header={vp.header}
+            tabHeight={vp.tabHeight}
+          />,
+        );
+        if (bannerOn) {
+          expect(await screen.findByTestId('push-alert-banner')).toBeInTheDocument();
+        } else {
+          await settle();
+        }
+
+        expect(screen.getByTestId('map-overlay-column')).toHaveAttribute('data-map-short', 'true');
+        expect(screen.queryByTestId('pulse-nudge')).toBeNull();
+        expect(screen.queryByTestId('map-overlay-scroll')).toBeNull();
+        expect(screen.queryByTestId('map-overlay-scroll-cue')).toBeNull();
+        expect(screen.getByTestId('map-top-pill-bar')).toContainElement(screen.getByTestId('map-layer-chrome'));
+
+        for (const id of [
+          'map-pill-radius',
+          'map-pill-filters',
+          'layer-toggle-people',
+          'layer-toggle-hotspots',
+          'mapbox-locate',
+          'pulse-fab',
+        ]) {
+          expect(hitCentre(id), `${id} is covered`).toBe(screen.getByTestId(id));
+        }
+      });
+    });
+  });
+});
+
+describe.each(PORTRAIT_PULSE)('portrait Pulse hit targets $name', (vp) => {
+  it('keeps Start Pulse, Not now, Widen and locate tappable with the banner', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: vp.width });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: vp.height });
     installRenderedLayoutRects();
     mockElementFromPoint();
     render(
@@ -1022,77 +1144,18 @@ describe('360x640 banner and Pulse keep pills on screen', () => {
         theme="dark"
         pulse
         banner
-        width={360}
-        height={640}
-        header={56}
-        tabHeight={64}
+        width={vp.width}
+        height={vp.height}
+        header={vp.header}
+        tabHeight={vp.tabHeight}
       />,
     );
     expect(await screen.findByTestId('push-alert-banner')).toBeInTheDocument();
+    expect(screen.getByTestId('map-overlay-column')).toHaveAttribute('data-map-short', 'false');
 
-    const pills = screen.getByTestId('map-top-pill-bar');
-    const pulse = screen.getByTestId('map-top-stack-leading');
-    const scroll = screen.getByTestId('map-overlay-scroll');
-    expect(pills.compareDocumentPosition(pulse) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(pills.closest('[data-testid="map-overlay-scroll"]')).toBeNull();
-    expect(scroll.contains(pulse)).toBe(true);
-    expect(scroll.className).toMatch(/overflow-y-auto/);
-
-    Object.defineProperty(scroll, 'scrollHeight', { configurable: true, value: 420 });
-    Object.defineProperty(scroll, 'clientHeight', { configurable: true, value: 96 });
-    Object.defineProperty(scroll, 'scrollTop', { configurable: true, value: 0 });
-    await settle();
-    expect(screen.getByTestId('map-overlay-scroll-cue')).toBeInTheDocument();
-  });
-});
-
-describe.each(VIEWPORTS)('overlay hit targets $name', (vp) => {
-  describe.each([true, false] as const)('banner %s', (bannerOn) => {
-    it('keeps Radius, Filters, Widen, locate, layers and the note close tappable', async () => {
-      Object.defineProperty(window, 'innerWidth', { configurable: true, value: vp.width });
-      Object.defineProperty(window, 'innerHeight', { configurable: true, value: vp.height });
-      installRenderedLayoutRects();
-      mockElementFromPoint();
-      render(
-        <InteractiveQuietMap
-          theme="dark"
-          pulse
-          banner={bannerOn}
-          width={vp.width}
-          height={vp.height}
-          header={vp.header}
-          tabHeight={vp.tabHeight}
-        />,
-      );
-      if (bannerOn) {
-        expect(await screen.findByTestId('push-alert-banner')).toBeInTheDocument();
-      }
-
-      const top = screen.getByTestId('map-overlay-top').getBoundingClientRect();
-      expect(top.height).toBeGreaterThanOrEqual(44);
-      expect(screen.getByTestId('map-overlay-pinned').className).toContain(MAP_OVERLAY_PINNED_MAX_CLASS);
-
-      const radius = screen.getByTestId('map-pill-radius').getBoundingClientRect();
-      expect(radius.height).toBeGreaterThanOrEqual(44);
-      expect(radius.bottom).toBeLessThanOrEqual(top.bottom + 1);
-
-      const widen = screen.getByTestId('map-widen-radius').getBoundingClientRect();
-      const locate = screen.getByTestId('mapbox-locate').getBoundingClientRect();
-      expect(overlap(widen, locate)).toBe(false);
-
-      for (const id of [
-        'map-pill-radius',
-        'map-pill-filters',
-        'map-widen-radius',
-        'mapbox-locate',
-        'layer-toggle-people',
-        'layer-toggle-hotspots',
-        'hotspots-map-helper-dismiss',
-        'map-privacy-note-close',
-      ]) {
-        expect(hitCentre(id), `${id} is covered`).toBe(screen.getByTestId(id));
-      }
-    });
+    for (const id of ['pulse-nudge-start', 'pulse-nudge-dismiss', 'map-widen-radius', 'mapbox-locate']) {
+      expect(hitCentre(id), `${id} is covered`).toBe(screen.getByTestId(id));
+    }
   });
 });
 

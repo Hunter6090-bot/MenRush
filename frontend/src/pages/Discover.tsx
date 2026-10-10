@@ -137,6 +137,7 @@ function MapFloatingChrome({
   onTravel,
   /** In-flow under MapTopPillBar children, no absolute offset, safe at 360/390/430. */
   placement = 'stacked',
+  section = 'all',
 }: {
   peopleLayerOn: boolean;
   hotSpotsLayerOn: boolean;
@@ -145,24 +146,25 @@ function MapFloatingChrome({
   /** Travel (plane): Look around another city or plan a trip. */
   onTravel?: () => void;
   placement?: 'stacked' | 'absolute';
+  /** Split so short maps can put layers on the pills row and drop the 18+ note. */
+  section?: 'all' | 'layers' | 'spots';
 }) {
   // One-time Legal quiet-face dismiss — same localStorage pattern as match coach.
   const [mapBannerDismissed, setMapBannerDismissed] = useState(isHotSpotsMapBannerDismissed);
   const stacked = placement === 'stacked';
+  const showLayers = section === 'all' || section === 'layers';
+  const showSpots = section === 'all' || section === 'spots';
 
   return (
     <>
-      {/* People / Cruise layers: stacked in-flow under pills. Discretion is in the top-right Menu. */}
-      <div
-        className={
-          stacked
-            ? 'pointer-events-none flex w-full items-start justify-end gap-2'
-            : 'pointer-events-none absolute inset-x-0 top-16 z-10 flex items-start justify-end gap-2 px-3'
-        }
-        data-testid="map-layer-chrome"
-      >
+      {showLayers ? (
         <div
-          className="pointer-events-auto flex items-center gap-1.5"
+          className={
+            stacked
+              ? 'pointer-events-auto flex items-center gap-1.5'
+              : 'pointer-events-none absolute inset-x-0 top-16 z-10 flex items-start justify-end gap-2 px-3'
+          }
+          data-testid="map-layer-chrome"
           data-map-chrome-corner="top-right"
         >
           {/* #67: compact independent People / Cruise (Hot Spots) layer control. */}
@@ -187,7 +189,7 @@ function MapFloatingChrome({
             className={`${mapChromeBtnClass} ${hotSpotsLayerOn ? '' : 'opacity-45'} gap-1 px-2.5`}
           >
             <IconHotSpots size={18} />
-            <span className="hidden text-xs font-extrabold tracking-wide sm:inline">
+            <span data-layer-label className="hidden text-xs font-extrabold tracking-wide sm:inline">
               {HOT_SPOTS_CHIP_LABEL}
             </span>
           </button>
@@ -205,8 +207,8 @@ function MapFloatingChrome({
             </button>
           ) : null}
         </div>
-      </div>
-      {hotSpotsLayerOn && !mapBannerDismissed ? (
+      ) : null}
+      {showSpots && hotSpotsLayerOn && !mapBannerDismissed ? (
         <div
           className={
             stacked
@@ -412,6 +414,13 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
     @media (max-width: 1023px) {
       .discover-map-surface[data-map-mode='default'] .mapboxgl-ctrl-bottom-right {
         bottom: calc(var(--fab-offset, 16px) + 88px + var(--fab-size, 56px) + 12px - var(--nav-height, 64px));
+        right: 12px;
+      }
+    }
+    /* Short / landscape: sit locate in the right gutter above the FAB, not on the pills. */
+    @media (max-height: 500px) {
+      .discover-map-surface .mapboxgl-ctrl-bottom-right {
+        bottom: calc(var(--fab-size, 4rem) + 24px);
         right: 12px;
       }
     }
@@ -2325,6 +2334,17 @@ export const Discover = () => {
                 <QuietMapPulseCard compact onStart={requestOpenPulse} onDismiss={dismissQuietPulse} />
               ) : null
             }
+            layers={
+              <MapFloatingChrome
+                section="layers"
+                placement="stacked"
+                peopleLayerOn={peopleLayerOn}
+                hotSpotsLayerOn={hotSpotsLayerOn}
+                onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
+                onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
+                onTravel={() => navigate('/travel')}
+              />
+            }
             notes={
               !needsLocationGate && !tokenMissing ? (
                 <MapPrivacyNote text={formatFuzzPrivacyNote(mapPinFuzzM)} />
@@ -2337,12 +2357,12 @@ export const Discover = () => {
             }
           >
             <MapFloatingChrome
+              section="spots"
               placement="stacked"
               peopleLayerOn={peopleLayerOn}
               hotSpotsLayerOn={hotSpotsLayerOn}
               onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
               onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
-              onTravel={() => navigate('/travel')}
             />
           </MapTopPillBar>
           <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
@@ -2456,6 +2476,17 @@ export const Discover = () => {
                   <QuietMapPulseCard compact onStart={requestOpenPulse} onDismiss={dismissQuietPulse} />
                 ) : null
               }
+              layers={
+                <MapFloatingChrome
+                  section="layers"
+                  placement="stacked"
+                  peopleLayerOn={peopleLayerOn}
+                  hotSpotsLayerOn={hotSpotsLayerOn}
+                  onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
+                  onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
+                  onTravel={() => navigate('/travel')}
+                />
+              }
               notes={
                 !needsLocationGate && !tokenMissing ? (
                   <MapPrivacyNote text={formatFuzzPrivacyNote(mapPinFuzzM)} />
@@ -2468,12 +2499,12 @@ export const Discover = () => {
               }
             >
               <MapFloatingChrome
+                section="spots"
                 placement="stacked"
                 peopleLayerOn={peopleLayerOn}
                 hotSpotsLayerOn={hotSpotsLayerOn}
                 onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
                 onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
-              onTravel={() => navigate('/travel')}
               />
             </MapTopPillBar>
           ) : null}

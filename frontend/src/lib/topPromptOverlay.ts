@@ -8,9 +8,10 @@
  * bottom edge (viewport px) while it is on screen; null when it is not.
  *
  * `settled` is false while the banner is still deciding (async push check).
- * Chrome stays painted at offset 0 and animates when the banner arrives so
- * a late measure does not snap. A short timeout (or an error) always
- * releases them so a hung check cannot hide Radius / Filters / Pulse.
+ * Map chrome stays hidden until then so pills never paint at the un-offset y
+ * and slide. A short timeout (or an error) always releases them so a hung
+ * check cannot hide Radius / Filters / Pulse. A banner that arrives after
+ * that timeout may animate once from the released position.
  */
 import { useLayoutEffect, useState, useSyncExternalStore, type RefObject } from 'react';
 
@@ -123,31 +124,32 @@ export const MAP_OVERLAY_BOTTOM_CLEARANCE_CLASS =
 /** Pinned footer may not eat the top stack on a short or landscape map. */
 export const MAP_OVERLAY_PINNED_MAX_CLASS = 'max-h-[25%]';
 
+/** Landscape and other short maps: no Pulse card, pin note, spots note or scroll. */
+export const MAP_SHORT_HEIGHT_PX = 480;
+
 /**
  * How far `anchorRef` must move down to clear the banner. Re-measures when the
  * banner changes and whenever the anchor or its parent resizes. Chrome stays
- * painted; the shift animates so a late banner does not snap or flicker.
+ * hidden until `settled` so the first painted y is already the final y.
+ * After that, a late banner (past the 800ms release) may animate once.
  */
 export function useClearanceBelowTopPrompt(anchorRef: RefObject<HTMLElement | null>): {
   offset: number;
   ready: boolean;
+  animate: boolean;
 } {
   const { bottom: bannerBottom, settled } = useTopPromptSnapshot();
   const [offset, setOffset] = useState(0);
-  const [ready, setReady] = useState(true);
+  const [animate, setAnimate] = useState(false);
 
   useLayoutEffect(() => {
     const anchor = anchorRef.current;
-    if (!anchor) {
-      setOffset(0);
-      setReady(true);
+    if (!anchor || !settled) {
       return;
     }
 
     const measure = () => {
-      const live = settled ? getTopPromptBottom() : null;
-      setOffset(offsetBelowTopPrompt(anchor.getBoundingClientRect().top, live));
-      setReady(true);
+      setOffset(offsetBelowTopPrompt(anchor.getBoundingClientRect().top, getTopPromptBottom()));
     };
 
     measure();
@@ -164,5 +166,14 @@ export function useClearanceBelowTopPrompt(anchorRef: RefObject<HTMLElement | nu
     };
   }, [anchorRef, bannerBottom, settled]);
 
-  return { offset, ready };
+  useLayoutEffect(() => {
+    if (!settled) {
+      setAnimate(false);
+      return;
+    }
+    const id = requestAnimationFrame(() => setAnimate(true));
+    return () => cancelAnimationFrame(id);
+  }, [settled]);
+
+  return { offset, ready: settled, animate };
 }
