@@ -1,10 +1,10 @@
 /**
  * Tests for Oct 1 2026 social seed:
  * - templates render
- * - posts land as draft for campaign oct1-2026
+ * - posts land as draft for the launch pack campaign (stored id oct1-2026)
  * - seed is idempotent (second run inserts 0)
  *
- *   cd backend && npm run test:social-oct1
+ *   cd backend && npm run test:social-launch-pack
  */
 import 'dotenv/config';
 import assert from 'assert';
@@ -17,9 +17,9 @@ import {
   assertTemplatesRender,
   buildAllPosts,
   buildWeek1And2Posts,
-  seedSocialOct1,
+  seedSocialLaunchPack,
   ukWallToUtcIso,
-} from './seed-social-oct1-2026';
+} from './seed-social-launch-pack';
 
 type Test = { name: string; run: () => void | Promise<void> };
 const tests: Test[] = [];
@@ -80,8 +80,8 @@ test('ukWallToUtcIso keeps UK morning slot', () => {
   assert.equal(new Date(iso).toISOString(), '2026-08-18T07:30:00.000Z');
 });
 
-test('seed inserts draft oct1-2026 posts and is idempotent', async () => {
-  const first = await seedSocialOct1();
+test('seed inserts draft launch pack posts and is idempotent', async () => {
+  const first = await seedSocialLaunchPack();
   assert.equal(first.templates, TEMPLATES.length);
   assert.ok(first.posts.total === buildAllPosts().length);
   assert.ok(first.posts.inserted + first.posts.skipped === first.posts.total);
@@ -112,7 +112,7 @@ test('seed inserts draft oct1-2026 posts and is idempotent', async () => {
   );
   assert.equal(parseInt(published.rows[0].n, 10), 0);
 
-  const second = await seedSocialOct1();
+  const second = await seedSocialLaunchPack();
   assert.equal(second.posts.inserted, 0, 're-run must not insert duplicates');
   assert.equal(second.posts.skipped, second.posts.total);
 

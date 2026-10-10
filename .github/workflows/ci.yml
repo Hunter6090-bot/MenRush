@@ -77,10 +77,16 @@ jobs:
         run: npm run test:hot-spot-free-counts
       - name: Prompt prefs (auth, allowlist, no-store)
         run: npm run test:prompt-prefs
+      - name: Travel (dates, coarse centre, one place at a time)
+        run: npm run test:travel
+      - name: Travel GETs keep 'private, no-store'
+        run: npm run test:travel-cache-headers
       - name: No coordinates in URLs (ignored and stripped, reads use the stored location)
         run: npm run test:no-query-coordinates
       - name: Welcome emails use the official mark (no typed wordmark)
         run: npm run test:welcome-email-brand
+      - name: Social drafts say no waitlist, no dating app, no em dashes
+        run: npm run test:social-copy-guard
 
   frontend-build:
     name: Frontend build
@@ -180,8 +186,12 @@ jobs:
         run: npm run test:map-feed-hide-location
       - name: Hot-spot list on real PG (Free rounded sort, Premium exact)
         run: npm run test:hot-spot-live-sort-integration
+      - name: Ghost and hidden check-ins do not add to live counts
+        run: npm run test:hot-spot-ghost-live-count
       - name: Pride code holders can register (real PG)
         run: npm run test:pride-invite-register-integration
+      - name: Deleting a member who created a room works (real PG)
+        run: npm run test:delete-room-creator-integration
       - name: Ghost or hidden first event check-in creates no public spot (real PG)
         run: npm run test:events-ghost-first-checkin
       # --if-present: these scripts arrive with their own PRs (#333, #327,
@@ -196,5 +206,15 @@ jobs:
         run: npm run --if-present test:prompt-prefs-integration
       - name: Community leaves out Ghost and hidden members
         run: npm run --if-present test:community-ghost-hidden
+      - name: Travel (Look around and Plan a trip)
+        run: npm run --if-present test:travel-integration
+      - name: Account deletion erases Travel trips, all-or-nothing (real PG)
+        run: npm run test:travel-account-deletion-integration
       - name: Reports survive when the reported member deletes their account (real PG)
         run: npm run test:reports-survive-deletion-integration
+      - name: Travel trips deleted when ended, and 30 days after they end (real PG)
+        run: npm run test:travel-retention-integration
+      # Keep last: its fake 2027 clock clears every live location and strips
+      # old post coordinates in this test database.
+      - name: Location retention purge (fake clock)
+        run: npm run test:location-retention-integration
