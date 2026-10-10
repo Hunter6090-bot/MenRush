@@ -255,22 +255,22 @@ export function Out() {
                 Nothing in this chip yet.
               </p>
             ) : null}
-            <div className="flex flex-wrap gap-2 pt-2">
+            <div className="flex flex-wrap gap-2 pt-2" data-testid="out-footer-links">
               <Link
                 to="/hot-spots"
-                className="inline-flex min-h-[44px] items-center text-[15px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
+                className="inline-flex min-h-[44px] items-center text-[15px] font-bold text-[var(--nn-accent-text)] underline-offset-2 hover:underline"
               >
                 Full Cruise map
               </Link>
               <Link
                 to="/events"
-                className="inline-flex min-h-[44px] items-center text-[15px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
+                className="inline-flex min-h-[44px] items-center text-[15px] font-bold text-[var(--nn-accent-text)] underline-offset-2 hover:underline"
               >
                 Full Events
               </Link>
               <Link
                 to="/stream"
-                className="inline-flex min-h-[44px] items-center text-[15px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
+                className="inline-flex min-h-[44px] items-center text-[15px] font-bold text-[var(--nn-accent-text)] underline-offset-2 hover:underline"
               >
                 Community feed
               </Link>
@@ -350,7 +350,11 @@ function OutEventRow({ event }: { event: EventDTO }) {
           {[event.venue_name, event.starts_at].filter(Boolean).join(' · ')}
         </p>
       </div>
-      <span className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--copper)]/40 px-3 text-[15px] font-extrabold uppercase tracking-wide text-[var(--copper)]">
+      {/* Theme accent text: copper on dark, rust on light (>= 4.5:1 on the card in both). */}
+      <span
+        data-testid="out-event-pill"
+        className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[color-mix(in_srgb,var(--nn-accent-text)_55%,transparent)] px-3 text-[15px] font-extrabold uppercase tracking-wide text-[var(--nn-accent-text)]"
+      >
         Event
       </span>
     </article>
