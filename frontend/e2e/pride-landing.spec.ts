@@ -30,7 +30,7 @@ test.describe('Pride promotion landing', () => {
     await expect(page.getByTestId('pride-closed-note')).toHaveText('New Pride codes are no longer available.');
     const redeem = page.getByTestId('pride-redeem-note');
     await expect(redeem).toHaveText(
-      'Already have a Pride code from your email? Enter it at register with that same email.',
+      'Already have a Pride code from your email? Enter it at register with that same email by 31 October.',
     );
     await expect(redeem).toHaveCSS('font-size', '15px');
     const cta = page.getByTestId('pride-register-cta');
@@ -99,7 +99,7 @@ test.describe('Pride promotion landing', () => {
     expect(network.expectNoSideEffects()).toEqual([]);
   });
 
-  test('/terms holds Pride grant rules (no Brighton, no city list)', async ({ page }) => {
+  test('/terms holds Pride grant rules (Brighton only as the code name, no city list)', async ({ page }) => {
     const network = await guardAgainstSideEffects(page);
     await page.goto('/terms');
 
@@ -109,9 +109,14 @@ test.describe('Pride promotion landing', () => {
     await expect(body).toContainText(/21 to 31 August 2026/i);
     await expect(body).toContainText('PRIDE 3MONTH FREE');
     await expect(body).toContainText(/5 September 2026/i);
-    await expect(body).toContainText(/earlier email/i);
+    await expect(body).toContainText(
+      'Brighton Pride personal promo codes sent by email, and MenRush Pride invites (MENRUSH codes)',
+    );
+    await expect(body).toContainText('The claim form closes at the same time.');
+    await expect(body).toContainText(/refused from 1 November 2026/i);
     await expect(body).toContainText(/31 October 2026/i);
-    await expect(body).toContainText(/3 months of Premium from launch/i);
+    await expect(body).toContainText('Redeeming a valid Pride code grants 3 months of Premium.');
+    await expect(body).not.toContainText(/Premium from launch/i);
     await expect(body).toContainText(/One grant per person/i);
     await expect(body).toContainText(/No stacking/i);
     await expect(body).toContainText(/clause 7\.2/i);
@@ -122,7 +127,10 @@ test.describe('Pride promotion landing', () => {
     await expect(body).toContainText(/Manchester Village Pride/i);
     await expect(body).toContainText(/1 October 2026/i);
     await expect(body).toContainText(/1 January 2027/i);
-    await expect(body).toContainText(/If launch slips/i);
+    await expect(body).toContainText(
+      'Duration: for a code redeemed before 1 October 2026, Premium runs from 1 October 2026 to 1 January 2027. For a code redeemed on or after 1 October 2026, Premium runs for 3 months from the day you register.',
+    );
+    await expect(body).not.toContainText(/If launch slips|booked before launch/i);
     await expect(body).toContainText(/7\.8/i);
     await expect(body).toContainText('BSF26');
     await expect(body).toContainText(/BearScotsFest 2026/i);
@@ -144,7 +152,8 @@ test.describe('Pride promotion landing', () => {
     await expect(body).not.toContainText(/pending Al/i);
     await expect(body).not.toContainText(/Al lock/i);
     await expect(body).not.toContainText(/\bAl\b/);
-    await expect(body).not.toContainText(/Brighton/i);
+    // 7.7 names the Brighton Pride promo codes; nothing else may mention Brighton.
+    expect((await body.innerText()).replace(/Brighton Pride personal promo codes/g, '')).not.toMatch(/Brighton/i);
     await expect(body).not.toContainText(/London · Manchester · Birmingham/i);
 
     expect(network.expectNoSideEffects()).toEqual([]);

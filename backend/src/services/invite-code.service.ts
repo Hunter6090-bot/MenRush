@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { PoolClient } from 'pg';
 import pool, { query } from '../db';
+import { isPrideCodeRedeemOpen, PERSONAL_PRIDE_EXPIRED_MESSAGE } from './promo.service';
 
 const CODE_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 
@@ -47,7 +48,13 @@ type InviteRow = {
   use_count: number;
   expires_at: Date | null;
   revoked_at: Date | null;
+  pride_months_free: number | null;
 };
+
+/** Pride invites (pride_months_free set) close with every other Pride code at the cutoff. */
+function isClosedPrideInvite(row: InviteRow): boolean {
+  return row.pride_months_free != null && !isPrideCodeRedeemOpen();
+}
 
 function inviteUnavailableMessage(): string {
   return 'This invite code is invalid or has already been used.';
@@ -60,7 +67,7 @@ async function findInviteRow(
 ): Promise<InviteRow | null> {
   const lock = forUpdate ? 'FOR UPDATE' : '';
   const result = await client.query<InviteRow>(
-    `SELECT id, code, max_uses, use_count, expires_at, revoked_at
+    `SELECT id, code, max_uses, use_count, expires_at, revoked_at, pride_months_free
      FROM beta_invite_codes
      WHERE code_normalized = $1
      ${lock}`,
@@ -76,7 +83,9 @@ function isInviteUsable(row: InviteRow | null): row is InviteRow {
 }
 
 export const inviteCodeService = {
-  async validate(rawCode: string): Promise<{ valid: true; code: string } | { valid: false }> {
+  async validate(
+    rawCode: string,
+  ): Promise<{ valid: true; code: string } | { valid: false; reason?: 'pride_expired' }> {
     const normalized = normalizeInviteCode(rawCode);
     if (!normalized.startsWith('MENRUSH') || normalized.length !== 15) {
       return { valid: false };
@@ -85,6 +94,9 @@ export const inviteCodeService = {
     const row = await findInviteRow(pool, normalized);
     if (!isInviteUsable(row)) {
       return { valid: false };
+    }
+    if (isClosedPrideInvite(row)) {
+      return { valid: false, reason: 'pride_expired' };
     }
 
     return { valid: true, code: row.code };
@@ -100,6 +112,9 @@ export const inviteCodeService = {
     const row = await findInviteRow(client, normalized, true);
     if (!isInviteUsable(row)) {
       throw new Error(inviteUnavailableMessage());
+    }
+    if (isClosedPrideInvite(row)) {
+      throw new Error(PERSONAL_PRIDE_EXPIRED_MESSAGE);
     }
 
     await client.query(

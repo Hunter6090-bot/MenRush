@@ -43,6 +43,8 @@ jobs:
         run: npm run test:london-midnight
       - name: Security checks (source guards, uploads, media, CORS)
         run: npm run test:security
+      - name: Personal Pride codes end 31 October 23:59:59 London (boundary)
+        run: npm run test:pride-personal-expiry
 
   backend-adult-assurance:
     name: Adult assurance + Veriff checks
@@ -190,6 +192,8 @@ jobs:
         run: npm run test:map-feed-hide-location
       - name: Hot-spot list on real PG (Free rounded sort, Premium exact)
         run: npm run test:hot-spot-live-sort-integration
+      - name: Personal Pride codes end 31 October (real PG)
+        run: npm run test:pride-personal-expiry-integration
       - name: Ghost and hidden check-ins do not add to live counts
         run: npm run test:hot-spot-ghost-live-count
       - name: Pride code holders can register (real PG)
