@@ -63,6 +63,8 @@ function sectionFromParam(raw: string | null): OutChip {
 
 /** A re-read after a check-in gives up after this long; the server spot is kept. */
 export const OUT_REFRESH_TIMEOUT_MS = 5000;
+// Backoff before each retry of a failed background recovery reload; then it stops.
+export const OUT_RECOVERY_RETRY_DELAYS_MS = [1000, 3000];
 
 export function Out() {
   const [params, setParams] = useSearchParams();
@@ -99,21 +101,30 @@ export function Out() {
   // new one (QC P0 on #393).
   const listSeqRef = useRef(0);
   const [reloadKey, setReloadKey] = useState(0);
+  const lastLoadDepsRef = useRef<{ chip: string; lat: number | null | undefined; lng: number | null | undefined } | null>(null);
   // Set while a full load (first load, location change) is in flight or after its reply
   // was dropped as stale. If the re-read that superseded it then fails or times out, we
   // reload, so the member is never stuck on the old location's list (QC P1 on #393).
   const loadInFlightRef = useRef(false);
   const loadDroppedRef = useRef(false);
   // A recovery reload runs in the background: the current list stays on screen (no
-  // spinner behind the open spot sheet) and a failure keeps it instead of an error.
-  const quietReloadRef = useRef(false);
+  // spinner behind the open spot sheet), a failure is retried a couple of times with
+  // backoff, and a final failure keeps the list instead of an error. The quiet flag
+  // names the exact reload it was raised for and is cleared when that load ends, so a
+  // later normal load (chip, location, location saved) shows the spinner again.
+  const reloadKeyRef = useRef(0);
+  const quietReloadKeyRef = useRef<number | null>(null);
+  const bumpReload = useCallback((quiet: boolean) => {
+    reloadKeyRef.current += 1;
+    quietReloadKeyRef.current = quiet ? reloadKeyRef.current : null;
+    setReloadKey(reloadKeyRef.current);
+  }, []);
   const reloadIfLoadWasDropped = useCallback(() => {
     if (loadInFlightRef.current || loadDroppedRef.current) {
       loadDroppedRef.current = false;
-      quietReloadRef.current = true;
-      setReloadKey((k) => k + 1);
+      bumpReload(true);
     }
-  }, []);
+  }, [bumpReload]);
   const takeListTicket = useCallback(() => {
     listSeqRef.current += 1;
     return listSeqRef.current;
@@ -207,71 +218,99 @@ export function Out() {
     if (!needsLocation) return;
     return onLocationSaved(() => {
       setNeedsLocation(false);
-      setReloadKey((k) => k + 1);
+      bumpReload(false);
     });
-  }, [needsLocation]);
+  }, [needsLocation, bumpReload]);
 
   useEffect(() => {
     let cancelled = false;
-    const quiet = quietReloadRef.current;
-    quietReloadRef.current = false;
+    // Quiet only for the recovery reload itself, and only while chip and location are
+    // the ones it was raised for: any other change in the same render is a normal load.
+    const prev = lastLoadDepsRef.current;
+    const sameView = prev != null && prev.chip === chip && prev.lat === lat && prev.lng === lng;
+    const quiet = quietReloadKeyRef.current === reloadKey && sameView;
+    lastLoadDepsRef.current = { chip, lat, lng };
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const wait = (ms: number) =>
+      new Promise<void>((resolve) => {
+        retryTimer = setTimeout(resolve, ms);
+      });
+    async function loadOnce() {
+      const tasks: Promise<void>[] = [];
+      if (chip !== 'community' && chip !== 'event') {
+        tasks.push(
+          (async () => {
+            const ticket = takeListTicket();
+            if (lat == null || lng == null) {
+              if (!cancelled) setSpots([]);
+              return;
+            }
+            loadInFlightRef.current = true;
+            let res;
+            try {
+              res = await hotSpotsAPI.listNearby(lat, lng, 80);
+            } finally {
+              if (!cancelled) loadInFlightRef.current = false;
+            }
+            if (!cancelled && !isLatestList(ticket)) loadDroppedRef.current = true;
+            if (!cancelled && isLatestList(ticket)) {
+              loadDroppedRef.current = false;
+              setSpots(res.data.spots ?? []);
+              setNeedsLocation(Boolean((res.data as { location_required?: boolean }).location_required));
+            }
+          })(),
+        );
+      } else if (!cancelled) {
+        setSpots([]);
+      }
+      if (chip === 'all' || chip === 'event') {
+        tasks.push(
+          (async () => {
+            if (lat == null || lng == null) {
+              if (!cancelled) setEvents([]);
+              return;
+            }
+            const res = await eventsAPI.getNearby(lat, lng, 50, 24);
+            if (!cancelled) setEvents(Array.isArray(res.data) ? res.data : []);
+          })(),
+        );
+      } else if (!cancelled) {
+        setEvents([]);
+      }
+      await Promise.all(tasks);
+    }
     async function load() {
       // Background recovery reload: keep the list visible (no spinner) and clear any
       // spinner left by the load it replaces.
       setLoading(!quiet);
       setError('');
+      const attempts = quiet ? 1 + OUT_RECOVERY_RETRY_DELAYS_MS.length : 1;
       try {
-        const tasks: Promise<void>[] = [];
-        if (chip !== 'community' && chip !== 'event') {
-          tasks.push(
-            (async () => {
-              const ticket = takeListTicket();
-              if (lat == null || lng == null) {
-                if (!cancelled) setSpots([]);
-                return;
-              }
-              loadInFlightRef.current = true;
-              let res;
-              try {
-                res = await hotSpotsAPI.listNearby(lat, lng, 80);
-              } finally {
-                if (!cancelled) loadInFlightRef.current = false;
-              }
-              if (!cancelled && !isLatestList(ticket)) loadDroppedRef.current = true;
-              if (!cancelled && isLatestList(ticket)) {
-                loadDroppedRef.current = false;
-                setSpots(res.data.spots ?? []);
-                setNeedsLocation(Boolean((res.data as { location_required?: boolean }).location_required));
-              }
-            })(),
-          );
-        } else if (!cancelled) {
-          setSpots([]);
+        for (let attempt = 0; attempt < attempts; attempt += 1) {
+          try {
+            await loadOnce();
+            return;
+          } catch (err) {
+            if (cancelled) return;
+            if (attempt === attempts - 1) throw err;
+            await wait(OUT_RECOVERY_RETRY_DELAYS_MS[attempt]);
+            if (cancelled) return;
+          }
         }
-        if (chip === 'all' || chip === 'event') {
-          tasks.push(
-            (async () => {
-              if (lat == null || lng == null) {
-                if (!cancelled) setEvents([]);
-                return;
-              }
-              const res = await eventsAPI.getNearby(lat, lng, 50, 24);
-              if (!cancelled) setEvents(Array.isArray(res.data) ? res.data : []);
-            })(),
-          );
-        } else if (!cancelled) {
-          setEvents([]);
-        }
-        await Promise.all(tasks);
       } catch {
+        // A failed recovery reload keeps the list on screen; a normal load shows the error.
         if (!cancelled && !quiet) setError('Could not load Out.');
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          if (quietReloadKeyRef.current === reloadKey) quietReloadKeyRef.current = null;
+        }
       }
     }
     void load();
     return () => {
       cancelled = true;
+      clearTimeout(retryTimer);
     };
   }, [chip, lat, lng, reloadKey, takeListTicket, isLatestList]);
 

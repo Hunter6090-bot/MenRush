@@ -174,7 +174,7 @@ export function TwoFactorSettings() {
           ) : null}
         </div>
         {enabled ? (
-          <span className="shrink-0 rounded-full border border-[color-mix(in_srgb,var(--status-online-text)_45%,transparent)] bg-[color-mix(in_srgb,var(--status-online-text)_10%,transparent)] px-3 py-1 text-[15px] font-bold uppercase tracking-[0.08em] text-[var(--status-online-text)]" data-testid="two-factor-badge-protected">
+          <span className="shrink-0 rounded-full border border-[color-mix(in_srgb,var(--status-online-text)_75%,transparent)] bg-[color-mix(in_srgb,var(--status-online-text)_10%,transparent)] px-3 py-1 text-[15px] font-bold uppercase tracking-[0.08em] text-[var(--status-online-text)]" data-testid="two-factor-badge-protected">
             Protected
           </span>
         ) : (
@@ -331,10 +331,11 @@ export function TwoFactorSettings() {
                   className="flex items-start justify-between gap-3 rounded-lg border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-elevated)_60%,transparent)] px-3 py-2.5"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-[15px] font-semibold text-[var(--cream)]">
-                      {device.label || 'Trusted browser'}
+                    {/* Wraps on narrow phones (360px): the label breaks, "This device" drops to its own line. */}
+                    <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[15px] font-semibold text-[var(--cream)]" data-testid="two-factor-device-label">
+                      <span className="min-w-0 break-words [overflow-wrap:anywhere]">{device.label || 'Trusted browser'}</span>
                       {device.isCurrent ? (
-                        <span className="ml-2 text-[15px] font-bold uppercase tracking-[0.08em] text-[var(--nn-accent-text)]" data-testid="two-factor-badge-this-device">
+                        <span className="whitespace-nowrap text-[15px] font-bold uppercase tracking-[0.08em] text-[var(--nn-accent-text)]" data-testid="two-factor-badge-this-device">
                           This device
                         </span>
                       ) : null}
