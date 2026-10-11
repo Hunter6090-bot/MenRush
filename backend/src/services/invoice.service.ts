@@ -38,6 +38,7 @@ export interface PremiumInvoiceRow {
   refund_days_had?: number | null;
   cancelled_by?: string | null;
   refund_paid_at?: string | null;
+  refund_email_claimed_at?: string | null;
   refund_paid_by?: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
@@ -785,14 +786,39 @@ export const invoiceService = {
    * the admin invoice list) and alerts the team, so ops can resend with
    * POST /api/admin/premium/invoices/:id/resend-refund-email.
    */
-  async sendRefundEmail(invoiceId: string, now = new Date()): Promise<'sent' | 'already_sent' | 'failed' | 'not_due'> {
-    const r = await query(`SELECT * FROM premium_invoices WHERE id = $1`, [invoiceId]);
-    const row: PremiumInvoiceRow | undefined = r.rows[0];
-    if (!row || row.status !== 'refunded' || !row.refund_paid_at) return 'not_due';
-    if ((row.metadata as { refund_email_sent_at?: string })?.refund_email_sent_at) return 'already_sent';
+  async sendRefundEmail(
+    invoiceId: string,
+    now = new Date(),
+  ): Promise<'sent' | 'already_sent' | 'failed' | 'not_due' | 'in_progress'> {
+    // Atomic claim: one conditional UPDATE ... RETURNING, so only one caller can send.
+    // A claim older than 10 minutes (a crashed sender) can be taken over.
+    const claim = await query(
+      `UPDATE premium_invoices
+          SET refund_email_claimed_at = NOW(), updated_at = NOW()
+        WHERE id = $1
+          AND status = 'refunded'
+          AND refund_paid_at IS NOT NULL
+          AND NOT (metadata ? 'refund_email_sent_at')
+          AND (refund_email_claimed_at IS NULL OR refund_email_claimed_at < NOW() - INTERVAL '10 minutes')
+        RETURNING *`,
+      [invoiceId],
+    );
+    const row: PremiumInvoiceRow | undefined = claim.rows[0];
+    if (!row) {
+      const r = await query(`SELECT status, refund_paid_at, metadata FROM premium_invoices WHERE id = $1`, [invoiceId]);
+      const cur = r.rows[0];
+      if (!cur || cur.status !== 'refunded' || !cur.refund_paid_at) return 'not_due';
+      if ((cur.metadata as { refund_email_sent_at?: string })?.refund_email_sent_at) return 'already_sent';
+      return 'in_progress';
+    }
+    const release = () =>
+      query(`UPDATE premium_invoices SET refund_email_claimed_at = NULL WHERE id = $1`, [row.id]);
     const u = await query(`SELECT email, name FROM users WHERE id = $1`, [row.user_id]);
     const user = u.rows[0];
-    if (!user?.email) return 'not_due';
+    if (!user?.email) {
+      await release();
+      return 'not_due';
+    }
     const email = buildRefundPaidEmail({
       name: user.name ?? null,
       refundPence: row.refund_amount_pence ?? 0,
@@ -806,6 +832,7 @@ export const invoiceService = {
         await query(
           `UPDATE premium_invoices
               SET metadata = (metadata - 'refund_email_failed_at') || jsonb_build_object('refund_email_sent_at', $2::text),
+                  refund_email_claimed_at = NULL,
                   updated_at = NOW()
             WHERE id = $1`,
           [row.id, now.toISOString()],
@@ -817,7 +844,8 @@ export const invoiceService = {
     }
     await query(
       `UPDATE premium_invoices
-          SET metadata = metadata || jsonb_build_object('refund_email_failed_at', $2::text), updated_at = NOW()
+          SET metadata = metadata || jsonb_build_object('refund_email_failed_at', $2::text),
+              refund_email_claimed_at = NULL, updated_at = NOW()
         WHERE id = $1`,
       [row.id, now.toISOString()],
     );

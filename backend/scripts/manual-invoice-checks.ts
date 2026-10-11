@@ -1342,6 +1342,125 @@ test('Refund email failure: retried, flagged for ops, team alerted (invoice id o
   }
 });
 
+test('Refund resend lock: 5 concurrent sends give exactly 1 email (atomic claim)', async () => {
+  const { invoiceMailer } = await import('../src/services/invoice.service');
+  const realSend = invoiceMailer.send;
+  const realOps = invoiceMailer.sendOps;
+  let failing = true;
+  const sent: string[] = [];
+  invoiceMailer.send = async (msg) => {
+    if (failing) throw new Error('smtp down');
+    await new Promise((r) => setTimeout(r, 50)); // slow mailer widens the race window
+    sent.push(msg.to);
+  };
+  invoiceMailer.sendOps = async () => undefined;
+  try {
+    const user = await createTestUser('refund-race', 'Sam');
+    const invoice = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: true });
+    await invoiceService.confirmPayment(invoice.id);
+    await invoiceService.cancelPaidInvoiceWithRefund(invoice.id, 'ops-x');
+    await invoiceService.markRefundPaid(invoice.id, 'ops-x'); // fails twice, flagged for resend
+    failing = false;
+
+    // Service level: 5 at once.
+    const results = await Promise.all(Array.from({ length: 5 }, () => invoiceService.sendRefundEmail(invoice.id)));
+    assert.strictEqual(sent.length, 1, `exactly one email, got ${sent.length}`);
+    assert.strictEqual(results.filter((r) => r === 'sent').length, 1);
+    assert.ok(results.every((r) => ['sent', 'in_progress', 'already_sent'].includes(r)), results.join(','));
+    const row = await query(`SELECT refund_email_claimed_at, metadata FROM premium_invoices WHERE id = $1`, [invoice.id]);
+    assert.strictEqual(row.rows[0].refund_email_claimed_at, null, 'claim released after send');
+    assert.ok(row.rows[0].metadata.refund_email_sent_at);
+    assert.ok(!row.rows[0].metadata.refund_email_failed_at);
+
+    // HTTP level: 5 concurrent admin resends on a second flagged invoice -> 1 email.
+    failing = true;
+    const u2 = await createTestUser('refund-race-http', 'Sam');
+    const inv2 = await invoiceService.createInvoice({ userId: u2.id, immediateStartConsent: true });
+    await invoiceService.confirmPayment(inv2.id);
+    await invoiceService.cancelPaidInvoiceWithRefund(inv2.id, 'ops-x');
+    await invoiceService.markRefundPaid(inv2.id, 'ops-x');
+    failing = false;
+    sent.length = 0;
+    const srv = await adminServer();
+    try {
+      const codes = await Promise.all(
+        Array.from({ length: 5 }, () =>
+          srv.post(`${inv2.id}/resend-refund-email`, { admin_actor: 'ops-x' }).then((r) => r.status),
+        ),
+      );
+      assert.strictEqual(sent.length, 1, `HTTP: exactly one email, got ${sent.length}`);
+      assert.strictEqual(codes.filter((c) => c === 200).length >= 1, true, codes.join(','));
+      assert.ok(codes.every((c) => c === 200 || c === 409), codes.join(','));
+    } finally {
+      await srv.close();
+    }
+
+    // A stale claim (sender crashed) can be taken over after 10 minutes.
+    failing = true;
+    const u3 = await createTestUser('refund-race-stale');
+    const inv3 = await invoiceService.createInvoice({ userId: u3.id, immediateStartConsent: true });
+    await invoiceService.confirmPayment(inv3.id);
+    await invoiceService.cancelPaidInvoiceWithRefund(inv3.id, 'ops-x');
+    await invoiceService.markRefundPaid(inv3.id, 'ops-x');
+    failing = false;
+    sent.length = 0;
+    await query(`UPDATE premium_invoices SET refund_email_claimed_at = NOW() WHERE id = $1`, [inv3.id]);
+    assert.strictEqual(await invoiceService.sendRefundEmail(inv3.id), 'in_progress');
+    await query(`UPDATE premium_invoices SET refund_email_claimed_at = NOW() - INTERVAL '11 minutes' WHERE id = $1`, [inv3.id]);
+    assert.strictEqual(await invoiceService.sendRefundEmail(inv3.id), 'sent');
+    assert.strictEqual(sent.length, 1);
+  } finally {
+    invoiceMailer.send = realSend;
+    invoiceMailer.sendOps = realOps;
+  }
+});
+
+test('Admin confirm on a refunded invoice returns 409', async () => {
+  const user = await createTestUser('confirm-refunded-http');
+  const invoice = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: true });
+  await invoiceService.confirmPayment(invoice.id);
+  await invoiceService.cancelPaidInvoiceWithRefund(invoice.id, 'ops-y');
+  const srv = await adminServer();
+  try {
+    const r = await srv.post(`${invoice.id}/confirm-payment`, {});
+    assert.strictEqual(r.status, 409);
+    assert.deepStrictEqual(await r.json(), { error: 'invoice_refunded' });
+  } finally {
+    await srv.close();
+  }
+});
+
+test('085: requested_at defaults to created_at, and existing rows are backfilled from created_at', async () => {
+  const user = await createTestUser('requested-default');
+  // Insert without requested_at (as an older writer would): it takes created_at.
+  const ins = await query(
+    `INSERT INTO premium_invoices (user_id, plan_tier, plan_days, amount_pence, currency, status, payment_method,
+                                   payment_reference, invoice_number, created_at)
+     VALUES ($1, 'premium', 30, 699, 'GBP', 'unpaid', 'bank_transfer', $2, $3, NOW() - INTERVAL '3 days')
+     RETURNING requested_at, created_at`,
+    [user.id, `MR-T${Date.now() % 1e8}`, `MR-INV-T-${Date.now()}`],
+  );
+  assert.strictEqual(new Date(ins.rows[0].requested_at).getTime(), new Date(ins.rows[0].created_at).getTime());
+  const col = await query(
+    `SELECT is_nullable, column_default FROM information_schema.columns
+      WHERE table_name = 'premium_invoices' AND column_name = 'requested_at'`,
+  );
+  assert.strictEqual(col.rows[0].is_nullable, 'NO');
+  assert.strictEqual(col.rows[0].column_default, null, 'no NOW() default: the trigger copies created_at');
+  // The backfill statement is in 085, before NOT NULL is set.
+  const { readFileSync } = await import('fs');
+  const { resolve } = await import('path');
+  const sql = readFileSync(resolve(__dirname, '../../database/migrations/085_premium_invoices.sql'), 'utf8');
+  const backfill = sql.indexOf('UPDATE premium_invoices SET requested_at = created_at WHERE requested_at IS NULL;');
+  assert.ok(backfill > 0, 'backfill present');
+  assert.ok(sql.indexOf('ALTER COLUMN requested_at SET NOT NULL') > backfill, 'NOT NULL after backfill');
+  assert.strictEqual(
+    readFileSync(resolve(__dirname, '../database/migrations/085_premium_invoices.sql'), 'utf8'),
+    sql,
+    'both copies of 085 match',
+  );
+});
+
 async function main() {
   console.log(`Running ${tests.length} manual invoice and password tests...`);
   for (const t of tests) {

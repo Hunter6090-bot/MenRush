@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS premium_invoices (
   cancelled_at TIMESTAMPTZ,
   -- When the member asked for this invoice (bought Premium). The 14 day
   -- cancellation window (Terms 7.6A) runs from here, not from payment.
-  requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- Defaults to created_at (trigger below); the app also sets it on insert.
+  requested_at TIMESTAMPTZ,
   -- When the member chose "Start my Premium as soon as my payment is confirmed"
   -- (Terms 7.6A). NULL means not chosen: Premium starts after the 14 days.
   immediate_start_consent_at TIMESTAMPTZ,
@@ -34,6 +35,8 @@ CREATE TABLE IF NOT EXISTS premium_invoices (
   cancelled_by VARCHAR(64),
   refund_paid_at TIMESTAMPTZ,
   refund_paid_by VARCHAR(64),
+  -- Claim for sending the refund email: one sender at a time (resend lock).
+  refund_email_claimed_at TIMESTAMPTZ,
   metadata JSONB NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -42,12 +45,31 @@ CREATE TABLE IF NOT EXISTS premium_invoices (
 -- 085 has never been applied anywhere (it is not on main yet); this keeps any
 -- local dev table from an earlier draft of this branch in step.
 ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS immediate_start_consent_at TIMESTAMPTZ;
-ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ;
+ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS refund_email_claimed_at TIMESTAMPTZ;
 ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS refund_amount_pence INTEGER;
 ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS refund_days_had INTEGER;
 ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS cancelled_by VARCHAR(64);
 ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS refund_paid_at TIMESTAMPTZ;
 ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS refund_paid_by VARCHAR(64);
+
+-- requested_at: backfill existing rows from created_at, then default new rows to
+-- created_at (a column DEFAULT cannot read another column, so a trigger does it).
+ALTER TABLE premium_invoices ALTER COLUMN requested_at DROP DEFAULT;
+UPDATE premium_invoices SET requested_at = created_at WHERE requested_at IS NULL;
+CREATE OR REPLACE FUNCTION premium_invoices_default_requested_at() RETURNS trigger AS $$
+BEGIN
+  IF NEW.requested_at IS NULL THEN
+    NEW.requested_at := COALESCE(NEW.created_at, NOW());
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS premium_invoices_requested_at_default ON premium_invoices;
+CREATE TRIGGER premium_invoices_requested_at_default
+  BEFORE INSERT ON premium_invoices
+  FOR EACH ROW EXECUTE FUNCTION premium_invoices_default_requested_at();
+ALTER TABLE premium_invoices ALTER COLUMN requested_at SET NOT NULL;
 
 DO $$ BEGIN
   ALTER TABLE premium_invoices
