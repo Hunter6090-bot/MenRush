@@ -45,6 +45,8 @@ jobs:
         run: npm run test:security
       - name: TOTP wrap key (v1 and v2, previous key, friendly errors, JWT fallback)
         run: npm run test:totp-crypto
+      - name: Production refuses to start without a real TOTP key (no JWT_SECRET fallback)
+        run: npm run test:totp-startup
 
   backend-adult-assurance:
     name: Adult assurance + Veriff checks

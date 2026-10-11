@@ -7,6 +7,7 @@ import http from 'http';
 import path from 'path';
 import cors from 'cors';
 import helmet from 'helmet';
+import { assertTotpKeyForProduction } from './security/totp-crypto';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import messageRoutes from './routes/messages';
@@ -980,6 +981,8 @@ Sentry.setupExpressErrorHandler(app);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;
+// Also guarded in boot.ts; repeated here for `npm run dev` / direct starts.
+assertTotpKeyForProduction();
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   warmIceServers();
