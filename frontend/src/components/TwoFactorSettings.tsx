@@ -280,7 +280,7 @@ export function TwoFactorSettings() {
         </div>
       ) : null}
 
-      {error ? <p className="text-[15px] text-[var(--nn-danger-text)]">{error}</p> : null}
+      {error ? <p role="alert" className="text-[15px] leading-snug text-[var(--nn-danger-text)]">{error}</p> : null}
 
       {mode === 'idle' ? (
         <div>
