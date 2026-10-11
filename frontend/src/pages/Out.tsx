@@ -104,9 +104,13 @@ export function Out() {
   // reload, so the member is never stuck on the old location's list (QC P1 on #393).
   const loadInFlightRef = useRef(false);
   const loadDroppedRef = useRef(false);
+  // A recovery reload runs in the background: the current list stays on screen (no
+  // spinner behind the open spot sheet) and a failure keeps it instead of an error.
+  const quietReloadRef = useRef(false);
   const reloadIfLoadWasDropped = useCallback(() => {
     if (loadInFlightRef.current || loadDroppedRef.current) {
       loadDroppedRef.current = false;
+      quietReloadRef.current = true;
       setReloadKey((k) => k + 1);
     }
   }, []);
@@ -209,8 +213,12 @@ export function Out() {
 
   useEffect(() => {
     let cancelled = false;
+    const quiet = quietReloadRef.current;
+    quietReloadRef.current = false;
     async function load() {
-      setLoading(true);
+      // Background recovery reload: keep the list visible (no spinner) and clear any
+      // spinner left by the load it replaces.
+      setLoading(!quiet);
       setError('');
       try {
         const tasks: Promise<void>[] = [];
@@ -256,7 +264,7 @@ export function Out() {
         }
         await Promise.all(tasks);
       } catch {
-        if (!cancelled) setError('Could not load Out.');
+        if (!cancelled && !quiet) setError('Could not load Out.');
       } finally {
         if (!cancelled) setLoading(false);
       }

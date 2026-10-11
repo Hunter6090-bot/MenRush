@@ -201,4 +201,69 @@ describe('Out list re-reads are latest-wins', () => {
       expect(screen.queryByTestId(`out-spot-open-${A.id}`)).toBeNull();
     },
   );
+  it('the recovery reload runs in the background: the list stays visible behind the open sheet', async () => {
+    const lateLoad = deferred<unknown>();
+    const reload = deferred<unknown>();
+    const C: HotSpotDTO = { ...B, id: 'spot-c', name: 'Charlie Dunes', live_count: 7 } as HotSpotDTO;
+    const failed = Promise.reject(new Error('Request failed with status code 500'));
+    failed.catch(() => {});
+    vi.mocked(hotSpotsAPI.listNearby)
+      .mockResolvedValueOnce(list(A)) // first load
+      .mockReturnValueOnce(lateLoad.promise as never) // location-change load, dropped by the check-in
+      .mockReturnValueOnce(failed as never) // re-read 500s
+      .mockReturnValueOnce(reload.promise as never); // recovery reload: still in flight
+    vi.mocked(hotSpotsAPI.checkIn).mockResolvedValue({
+      data: { ok: true, spot: { ...A, is_checked_in: true, live_count: 3 } },
+    } as never);
+
+    render(<MemoryRouter><Out /></MemoryRouter>);
+    await openSpot(A.id);
+    act(() => useLocationStore.setState({ lat: 53.4, lng: -2.2 }));
+    await waitFor(() => expect(hotSpotsAPI.listNearby).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByTestId('hotspot-sheet-checkin'));
+    await waitFor(() => expect(hotSpotsAPI.listNearby).toHaveBeenCalledTimes(4));
+
+    // While the recovery reload is in flight: no spinner, the list and the sheet stay.
+    await waitFor(() => expect(screen.queryByLabelText('Loading Out')).toBeNull());
+    expect(screen.getByTestId('out-list')).toBeInTheDocument();
+    expect(screen.getByTestId(`out-spot-open-${A.id}`)).toBeInTheDocument();
+    expect(screen.getByTestId('hotspot-sheet')).toBeInTheDocument();
+    expect(screen.getByTestId('hotspot-sheet-activity')).toHaveTextContent('3 checked in');
+
+    await act(async () => {
+      reload.resolve(list(C));
+      await reload.promise;
+    });
+    expect(await screen.findByTestId(`out-spot-open-${C.id}`)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Loading Out')).toBeNull();
+    lateLoad.resolve(list(C));
+  });
+
+  it('a failed recovery reload keeps the list (no error screen)', async () => {
+    const lateLoad = deferred<unknown>();
+    const fail = () => {
+      const p = Promise.reject(new Error('Request failed with status code 500'));
+      p.catch(() => {});
+      return p as never;
+    };
+    vi.mocked(hotSpotsAPI.listNearby)
+      .mockResolvedValueOnce(list(A))
+      .mockReturnValueOnce(lateLoad.promise as never)
+      .mockReturnValueOnce(fail())
+      .mockReturnValueOnce(fail());
+    vi.mocked(hotSpotsAPI.checkIn).mockResolvedValue({
+      data: { ok: true, spot: { ...A, is_checked_in: true, live_count: 3 } },
+    } as never);
+
+    render(<MemoryRouter><Out /></MemoryRouter>);
+    await openSpot(A.id);
+    act(() => useLocationStore.setState({ lat: 53.4, lng: -2.2 }));
+    await waitFor(() => expect(hotSpotsAPI.listNearby).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByTestId('hotspot-sheet-checkin'));
+    await waitFor(() => expect(hotSpotsAPI.listNearby).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(screen.queryByLabelText('Loading Out')).toBeNull());
+    expect(screen.queryByText('Could not load Out.')).toBeNull();
+    expect(screen.getByTestId(`out-spot-open-${A.id}`)).toBeInTheDocument();
+    lateLoad.resolve(list(A));
+  });
 });
