@@ -1,7 +1,8 @@
 # 2FA (TOTP) wrap key: deploy, rotate, verify, roll back
 
-The runbook for #398. Follow it in order. Nobody reads, prints or pastes a key: keys live in
-Railway variables only, and the script prints counts only.
+The runbook for #398 (and #400's key check). Follow it in order. The script never prints a key,
+secret, ciphertext or user id: it prints counts only. Keys live in Railway variables, entered as
+literal values (see the warning below).
 
 ## What the script does
 
@@ -86,7 +87,13 @@ this PR.
    `result=OK` and `unreadable=0`.
 2. Only then remove `TOTP_ENCRYPTION_KEY_PREVIOUS` from Railway. Keep today's key in the
    password manager until you are sure you will not need the key rollback.
-3. (#400, if merging it) only after this step, and only with a key that meets its rule.
+3. **Before merging #400: prod dry-run key_check (counts only).** With the key that will stay
+   live, run the dry run (command above, read-only, writes nothing). It prints counts only:
+   `rows=`, `enabled=`, `pending=`, `format v1= v2=`, `readable current= previous_only=
+   unreadable=`, then `key_check=OK` or `key_check=FAIL problem=<unset|not-encoded|too-short|low-variety>`,
+   then `result=`. Merge #400 only on `key_check=OK`, `result=OK` and `unreadable=0`. On
+   `key_check=FAIL`, production would refuse to start once #400 is in: do section 2 with a key
+   from `openssl rand -hex 32` first, then repeat this step.
 
 **Never remove the previous key before `--verify` is clean.**
 
@@ -94,6 +101,10 @@ this PR.
 
 Use this if the new key has to go. The code stays as it is.
 
+0. **If #400 is merged and the old key fails its rule** (it showed `key_check=FAIL` at 3.3, or
+   you do not know), **revert #400 first** and let that deploy. Otherwise production refuses to
+   start as soon as the old key is back in `TOTP_ENCRYPTION_KEY`. If the old key passed
+   `key_check=OK`, #400 can stay.
 1. In **one** variables change, set `TOTP_ENCRYPTION_KEY` = the old key and
    `TOTP_ENCRYPTION_KEY_PREVIOUS` = the new key. Wait for the redeploy. Both keys decrypt, so
    nobody is locked out at any point.
@@ -107,7 +118,10 @@ This is **not** `--reverse`. The rows stay v2, now under the old key.
 
 Do this in order. Reverting the code first would lock out every member with a v2 row.
 
-1. If #400 is merged, revert it first (its guard is its only behaviour change).
+1. If #400 is merged, revert it first. Its behaviour changes are: the production startup guard
+   on the TOTP key, **dropping the production `JWT_SECRET` fallback for the TOTP key** (with #400,
+   production uses only `TOTP_ENCRYPTION_KEY`; reverting brings the fallback back, so keep
+   `TOTP_ENCRYPTION_KEY` set), and the rotate key check. Let the revert deploy.
 2. Keep `TOTP_ENCRYPTION_KEY` as it is (the reverted code will use it, hashed, for v1). Set
    `TOTP_WRITE_FORMAT=v1` on the backend service. Wait for the redeploy. From now on every
    write (new setups and lazy re-encrypts) is v1.

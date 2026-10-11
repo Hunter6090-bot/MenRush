@@ -103,6 +103,20 @@ const tests: [string, () => void][] = [
     assert.equal(totpKeyByteLength(b64), 32);
     assert.equal(decodeTotpKey(crypto.randomBytes(32).toString('hex'))?.encoding, 'hex');
   }],
+  ['runbook covers #400: 3.3 prod dry-run key_check, 4.0 revert first, 5.1 true behaviour list', () => {
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    const doc = fs.readFileSync(path.join(__dirname, '../../docs/totp-key-rotation.md'), 'utf8');
+    const sec = (h: string) => doc.slice(doc.indexOf(h), doc.indexOf('\n## ', doc.indexOf(h) + 1));
+    assert.match(sec('## 3. Verify'), /3\. \*\*Before merging #400: prod dry-run key_check \(counts only\)\.\*\*/);
+    assert.match(sec('## 3. Verify'), /Merge #400 only on `key_check=OK`/);
+    assert.match(sec('## 4. Key rollback'), /0\. \*\*If #400 is merged and the old key fails its rule\*\*[\s\S]*\*\*revert #400 first\*\*/);
+    const five = sec('## 5. Code rollback');
+    assert.match(five, /1\. If #400 is merged, revert it first\. Its behaviour changes are:/);
+    assert.match(five, /dropping the production `JWT_SECRET` fallback/);
+    assert.ok(!/only behaviour change/.test(doc), 'no "only behaviour change" claim');
+    assert.ok(!/pastes a key/i.test(doc), 'no "nobody pastes a key" line');
+  }],
   ['the refusal recommends only openssl rand -hex 32 and never echoes the value', () => {
     const weak = 'a passphrase that is long enough to pass a length check';
     assert.throws(() => assertTotpKeyForProduction(prod(weak)), (err: Error) => {
