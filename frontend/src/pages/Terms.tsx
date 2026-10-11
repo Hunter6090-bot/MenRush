@@ -112,7 +112,7 @@ export const Terms = () => {
           >
             <header>
               <span className="inline-block rounded-full border border-[#c8861c]/30 bg-[#c8861c]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#c8861c]">
-                Last updated: 10 October 2026
+                Last updated: 11 October 2026
               </span>
               <h1 className="mr-page-heading mt-4">
                 Terms and Conditions
@@ -415,9 +415,14 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>7.3</Strong> Card payments are not available yet. Before card payment opens,
-                  we will update these Terms and tell you who processes card payments. For now, you
-                  can buy Premium by manual invoice from the Premium page.
+                  <Strong>7.3</Strong> At times we may include Premium free for all members. While it
+                  is included free, there is nothing to buy and we will not charge you for it. The
+                  Premium page shows which applies. When Premium can be bought, you buy it by manual
+                  invoice from the Premium page, as set out in section 7.4. Card payments are not
+                  available yet. Before card payment opens, we will update these Terms and tell you
+                  who processes card payments. If we stop including Premium free for all members, we
+                  will tell you at least 14 days before, and we will only charge you if you choose to
+                  buy it.
                 </>,
               )}
               {para(
@@ -439,9 +444,12 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>7.6</Strong> Premium runs for the period you have paid for and does not
-                  renew automatically. When that period ends, Premium stops unless you pay a new
-                  invoice. You can cancel an unpaid invoice on the Premium page.
+                  <Strong>7.6</Strong> When you buy Premium, it runs for the period you have paid for
+                  and does not renew automatically. When that period ends, Premium stops unless you
+                  buy it again. You can cancel an unpaid invoice on the Premium page. Free Premium for
+                  all members does not renew or charge you either, and ending it does not affect any
+                  Premium you have already paid for or any separate free Premium we have promised
+                  you, such as an offer code you have redeemed.
                 </>,
               )}
               {para(
@@ -549,8 +557,9 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>8.4</Strong> We send refunds to the account you paid from, within 14 days of
-                  agreeing them.
+                  <Strong>8.4</Strong> If you cancel within the 14 days, we refund you within 14 days of
+                  you telling us you are cancelling. Any other refund we agree is paid within 14 days
+                  of us agreeing it. We send refunds to the account you paid from.
                 </>,
               )}
               {para(

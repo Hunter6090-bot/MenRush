@@ -24,7 +24,10 @@ const S76A_PARTS = [
 ];
 
 const S73 =
-  '7.3</Strong> Card payments are not available yet. Before card payment opens, we will update these Terms and tell you who processes card payments. For now, you can buy Premium by manual invoice from the Premium page.';
+  '7.3</Strong> At times we may include Premium free for all members. While it is included free, there is nothing to buy and we will not charge you for it. The Premium page shows which applies. When Premium can be bought, you buy it by manual invoice from the Premium page, as set out in section 7.4. Card payments are not available yet. Before card payment opens, we will update these Terms and tell you who processes card payments. If we stop including Premium free for all members, we will tell you at least 14 days before, and we will only charge you if you choose to buy it.';
+
+const S76 =
+  '7.6</Strong> When you buy Premium, it runs for the period you have paid for and does not renew automatically. When that period ends, Premium stops unless you buy it again. You can cancel an unpaid invoice on the Premium page. Free Premium for all members does not renew or charge you either, and ending it does not affect any Premium you have already paid for or any separate free Premium we have promised you, such as an offer code you have redeemed.';
 
 const S75 =
   '7.5</Strong> Prices are shown in pounds sterling (GBP). The price shown on your invoice is the full amount you pay us, and if VAT applies it is shown there. If we change the price of Premium, the new price applies only to Premium you buy after the change, and you will see it before you pay.';
@@ -33,7 +36,7 @@ const S8: Array<[string, string]> = [
   ['8.1', 'You can cancel a Premium purchase within 14 days of buying it, as set out in section 7.6A. If you asked for Premium to start straight away, your refund is reduced for the days of Premium you have had. If you did not, you get a full refund.'],
   ['8.2', 'After those 14 days, we do not refund the rest of a Premium period you have started, unless the law gives you a right to a refund or we have made a mistake.'],
   ['8.3', 'If Premium does not work as described, or we charged you wrongly, please email support@menrush.com and we will put it right, which may include a refund. Nothing in these Terms affects your legal rights.'],
-  ['8.4', 'We send refunds to the account you paid from, within 14 days of agreeing them.'],
+  ['8.4', 'If you cancel within the 14 days, we refund you within 14 days of you telling us you are cancelling. Any other refund we agree is paid within 14 days of us agreeing it. We send refunds to the account you paid from.'],
   ['8.5', 'If we close your account because you broke these Terms, we may not refund unused Premium, except where the law says we must.'],
 ];
 
@@ -87,8 +90,25 @@ describe('Terms section 7 manual invoice wording', () => {
     expect(s73).not.toMatch(/recurring|merchant review|processor/i);
   });
 
-  it('Terms Last updated is 10 October 2026', () => {
-    expect(terms).toMatch(/Last updated: 10 October 2026/);
+  it('Terms Last updated is 11 October 2026', () => {
+    expect(terms).toMatch(/Last updated: 11 October 2026/);
+  });
+
+  it('7.6 is Legal wording exactly', () => {
+    expect(terms).toContain(S76);
+    expect(terms).not.toMatch(/unless you pay a new invoice/);
+  });
+
+  it('8.4 and 7.6A agree on refund timing for a cancellation (14 days from telling us)', () => {
+    expect(terms).toContain('We refund you within 14 days of you telling us, to the account you paid from.');
+    expect(terms).toContain('If you cancel within the 14 days, we refund you within 14 days of you telling us you are cancelling.');
+    expect(terms).not.toMatch(/within 14 days of agreeing them/);
+  });
+
+  it('the Premium page matches 7.3: while Premium is included free it says there is nothing to buy', () => {
+    const premium = readFileSync(resolve(__dirname, './Premium.tsx'), 'utf8').replace(/&apos;/g, "'");
+    expect(premium).toContain("Premium is included free for everyone at the moment, so there's nothing to buy.");
+    expect(premium).toMatch(/statusRes\.data\.beta_premium_included/);
   });
 
   it('7.4 is Legal wording exactly, with no recurring billing sentence', () => {
