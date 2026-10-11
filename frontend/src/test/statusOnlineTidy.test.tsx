@@ -72,6 +72,38 @@ describe('TwoFactorSettings badges', () => {
   });
 });
 
+describe('TwoFactorSettings P1s after #419', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each(THEMES)('Protected border is about 75 percent and at least 3:1 against the badge and the card (%s)', async (theme) => {
+    await renderTwoFactor(true);
+    const badge = screen.getByTestId('two-factor-badge-protected');
+    expect(badge).toHaveClass('border-[color-mix(in_srgb,var(--status-online-text)_75%,transparent)]');
+    // The border paints over the badge's own 10% tint (background-clip: border-box), so the
+    // edge colour is 75% + 25% of 10% = 77.5% of --status-online-text over the card.
+    const edge = 'color-mix(in srgb, var(--status-online-text) 77.5%, transparent)';
+    const fill = 'color-mix(in srgb, var(--status-online-text) 10%, transparent)';
+    for (const base of ['var(--bg-card)', 'var(--bg-primary)', 'var(--bg-elevated)']) {
+      expect(tokenContrast(edge, fill, theme, base)).toBeGreaterThanOrEqual(3);
+      expect(tokenContrast(edge, base, theme, base)).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('"This device" wraps instead of truncating on narrow phones, at 15px', async () => {
+    await renderTwoFactor(true);
+    const badge = await screen.findByTestId('two-factor-badge-this-device');
+    const row = screen.getByTestId('two-factor-device-label');
+    expect(row).not.toHaveClass('truncate');
+    expect(row).toHaveClass('flex', 'flex-wrap');
+    expect(row.contains(badge)).toBe(true);
+    // The badge keeps its two words together and drops to its own line; the label breaks.
+    expect(badge).toHaveClass('whitespace-nowrap', 'text-[15px]');
+    expect(badge).not.toHaveClass('truncate');
+    expect(row.querySelector('span:not([data-testid])')).toHaveClass('break-words');
+    expect(read('../components/TwoFactorSettings.tsx')).not.toMatch(/\btruncate\b/);
+  });
+});
+
 describe('grid live-count pill', () => {
   const discover = read('../pages/Discover.tsx');
   const pills = discover.match(/data-testid="nearby-counts"[\s\S]*?className="([^"]*)"/g) ?? [];
