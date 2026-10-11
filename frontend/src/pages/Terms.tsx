@@ -15,8 +15,8 @@ const SECTIONS: Section[] = [
   { id: 'acceptable-use', number: '4', title: 'Acceptable Use' },
   { id: 'user-content', number: '5', title: 'User Content' },
   { id: 'location-services', number: '6', title: 'Location Services' },
-  { id: 'premium-subscription', number: '7', title: 'Premium Subscription' },
-  { id: 'refunds', number: '8', title: 'Refunds' },
+  { id: 'premium-subscription', number: '7', title: 'Premium' },
+  { id: 'refunds', number: '8', title: 'Refunds and cancellation' },
   { id: 'intellectual-property', number: '9', title: 'Intellectual Property' },
   { id: 'privacy', number: '10', title: 'Privacy' },
   { id: 'disclaimers', number: '11', title: 'Disclaimers' },
@@ -59,6 +59,20 @@ const Strong = ({ children }: { children: React.ReactNode }) => (
   <strong className="font-semibold text-[#f0e4cc]">{children}</strong>
 );
 
+/**
+ * support@menrush.com as a mailto link. Inline in body text, so the 44px tap
+ * area comes from an invisible ::after box rather than padding (no reflow).
+ */
+const MailLink = () => (
+  <a
+    href="mailto:support@menrush.com"
+    data-testid="terms-support-mail"
+    className="relative text-[#c8861c] underline underline-offset-2 transition-colors hover:text-[#d9a038] after:absolute after:-inset-x-1 after:-inset-y-3 after:min-h-[44px] after:content-['']"
+  >
+    support@menrush.com
+  </a>
+);
+
 const A = ({ href, children }: { href: string; children: React.ReactNode }) => (
   <a
     href={href}
@@ -98,7 +112,7 @@ export const Terms = () => {
           >
             <header>
               <span className="inline-block rounded-full border border-[#c8861c]/30 bg-[#c8861c]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#c8861c]">
-                Last updated: 06 May 2026
+                Last updated: 11 October 2026
               </span>
               <h1 className="mr-page-heading mt-4">
                 Terms and Conditions
@@ -380,13 +394,13 @@ export const Terms = () => {
               )}
             </section>
 
-            {/* 7. Premium Subscription */}
+            {/* 7. Premium */}
             <section>
               {sectionHeading(SECTIONS[6])}
               {para(
                 <>
-                  <Strong>7.1</Strong> MenRush offers a free tier and a paid Premium subscription.
-                  Premium features are detailed on the Platform and are subject to change.
+                  <Strong>7.1</Strong> MenRush offers a free tier and paid Premium. You buy Premium as a
+                  one-off purchase for a fixed period. Premium features are detailed on the Platform and are subject to change.
                 </>,
               )}
               {para(
@@ -396,37 +410,74 @@ export const Terms = () => {
                   sign-up, unless a valid promotional offer (including a Pride /{' '}
                   <span className="font-mono tracking-wide">PRIDE</span> promo code) grants a
                   longer free Premium period instead. Where such a promo applies, it replaces the
-                  30-day waitlist reward — it is not added on top.
+                  30-day waitlist reward. It is not added on top.
                 </>,
               )}
               {para(
                 <>
-                  <Strong>7.3</Strong> After any free trial period, paid Premium subscriptions
-                  will be billed on a recurring basis through our designated payment processor once
-                  live payment processing is activated (under merchant review). In the interim,
-                  in-app card checkout is not live, and subscriptions or upgrades are processed via
-                  manual invoice by contacting support@menrush.com.
+                  <Strong>7.3</Strong> At times we may include Premium free for all members. While it
+                  is included free, there is nothing to buy and we will not charge you for it. The
+                  Premium page shows which applies. When Premium can be bought, you buy it by manual
+                  invoice from the Premium page, as set out in section 7.4. Card payments are not
+                  available yet. Before card payment opens, we will update these Terms and tell you
+                  who processes card payments. If we stop including Premium free for all members, we
+                  will tell you at least 14 days before, and we will only charge you if you choose to
+                  buy it.
                 </>,
               )}
               {para(
                 <>
-                  <Strong>7.4</Strong> Where recurring billing is activated with a valid payment
-                  method on file, you authorise us to charge that payment method at the start of
-                  each billing period. For manual invoices, payment is due upon issuance prior to
-                  entitlement activation.
+                  <Strong>7.4</Strong> To buy Premium by manual invoice, you pay the invoice by bank
+                  transfer using the payment reference shown on it. The invoice shows the full amount
+                  you pay us. When Premium starts depends on the choice you make when you buy, as set
+                  out in section 7.6A. We will tell you when your Premium has started. If your payment
+                  has not been matched, email <MailLink /> with your payment reference.
                 </>,
               )}
               {para(
                 <>
-                  <Strong>7.5</Strong> Prices are displayed in GBP and are inclusive of any
-                  applicable VAT. We reserve the right to change pricing with 30 days' notice.
+                  <Strong>7.5</Strong> Prices are shown in pounds sterling (GBP). The price shown on
+                  your invoice is the full amount you pay us, and if VAT applies it is shown there. If
+                  we change the price of Premium, the new price applies only to Premium you buy after
+                  the change, and you will see it before you pay.
                 </>,
               )}
               {para(
                 <>
-                  <Strong>7.6</Strong> Subscriptions auto-renew unless cancelled at least 24 hours
-                  before the renewal date. You can cancel at any time through your account
-                  settings.
+                  <Strong>7.6</Strong> When you buy Premium, it runs for the period you have paid for
+                  and does not renew automatically. When that period ends, Premium stops unless you
+                  buy it again. You can cancel an unpaid invoice on the Premium page. Free Premium for
+                  all members does not renew or charge you either, and ending it does not affect any
+                  Premium you have already paid for or any separate free Premium we have promised
+                  you, such as an offer code you have redeemed.
+                </>,
+              )}
+              {para(
+                <>
+                  <Strong>7.6A</Strong> You can cancel your Premium purchase within 14 days of buying
+                  it. When you buy, you choose when Premium starts:
+                </>,
+              )}
+              <div className="mt-2 space-y-2 pl-5" data-testid="terms-7-6a-choices">
+                {para(
+                  <>
+                    (a) If you tick the box asking for Premium to start straight away, it starts once
+                    we have confirmed your payment. If you then cancel within the 14 days, we refund
+                    what you paid less an amount for the days of Premium you have had.
+                  </>,
+                )}
+                {para(
+                  <>
+                    (b) If you leave the box unticked, Premium starts when the 14 days end, or when we
+                    confirm your payment if that is later. If you cancel within the 14 days, we refund
+                    what you paid in full.
+                  </>,
+                )}
+              </div>
+              {para(
+                <>
+                  To cancel, email <MailLink /> with your invoice reference. We refund you within 14 days of
+                  you telling us, to the account you paid from.
                 </>,
               )}
               {para(
@@ -479,27 +530,42 @@ export const Terms = () => {
               )}
             </section>
 
-            {/* 8. Refunds */}
+            {/* 8. Refunds and cancellation */}
             <section>
               {sectionHeading(SECTIONS[7])}
               {para(
                 <>
-                  <Strong>8.1</Strong> All subscription payments are non-refundable except where
-                  required by applicable law.
+                  <Strong>8.1</Strong> You can cancel a Premium purchase within 14 days of buying it,
+                  as set out in section 7.6A. If you asked for Premium to start straight away, your
+                  refund is reduced for the days of Premium you have had. If you did not, you get a
+                  full refund.
                 </>,
               )}
               {para(
                 <>
-                  <Strong>8.2</Strong> If you believe a charge was made in error, contact us at{' '}
-                  <A href="mailto:support@menrush.com">support@menrush.com</A> within 14 days of
-                  the charge.
+                  <Strong>8.2</Strong> After those 14 days, we do not refund the rest of a Premium
+                  period you have started, unless the law gives you a right to a refund or we have
+                  made a mistake.
                 </>,
               )}
               {para(
                 <>
-                  <Strong>8.3</Strong> Under UK consumer law, you have a 14-day cooling-off period
-                  for digital services. By accessing Premium features immediately after purchase,
-                  you acknowledge that this right may be waived.
+                  <Strong>8.3</Strong> If Premium does not work as described, or we charged you
+                  wrongly, please email <MailLink /> and we will put it right, which may include a refund.
+                  Nothing in these Terms affects your legal rights.
+                </>,
+              )}
+              {para(
+                <>
+                  <Strong>8.4</Strong> If you cancel within the 14 days, we refund you within 14 days of
+                  you telling us you are cancelling. Any other refund we agree is paid within 14 days
+                  of us agreeing it. We send refunds to the account you paid from.
+                </>,
+              )}
+              {para(
+                <>
+                  <Strong>8.5</Strong> If we close your account because you broke these Terms, we may
+                  not refund unused Premium, except where the law says we must.
                 </>,
               )}
             </section>
@@ -614,7 +680,7 @@ export const Terms = () => {
                 <>
                   <Strong>13.1</Strong> You may delete your account at any time through your
                   account settings or by contacting{' '}
-                  <A href="mailto:support@menrush.com">support@menrush.com</A>.
+                  <MailLink />.
                 </>,
               )}
               {para(
@@ -705,7 +771,7 @@ export const Terms = () => {
                     Support
                   </dt>
                   <dd>
-                    <A href="mailto:support@menrush.com">support@menrush.com</A>
+                    <MailLink />
                   </dd>
 
                   <dt className="font-semibold uppercase tracking-[0.12em] text-[#c8861c]/90 text-xs sm:text-[11px]">
