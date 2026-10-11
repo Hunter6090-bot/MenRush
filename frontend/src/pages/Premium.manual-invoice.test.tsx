@@ -536,7 +536,7 @@ describe('Premium manual invoice stopgap and password step', () => {
   it.each([
     ['paid Premium', false],
     ['Premium included for everyone', true],
-  ])('hides the £6.99 offer from anyone already Premium (%s)', async (_label, included) => {
+  ])('hides the £6.99 offer from anyone already Premium (%s)', async (label, included) => {
     mocks.getStatus.mockResolvedValue({
       data: {
         tier: 'premium',
@@ -552,11 +552,90 @@ describe('Premium manual invoice stopgap and password step', () => {
         <Premium />
       </MemoryRouter>,
     );
-    await screen.findByTestId('premium-active-status');
+    await screen.findByTestId(included ? 'premium-included-free' : 'premium-active-status');
+    void label;
     expect(screen.queryByTestId('generate-invoice-button')).not.toBeInTheDocument();
     expect(screen.queryByTestId('immediate-start-consent')).not.toBeInTheDocument();
     expect(screen.queryByText('£6.99')).not.toBeInTheDocument();
     expect(screen.queryByText(/Use the bank invoice below/i)).not.toBeInTheDocument();
     expect(document.body.textContent ?? '').not.toMatch(/beta/i);
+  });
+
+  const FOOTER = /MenRush checks bank invoices by hand once your payment arrives/;
+  const flagStatus = (included: boolean, over: Record<string, unknown> = {}) => ({
+    data: {
+      tier: included ? 'premium' : 'free',
+      is_premium: included,
+      beta_premium_included: included,
+      premium_until: null,
+      features: [],
+      free_limits: { likesPerDay: 20, radiusKm: 5, photos: 6 },
+      ...over,
+    },
+  });
+
+  it('flag ON (backend reports Premium included): says so, nothing to buy, no invoice flow, no stale lines', async () => {
+    mocks.getStatus.mockResolvedValue(flagStatus(true));
+    // Even with an old unpaid invoice on file, the invoice flow is hidden while Premium is included.
+    mocks.getUnpaidInvoice.mockResolvedValue({ data: { invoice: unpaidInvoice(), payment_instructions: instructions() } });
+    render(
+      <MemoryRouter>
+        <Premium />
+      </MemoryRouter>,
+    );
+    const banner = await screen.findByTestId('premium-included-free');
+    expect(banner.textContent).toContain(
+      "Premium is included free for everyone at the moment, so there's nothing to buy.",
+    );
+    for (const id of ['generate-invoice-button', 'immediate-start-consent', 'start-options', 'premium-start-date', 'unpaid-invoice-card', 'premium-buy-info', 'premium-pending-start']) {
+      expect(screen.queryByTestId(id), id).not.toBeInTheDocument();
+    }
+    const text = document.body.textContent ?? '';
+    expect(text).not.toMatch(/£6\.99|Get MenRush Premium/);
+    expect(text).not.toMatch(/Entitlements stack on extension/);
+    expect(text).not.toMatch(FOOTER);
+    expect(text).not.toMatch(/\bbeta\b/i);
+    expect(text).not.toMatch(/right now/i);
+  });
+
+  it('flag ON is read from the backend status, not a frontend constant', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const src = readFileSync(resolve(__dirname, './Premium.tsx'), 'utf8');
+    expect(src).toMatch(/setPremiumIncluded\(Boolean\(statusRes\.data\.beta_premium_included\)\)/);
+    expect(src).not.toMatch(/BETA_INVITE_REQUIRED|isBetaPremiumFree|import\.meta\.env/);
+  });
+
+  it('flag OFF: the offer and the invoice flow show as built, with no stale lines', async () => {
+    mocks.getStatus.mockResolvedValue(flagStatus(false));
+    mocks.createInvoice.mockResolvedValue({ data: { invoice: unpaidInvoice(), payment_instructions: instructions() } });
+    render(
+      <MemoryRouter>
+        <Premium />
+      </MemoryRouter>,
+    );
+    await screen.findByTestId('generate-invoice-button');
+    expect(screen.getByText('£6.99')).toBeInTheDocument();
+    expect(screen.getByTestId('immediate-start-consent')).toBeInTheDocument();
+    expect(screen.getByTestId('start-options')).toBeInTheDocument();
+    expect(screen.getByTestId('premium-buy-info')).toBeInTheDocument();
+    expect(screen.queryByTestId('premium-included-free')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('generate-invoice-button'));
+    expect(await screen.findByTestId('unpaid-invoice-card')).toBeInTheDocument();
+    const text = document.body.textContent ?? '';
+    expect(text).not.toMatch(FOOTER);
+    expect(text).not.toMatch(/\bbeta\b/i);
+  });
+
+  it('flag OFF, paid Premium: shows the end date without the old stacking line', async () => {
+    mocks.getStatus.mockResolvedValue(flagStatus(false, { tier: 'premium', is_premium: true, premium_until: '2099-01-01T00:00:00.000Z' }));
+    render(
+      <MemoryRouter>
+        <Premium />
+      </MemoryRouter>,
+    );
+    const active = await screen.findByTestId('premium-active-status');
+    expect(active.textContent).toMatch(/Active until 1 Jan 2099\./);
+    expect(active.textContent).not.toMatch(/Entitlements/);
   });
 });

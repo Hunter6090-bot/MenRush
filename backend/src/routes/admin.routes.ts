@@ -690,6 +690,7 @@ router.post('/premium/invoices/:id/resend-refund-email', privateNoStore, async (
     const result = await invoiceService.sendRefundEmail(inv.id);
     console.log(`[invoice] resend-refund-email invoice=${inv.id} admin=${parsed.data.admin_actor} result=${result}`);
     if (result === 'not_due') return res.status(409).json({ error: 'refund_not_paid' });
+    if (result === 'in_progress') return res.status(409).json({ error: 'refund_email_in_progress' });
     return res.status(result === 'failed' ? 502 : 200).json({ ok: result !== 'failed', result });
   } catch {
     console.error('[admin] resend-refund-email error');
@@ -725,6 +726,9 @@ router.post('/premium/invoices/:id/confirm-payment', privateNoStore, async (req:
     });
   } catch (err: any) {
     console.error('[admin] confirm invoice error:', err);
+    if (/refunded invoice/.test(String(err?.message))) {
+      return res.status(409).json({ error: 'invoice_refunded' });
+    }
     return res.status(400).json({ error: err.message || 'confirm_invoice_failed' });
   }
 });
