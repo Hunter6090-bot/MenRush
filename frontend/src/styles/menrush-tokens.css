@@ -124,6 +124,8 @@
   --cream-faded: #A89070;            /* placeholders only — not body text */
 
   --status-online: var(--nn-online);
+  /* Online green for TEXT (live counts): >= 4.5:1 on every surface. --status-online stays for dots/rings. */
+  --status-online-text: var(--nn-online);
   --status-online-glow: rgba(111, 168, 90, 0.4);
   --status-pulsing: var(--nn-copper);
   --status-offline: var(--nn-faint);
@@ -198,6 +200,7 @@ html.theme-light {
   --nn-faint: #6B5840;     /* helper on light */
   --nn-soft: #3D2B0E;
   --nn-online: #3D7A2E;
+  --status-online-text: #2F6624;
   --nn-warning: #B8860B;
   --nn-danger: #9B3A28;
 
