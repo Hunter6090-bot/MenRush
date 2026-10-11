@@ -137,14 +137,16 @@ jobs:
         run: npm run test:edge-proxy-secret
       - name: No coordinates in /api GET URLs (fix only in the POST body)
         run: npm run test:no-coords-in-urls
-      - name: 2FA step shows the 503 support copy at 15px and keeps the code step
-        run: npx vitest run src/pages/Login.twoFactorFailure.test.tsx
+      - name: Sign-in card background renders (real Tailwind CSS for the class)
+        run: npx vitest run src/lib/publicStyles.background.test.ts
       # vercel build, then import and call the exact built middleware.js under
       # plain Node ESM from an isolated copy (catches ERR_MODULE_NOT_FOUND /
       # MIDDLEWARE_INVOCATION_FAILED that vitest and tsc cannot see). No
       # Vercel token or env: placeholder project, empty global config.
       - name: Built middleware loads and runs on the nodejs runtime (vercel build + Node ESM import)
         run: npm run test:middleware-artifact
+      - name: 2FA step shows the 503 support copy at 15px and keeps the code step
+        run: npx vitest run src/pages/Login.twoFactorFailure.test.tsx
 
   # Integration tests that need a real Postgres + PostGIS (map feed blocks and
   # Ghost, radius on the fuzzed pin, etc.). Throwaway DB per run.
