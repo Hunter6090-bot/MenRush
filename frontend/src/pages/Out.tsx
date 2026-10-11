@@ -3,7 +3,7 @@
  * Chips: All / Sauna / Bar / Event / Community.
  * Cruising spot search lives here (moved off the map, Pete 8 Oct 2026).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { eventsAPI, hotSpotsAPI, onLocationSaved, type EventDTO, type HotSpotDTO } from '../api/client';
 import { Layout } from '../components/Layout';
@@ -61,6 +61,9 @@ function sectionFromParam(raw: string | null): OutChip {
   return 'all';
 }
 
+/** A re-read after a check-in gives up after this long; the server spot is kept. */
+export const OUT_REFRESH_TIMEOUT_MS = 5000;
+
 export function Out() {
   const [params, setParams] = useSearchParams();
   const chip = sectionFromParam(params.get('section') || params.get('chip'));
@@ -77,14 +80,85 @@ export function Out() {
   const [sheetError, setSheetError] = useState('');
   const isPremium = useAuthStore((s) => Boolean(s.user?.is_premium));
   const navigate = useNavigate();
-  const sheetSpot = useMemo(
-    () => (sheetSpotId ? spots.find((s) => s.id === sheetSpotId) ?? null : null),
-    [spots, sheetSpotId],
+  // Last copy of the open spot, so a list refresh that drops it does not slam the sheet shut.
+  const sheetSnapshotRef = useRef<HotSpotDTO | null>(null);
+  const sheetSpot = useMemo(() => {
+    if (!sheetSpotId) {
+      sheetSnapshotRef.current = null;
+      return null;
+    }
+    const live = spots.find((s) => s.id === sheetSpotId) ?? null;
+    if (live) sheetSnapshotRef.current = live;
+    return live ?? (sheetSnapshotRef.current?.id === sheetSpotId ? sheetSnapshotRef.current : null);
+  }, [spots, sheetSpotId]);
+
+  // Latest-wins for every spot list read (first load, location change, re-read after a
+  // check-in). Each read takes a ticket; a reply is applied only if no newer read or
+  // server spot merge has happened since. So a slow re-read for spot A can never
+  // overwrite spot B's newer check-in, and an old location's list never overwrites the
+  // new one (QC P0 on #393).
+  const listSeqRef = useRef(0);
+  const [reloadKey, setReloadKey] = useState(0);
+  // Set while a full load (first load, location change) is in flight or after its reply
+  // was dropped as stale. If the re-read that superseded it then fails or times out, we
+  // reload, so the member is never stuck on the old location's list (QC P1 on #393).
+  const loadInFlightRef = useRef(false);
+  const loadDroppedRef = useRef(false);
+  // A recovery reload runs in the background: the current list stays on screen (no
+  // spinner behind the open spot sheet) and a failure keeps it instead of an error.
+  const quietReloadRef = useRef(false);
+  const reloadIfLoadWasDropped = useCallback(() => {
+    if (loadInFlightRef.current || loadDroppedRef.current) {
+      loadDroppedRef.current = false;
+      quietReloadRef.current = true;
+      setReloadKey((k) => k + 1);
+    }
+  }, []);
+  const takeListTicket = useCallback(() => {
+    listSeqRef.current += 1;
+    return listSeqRef.current;
+  }, []);
+  const isLatestList = useCallback((ticket: number) => ticket === listSeqRef.current, []);
+
+  const replaceSpot = useCallback(
+    (updated: HotSpotDTO) => {
+      // A server spot is newer than any list read already in flight: retire those reads.
+      takeListTicket();
+      setSpots((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
+    },
+    [takeListTicket],
   );
 
-  const replaceSpot = useCallback((updated: HotSpotDTO) => {
-    setSpots((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
-  }, []);
+  // Quiet re-read of the list after a check-in or check-out (no spinner, the sheet stays
+  // open). Counts come from the server, which leaves out Ghost and hidden members (#368).
+  // A hung re-read gives up after OUT_REFRESH_TIMEOUT_MS and the server spot from the
+  // check-in reply stays; its late reply is then dropped.
+  const refreshSpots = useCallback(async () => {
+    if (lat == null || lng == null || chip === 'community' || chip === 'event') return;
+    const ticket = takeListTicket();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), OUT_REFRESH_TIMEOUT_MS);
+    });
+    try {
+      const res = await Promise.race([hotSpotsAPI.listNearby(lat, lng, 80), timedOut]);
+      if (res === 'timeout') {
+        // Retire this read so a reply that turns up later is ignored.
+        if (isLatestList(ticket)) takeListTicket();
+        reloadIfLoadWasDropped();
+        return;
+      }
+      if (isLatestList(ticket)) {
+        setSpots(res.data.spots ?? []);
+        loadDroppedRef.current = false;
+      }
+    } catch {
+      // Keep the server spot we already merged, but never leave an old list in place.
+      reloadIfLoadWasDropped();
+    } finally {
+      clearTimeout(timer);
+    }
+  }, [lat, lng, chip, takeListTicket, isLatestList, reloadIfLoadWasDropped]);
 
   // Same check-in / check-out calls the map sheet uses (Discover handleHotSpotCheckIn).
   const handleCheckIn = useCallback(
@@ -101,13 +175,15 @@ export function Out() {
           const res = await hotSpotsAPI.checkIn(spot.id, anonymous);
           replaceSpot(spotAfterCheckToggle(spot, res.data?.spot, true, { my_checkin_anonymous: anonymous }));
         }
+        // Refresh the Out list so every card shows the server's updated count.
+        await refreshSpots();
       } catch {
         setSheetError('Check-in failed. Try again.');
       } finally {
         setActingSpotId(null);
       }
     },
-    [replaceSpot],
+    [replaceSpot, refreshSpots],
   );
 
   const setChip = useCallback(
@@ -127,7 +203,6 @@ export function Out() {
   // A brand-new member's first read can land before the server has their
   // location (empty list, location_required). Reload once when it is saved.
   const [needsLocation, setNeedsLocation] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
   useEffect(() => {
     if (!needsLocation) return;
     return onLocationSaved(() => {
@@ -138,20 +213,33 @@ export function Out() {
 
   useEffect(() => {
     let cancelled = false;
+    const quiet = quietReloadRef.current;
+    quietReloadRef.current = false;
     async function load() {
-      setLoading(true);
+      // Background recovery reload: keep the list visible (no spinner) and clear any
+      // spinner left by the load it replaces.
+      setLoading(!quiet);
       setError('');
       try {
         const tasks: Promise<void>[] = [];
         if (chip !== 'community' && chip !== 'event') {
           tasks.push(
             (async () => {
+              const ticket = takeListTicket();
               if (lat == null || lng == null) {
                 if (!cancelled) setSpots([]);
                 return;
               }
-              const res = await hotSpotsAPI.listNearby(lat, lng, 80);
-              if (!cancelled) {
+              loadInFlightRef.current = true;
+              let res;
+              try {
+                res = await hotSpotsAPI.listNearby(lat, lng, 80);
+              } finally {
+                if (!cancelled) loadInFlightRef.current = false;
+              }
+              if (!cancelled && !isLatestList(ticket)) loadDroppedRef.current = true;
+              if (!cancelled && isLatestList(ticket)) {
+                loadDroppedRef.current = false;
                 setSpots(res.data.spots ?? []);
                 setNeedsLocation(Boolean((res.data as { location_required?: boolean }).location_required));
               }
@@ -176,7 +264,7 @@ export function Out() {
         }
         await Promise.all(tasks);
       } catch {
-        if (!cancelled) setError('Could not load Out.');
+        if (!cancelled && !quiet) setError('Could not load Out.');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -185,7 +273,7 @@ export function Out() {
     return () => {
       cancelled = true;
     };
-  }, [chip, lat, lng, reloadKey]);
+  }, [chip, lat, lng, reloadKey, takeListTicket, isLatestList]);
 
   const visibleSpots = useMemo(
     () => spots.filter((s) => spotMatchesChip(s, chip)),

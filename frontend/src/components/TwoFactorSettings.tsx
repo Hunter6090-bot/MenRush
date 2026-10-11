@@ -150,7 +150,7 @@ export function TwoFactorSettings() {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-[var(--cream-muted)]">
+      <div className="flex items-center gap-2 text-[15px] text-[var(--cream-muted)]">
         <PulseRing size={16} />
         Loading security settings…
       </div>
@@ -161,33 +161,33 @@ export function TwoFactorSettings() {
     <div className="space-y-4" data-testid="two-factor-settings">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-[var(--cream)]">
+          <p className="text-[15px] font-semibold text-[var(--cream)]">
             {enabled ? 'Two-factor authentication is on' : 'Two-factor authentication is off'}
           </p>
-          <p className="mt-1 text-[13px] leading-relaxed text-[var(--cream-muted)]">
+          <p className="mt-1 text-[15px] leading-relaxed text-[var(--cream-muted)]">
             Add a second step at sign-in with an authenticator app such as Google Authenticator, Authy, or 1Password.
           </p>
           {enabled && enabledAt ? (
-            <p className="mt-1 text-[11px] text-[var(--cream-muted)]/80">
+            <p className="mt-1 text-[15px] text-[var(--cream-muted)]">
               Enabled {new Date(enabledAt).toLocaleDateString()}
             </p>
           ) : null}
         </div>
         {enabled ? (
-          <span className="shrink-0 rounded-full border border-[rgba(111,168,90,0.45)] bg-[rgba(111,168,90,0.12)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--status-online)]">
+          <span className="shrink-0 rounded-full border border-[color-mix(in_srgb,var(--status-online-text)_45%,transparent)] bg-[color-mix(in_srgb,var(--status-online-text)_10%,transparent)] px-3 py-1 text-[15px] font-bold uppercase tracking-[0.08em] text-[var(--status-online-text)]" data-testid="two-factor-badge-protected">
             Protected
           </span>
         ) : (
-          <span className="shrink-0 rounded-full border border-[var(--border-default)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--cream-muted)]">
+          <span className="shrink-0 rounded-full border border-[var(--border-default)] px-3 py-1 text-[15px] font-bold uppercase tracking-[0.08em] text-[var(--cream-muted)]" data-testid="two-factor-badge-optional">
             Optional
           </span>
         )}
       </div>
 
       {mode === 'setup' && setup ? (
-        <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)]/50 p-4">
-          <p className="text-[13px] font-semibold text-[var(--cream)]">Scan this QR code</p>
-          <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
+        <div className="rounded-xl border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-primary)_50%,transparent)] p-4">
+          <p className="text-[15px] font-semibold text-[var(--cream)]">Scan this QR code</p>
+          <p className="mt-1 text-[15px] text-[var(--cream-muted)]">
             Open your authenticator app, add a new account, then enter the 6-digit code below.
           </p>
           <div className="mt-4 flex flex-col items-center gap-3 sm:flex-row sm:items-start">
@@ -195,16 +195,16 @@ export function TwoFactorSettings() {
               <QRCodeSVG value={setup.otpauthUrl} size={148} />
             </div>
             <div className="w-full sm:flex-1">
-              <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--cream-muted)]">
+              <p className="text-[15px] font-bold uppercase tracking-[0.1em] text-[var(--cream-muted)]">
                 Manual key
               </p>
-              <p className="mt-1 break-all rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2 font-mono text-[12px] text-[var(--copper)]">
+              <p className="mt-1 break-all rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2 font-mono text-[15px] text-[var(--copper)]">
                 {setup.secret}
               </p>
             </div>
           </div>
           <label className="mt-4 block">
-            <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--cream-muted)]">
+            <span className="text-[15px] font-bold uppercase tracking-[0.1em] text-[var(--cream-muted)]">
               Verification code
             </span>
             <input
@@ -218,7 +218,7 @@ export function TwoFactorSettings() {
                 setError('');
               }}
               placeholder="000000"
-              className="mt-1.5 w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-4 py-3 text-center text-lg font-bold tracking-[0.35em] text-[var(--cream)] focus:border-[var(--copper)]/50 focus:outline-none"
+              className="mt-1.5 w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-4 py-3 text-center text-lg font-bold tracking-[0.35em] text-[var(--cream)] focus:border-[color-mix(in_srgb,var(--copper)_50%,transparent)] focus:outline-none"
             />
           </label>
           <div className="mt-4 flex flex-wrap gap-2">
@@ -226,14 +226,14 @@ export function TwoFactorSettings() {
               type="button"
               onClick={() => void confirmEnable()}
               disabled={busy}
-              className="rounded-full bg-[var(--copper)] px-4 py-2 text-sm font-bold text-[var(--bg-primary)] transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-[var(--copper)] px-4 py-2 text-[15px] font-bold text-[var(--bg-primary)] transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {busy ? 'Confirming…' : 'Turn on 2FA'}
             </button>
             <button
               type="button"
               onClick={cancelFlow}
-              className="rounded-full border border-[var(--border-default)] px-4 py-2 text-sm font-semibold text-[var(--cream-muted)] hover:text-[var(--cream)]"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-[var(--border-default)] px-4 py-2 text-[15px] font-semibold text-[var(--cream-muted)] hover:text-[var(--cream)]"
             >
               Cancel
             </button>
@@ -242,9 +242,9 @@ export function TwoFactorSettings() {
       ) : null}
 
       {mode === 'disable' ? (
-        <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)]/50 p-4">
-          <p className="text-[13px] font-semibold text-[var(--cream)]">Confirm with your authenticator code</p>
-          <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
+        <div className="rounded-xl border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-primary)_50%,transparent)] p-4">
+          <p className="text-[15px] font-semibold text-[var(--cream)]">Confirm with your authenticator code</p>
+          <p className="mt-1 text-[15px] text-[var(--cream-muted)]">
             Enter a current code to turn off two-factor authentication.
           </p>
           <input
@@ -258,21 +258,21 @@ export function TwoFactorSettings() {
               setError('');
             }}
             placeholder="000000"
-            className="mt-3 w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-4 py-3 text-center text-lg font-bold tracking-[0.35em] text-[var(--cream)] focus:border-[var(--copper)]/50 focus:outline-none"
+            className="mt-3 w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-4 py-3 text-center text-lg font-bold tracking-[0.35em] text-[var(--cream)] focus:border-[color-mix(in_srgb,var(--copper)_50%,transparent)] focus:outline-none"
           />
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => void confirmDisable()}
               disabled={busy}
-              className="min-h-[44px] rounded-full border border-[var(--nn-danger-text)] px-4 py-2 text-[15px] font-bold text-[var(--nn-danger-text)] transition-colors hover:bg-[var(--error-soft)] disabled:opacity-50"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-[var(--nn-danger-text)] px-4 py-2 text-[15px] font-bold text-[var(--nn-danger-text)] transition-colors hover:bg-[color-mix(in_srgb,var(--nn-danger-text)_10%,transparent)] disabled:opacity-50"
             >
               {busy ? 'Turning off…' : 'Turn off 2FA'}
             </button>
             <button
               type="button"
               onClick={cancelFlow}
-              className="rounded-full border border-[var(--border-default)] px-4 py-2 text-sm font-semibold text-[var(--cream-muted)] hover:text-[var(--cream)]"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-[var(--border-default)] px-4 py-2 text-[15px] font-semibold text-[var(--cream-muted)] hover:text-[var(--cream)]"
             >
               Cancel
             </button>
@@ -292,7 +292,7 @@ export function TwoFactorSettings() {
                 setCode('');
                 setError('');
               }}
-              className="inline-flex min-h-[44px] items-center text-[15px] font-semibold text-[var(--nn-danger-text)] transition-opacity hover:opacity-80"
+              className="inline-flex min-h-[44px] items-center justify-center text-[15px] font-semibold text-[var(--nn-danger-text)] transition-opacity hover:opacity-80"
             >
               Turn off two-factor authentication
             </button>
@@ -301,7 +301,7 @@ export function TwoFactorSettings() {
               type="button"
               onClick={() => void startSetup()}
               disabled={busy}
-              className="rounded-full bg-[var(--copper)] px-4 py-2 text-sm font-bold text-[var(--bg-primary)] transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-[var(--copper)] px-4 py-2 text-[15px] font-bold text-[var(--bg-primary)] transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {busy ? 'Preparing…' : 'Set up authenticator app'}
             </button>
@@ -310,17 +310,17 @@ export function TwoFactorSettings() {
       ) : null}
 
       {enabled && mode === 'idle' ? (
-        <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)]/40 p-4">
-          <p className="text-[13px] font-semibold text-[var(--cream)]">Trusted devices</p>
-          <p className="mt-1 text-[12px] leading-relaxed text-[var(--cream-muted)]">
+        <div className="rounded-xl border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-primary)_40%,transparent)] p-4">
+          <p className="text-[15px] font-semibold text-[var(--cream)]">Trusted devices</p>
+          <p className="mt-1 text-[15px] leading-relaxed text-[var(--cream-muted)]">
             Browsers you chose to trust can skip the authenticator code for 30 days. Password is always required.
           </p>
           {devicesLoading ? (
-            <p className="mt-3 flex items-center gap-2 text-[12px] text-[var(--cream-muted)]">
+            <p className="mt-3 flex items-center gap-2 text-[15px] text-[var(--cream-muted)]">
               <PulseRing size={14} /> Loading…
             </p>
           ) : devices.length === 0 ? (
-            <p className="mt-3 text-[12px] text-[var(--cream-muted)]">
+            <p className="mt-3 text-[15px] text-[var(--cream-muted)]">
               No trusted devices yet. Check “Trust this device” the next time you enter an authenticator code.
             </p>
           ) : (
@@ -328,18 +328,18 @@ export function TwoFactorSettings() {
               {devices.map((device) => (
                 <li
                   key={device.id}
-                  className="flex items-start justify-between gap-3 rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)]/60 px-3 py-2.5"
+                  className="flex items-start justify-between gap-3 rounded-lg border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-elevated)_60%,transparent)] px-3 py-2.5"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-[13px] font-semibold text-[var(--cream)]">
+                    <p className="truncate text-[15px] font-semibold text-[var(--cream)]">
                       {device.label || 'Trusted browser'}
                       {device.isCurrent ? (
-                        <span className="ml-2 text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--copper)]">
+                        <span className="ml-2 text-[15px] font-bold uppercase tracking-[0.08em] text-[var(--nn-accent-text)]" data-testid="two-factor-badge-this-device">
                           This device
                         </span>
                       ) : null}
                     </p>
-                    <p className="mt-0.5 text-[11px] text-[var(--cream-muted)]">
+                    <p className="mt-0.5 text-[15px] text-[var(--cream-muted)]">
                       Last used {new Date(device.lastUsedAt).toLocaleDateString()} · Expires{' '}
                       {new Date(device.expiresAt).toLocaleDateString()}
                     </p>
@@ -348,7 +348,7 @@ export function TwoFactorSettings() {
                     type="button"
                     disabled={busy}
                     onClick={() => void revokeDevice(device)}
-                    className="inline-flex min-h-[44px] shrink-0 items-center text-[15px] font-semibold text-[var(--nn-danger-text)] transition-opacity hover:opacity-80 disabled:opacity-50"
+                    className="inline-flex min-h-[44px] items-center justify-center shrink-0 text-[15px] font-semibold text-[var(--nn-danger-text)] transition-opacity hover:opacity-80 disabled:opacity-50"
                   >
                     Revoke
                   </button>

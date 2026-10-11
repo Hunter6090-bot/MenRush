@@ -231,7 +231,8 @@ export const Login = () => {
               role="alert"
               className={
                 pendingToken
-                  ? // The auth panel is always dark (#1E1508), whatever the theme: --nn-danger-light is 5.26:1 there.
+                  ? // The sign-in card is dark in every theme (publicPanelClass: rgba(30,21,8,0.96) over #0D0A06),
+                    // so use the fixed --nn-danger-light (#D96A52): 4.5:1 or better there, see publicStyles.background.test.ts.
                     'text-[15px] font-semibold leading-snug text-[var(--nn-danger-light)]'
                   : publicErrorClass
               }

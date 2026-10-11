@@ -265,7 +265,9 @@ const tests: [string, () => void][] = [
     };
     const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
     assert.equal(tok(lightBlock, '--nn-danger-light'), undefined, 'danger-light is not re-themed (the auth panel is always dark)');
-    const panel = '#1E1508'; // publicPanelClass background, fixed in every theme
+    const panel = '#1E1508'; // publicPanelClass: rgba(30,21,8,0.96) over #0D0A06, effectively #1E1508, in every theme
+    const styles = fs.readFileSync(path.join(__dirname, '../../frontend/src/lib/publicStyles.ts'), 'utf8');
+    assert.ok(styles.includes('bg-[rgba(30,21,8,0.96)]'), 'the card background is a class Tailwind actually renders');
     assert.ok(ratio(tok(rootBlock, '--nn-danger-light')!, panel) >= 4.5, 'login 2FA error >= 4.5:1 on the auth panel');
     for (const surface of ['--nn-bg', '--nn-card', '--nn-elevated']) {
       assert.ok(ratio(tok(rootBlock, '--nn-danger-text')!, tok(rootBlock, surface)!) >= 4.5, `dark settings error >= 4.5:1 on ${surface}`);
