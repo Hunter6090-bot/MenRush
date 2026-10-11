@@ -91,6 +91,13 @@ export const ChangePasswordSchema = z
     path: ['new_password'],
   });
 
+export const SetPasswordSchema = z.object({
+  current_password: z.string().optional(),
+  new_password: z.string().min(8, 'New password must be at least 8 characters'),
+});
+
+export type SetPasswordInput = z.infer<typeof SetPasswordSchema>;
+
 export const ChangeEmailSchema = z.object({
   current_password: z.string().min(1, 'Current password is required'),
   new_email: normalizedEmail,
@@ -420,3 +427,61 @@ export type VenueCalendarEventCancelInput = z.infer<typeof VenueCalendarEventCan
 export type LocationMessageInput = z.infer<typeof LocationMessageSchema>;
 export type MediaMessageFormInput = z.infer<typeof MediaMessageFormSchema>;
 export type AlbumMediaMessageInput = z.infer<typeof AlbumMediaMessageSchema>;
+
+// ── Manual Premium Invoice Schemas ──────────────────────────────────────────
+
+/** Exact wording of the required tick on /premium (Legal soft advice, Terms 7.6A). */
+export const IMMEDIATE_START_CONSENT_TEXT =
+  'Start my Premium as soon as my payment is confirmed. I understand that if I cancel within 14 days, my refund will be reduced for the days of Premium I have had. If I leave this unticked, Premium starts after the 14 day cancellation period.';
+
+export const CreateInvoiceSchema = z
+  .object({
+    // The server sets the amount and length from PREMIUM_PRICE_LIST. Anything else a
+    // client sends (amount_pence, plan_days, notes, ...) is refused with 400.
+    plan_tier: z.literal('premium').default('premium'),
+    // Optional, unticked by default (Terms 7.6A). true: Premium starts at payment
+    // confirmation with a reduced refund on cancel. false: it starts after 14 days.
+    immediate_start_consent: z.boolean().default(false),
+  })
+  .strict();
+
+export const AdminCreateInvoiceSchema = z
+  .object({
+    user_id: z.string().uuid('Valid user UUID required'),
+    plan_tier: z.literal('premium').default('premium'),
+    // Optional ops override of the price list. Logged with admin_actor.
+    plan_days: z.number().int().min(1).max(3650).optional(),
+    amount_pence: z.number().int().min(0).optional(),
+    notes: z.string().max(500).optional(),
+    // The member's own choice, as they told ops. Not given unless they said yes.
+    immediate_start_consent: z.boolean().default(false),
+    // Who in ops made this invoice (the shared ADMIN_TOKEN names no one). Required for an override.
+    admin_actor: z.string().trim().min(1).max(64).optional(),
+  })
+  .strict()
+  .refine((v) => (v.plan_days === undefined && v.amount_pence === undefined) || Boolean(v.admin_actor), {
+    message: 'admin_actor is required to override the price list',
+    path: ['admin_actor'],
+  });
+
+export const AdminConfirmInvoiceSchema = z.object({
+  notes: z.string().max(500).optional(),
+});
+
+/** Admin only: 7.6A cancellation of a paid invoice. The refund is paid by hand by bank transfer. */
+export const AdminCancelRefundSchema = z
+  .object({
+    admin_actor: z.string().trim().min(1).max(64),
+  })
+  .strict();
+
+export const AdminMarkRefundPaidSchema = z
+  .object({
+    admin_actor: z.string().trim().min(1).max(64),
+  })
+  .strict();
+
+export type CreateInvoiceInput = z.infer<typeof CreateInvoiceSchema>;
+export type AdminCreateInvoiceInput = z.infer<typeof AdminCreateInvoiceSchema>;
+export type AdminConfirmInvoiceInput = z.infer<typeof AdminConfirmInvoiceSchema>;
+

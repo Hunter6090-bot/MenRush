@@ -10,6 +10,7 @@ import {
   buildTransactionalEmail,
   transactionalParagraph,
 } from '../services/transactional-email.template';
+import { privateNoStore } from '../middleware/noStore';
 
 const router = Router();
 
@@ -549,6 +550,202 @@ router.post('/venue-claims/:id/freeze', async (req: Request, res: Response) => {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Claim freeze failed';
     return res.status(400).json({ error: message });
+  }
+});
+
+// ── Manual Premium Invoices (Ops / Admin Path) ──────────────────────────────
+
+/**
+ * GET /api/admin/premium/invoices
+ * Ops list all invoices (optional ?status=unpaid|paid|cancelled).
+ */
+router.get('/premium/invoices', privateNoStore, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { invoiceService } = await import('../services/invoice.service');
+    const limit = Math.min(parseInt(String(req.query.limit || '100'), 10) || 100, 500);
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const invoices = await invoiceService.listAllInvoices(limit, status);
+    return res.json({ ok: true, invoices });
+  } catch (err) {
+    console.error('[admin] invoices list error:', err);
+    return res.status(500).json({ error: 'invoices_list_failed' });
+  }
+});
+
+/**
+ * GET /api/admin/premium/invoices/:id
+ * Ops view single invoice by ID or invoice number.
+ */
+router.get('/premium/invoices/:id', privateNoStore, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { invoiceService } = await import('../services/invoice.service');
+    const invoice = await invoiceService.getInvoiceById(req.params.id);
+    if (!invoice) return res.status(404).json({ error: 'invoice_not_found' });
+    return res.json({ ok: true, invoice });
+  } catch (err) {
+    console.error('[admin] invoice view error:', err);
+    return res.status(500).json({ error: 'invoice_view_failed' });
+  }
+});
+
+/**
+ * POST /api/admin/premium/invoices
+ * Ops generate/create invoice for a user.
+ */
+router.post('/premium/invoices', privateNoStore, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const { AdminCreateInvoiceSchema } = await import('../types/validation');
+  const parsed = AdminCreateInvoiceSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'validation_error', details: parsed.error.flatten() });
+  }
+
+  try {
+    const { invoiceService } = await import('../services/invoice.service');
+    const invoice = await invoiceService.createInvoice({
+      userId: parsed.data.user_id,
+      planTier: parsed.data.plan_tier,
+      planDays: parsed.data.plan_days,
+      amountPence: parsed.data.amount_pence,
+      notes: parsed.data.notes,
+      createdByAdminId: parsed.data.admin_actor || 'ops-admin',
+      // The member's own choice as they told ops; not given unless they said yes.
+      immediateStartConsent: parsed.data.immediate_start_consent,
+    });
+    return res.status(201).json({ ok: true, invoice });
+  } catch (err) {
+    console.error('[admin] create invoice error:', err);
+    return res.status(500).json({ error: 'create_invoice_failed' });
+  }
+});
+
+/**
+ * POST /api/admin/premium/invoices/:id/cancel-refund
+ * 7.6A cancellation of a PAID invoice. Works out the refund and resets Premium.
+ */
+router.post('/premium/invoices/:id/cancel-refund', privateNoStore, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const { AdminCancelRefundSchema } = await import('../types/validation');
+  const parsed = AdminCancelRefundSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'validation_error', details: parsed.error.flatten() });
+  }
+  try {
+    const { invoiceService } = await import('../services/invoice.service');
+    const r = await invoiceService.cancelPaidInvoiceWithRefund(req.params.id, parsed.data.admin_actor);
+    return res.json({
+      ok: true,
+      invoice: r.invoice,
+      refund_pence: r.refundPence,
+      days_had: r.daysHad,
+      premium_until: r.premiumUntil,
+      refund_method: 'bank_transfer_by_hand',
+    });
+  } catch (err: any) {
+    if (err?.name === 'InvoiceActionError') return res.status(err.status).json({ error: err.code });
+    console.error('[admin] cancel-refund error');
+    return res.status(500).json({ error: 'cancel_refund_failed' });
+  }
+});
+
+/**
+ * POST /api/admin/premium/invoices/:id/refund-paid
+ * Record that ops paid the refund by bank transfer, by hand.
+ */
+router.post('/premium/invoices/:id/refund-paid', privateNoStore, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const { AdminMarkRefundPaidSchema } = await import('../types/validation');
+  const parsed = AdminMarkRefundPaidSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'validation_error', details: parsed.error.flatten() });
+  }
+  try {
+    const { invoiceService } = await import('../services/invoice.service');
+    const invoice = await invoiceService.markRefundPaid(req.params.id, parsed.data.admin_actor);
+    return res.json({ ok: true, invoice });
+  } catch (err: any) {
+    if (err?.name === 'InvoiceActionError') return res.status(err.status).json({ error: err.code });
+    console.error('[admin] refund-paid error');
+    return res.status(500).json({ error: 'refund_paid_failed' });
+  }
+});
+
+/**
+ * POST /api/admin/premium/invoices/:id/resend-refund-email
+ * Resend a refund email that failed. Sends nothing if it was already sent.
+ */
+router.post('/premium/invoices/:id/resend-refund-email', privateNoStore, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const { AdminMarkRefundPaidSchema } = await import('../types/validation');
+  const parsed = AdminMarkRefundPaidSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'validation_error', details: parsed.error.flatten() });
+  }
+  try {
+    const { invoiceService } = await import('../services/invoice.service');
+    const inv = await invoiceService.getInvoiceById(req.params.id);
+    if (!inv) return res.status(404).json({ error: 'invoice_not_found' });
+    const result = await invoiceService.sendRefundEmail(inv.id);
+    console.log(`[invoice] resend-refund-email invoice=${inv.id} admin=${parsed.data.admin_actor} result=${result}`);
+    if (result === 'not_due') return res.status(409).json({ error: 'refund_not_paid' });
+    if (result === 'in_progress') return res.status(409).json({ error: 'refund_email_in_progress' });
+    return res.status(result === 'failed' ? 502 : 200).json({ ok: result !== 'failed', result });
+  } catch {
+    console.error('[admin] resend-refund-email error');
+    return res.status(500).json({ error: 'resend_failed' });
+  }
+});
+
+/**
+ * POST /api/admin/premium/invoices/:id/confirm-payment
+ * Ops mark invoice paid after real payment received (bank transfer / manual).
+ * Activates / extends Premium with entitlement stacking.
+ */
+router.post('/premium/invoices/:id/confirm-payment', privateNoStore, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const { AdminConfirmInvoiceSchema } = await import('../types/validation');
+  const parsed = AdminConfirmInvoiceSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'validation_error', details: parsed.error.flatten() });
+  }
+
+  try {
+    const { invoiceService } = await import('../services/invoice.service');
+    const result = await invoiceService.confirmPayment(
+      req.params.id,
+      undefined,
+      parsed.data.notes,
+    );
+    return res.json({
+      ok: true,
+      invoice: result.invoice,
+      user_premium: result.userPremium,
+      already_paid: result.alreadyPaid ?? false,
+    });
+  } catch (err: any) {
+    console.error('[admin] confirm invoice error:', err);
+    if (/refunded invoice/.test(String(err?.message))) {
+      return res.status(409).json({ error: 'invoice_refunded' });
+    }
+    return res.status(400).json({ error: err.message || 'confirm_invoice_failed' });
+  }
+});
+
+/**
+ * POST /api/admin/premium/invoices/:id/cancel
+ * Ops cancel an unpaid invoice.
+ */
+router.post('/premium/invoices/:id/cancel', privateNoStore, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { invoiceService } = await import('../services/invoice.service');
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined;
+    const cancelled = await invoiceService.cancelInvoice(req.params.id, reason);
+    return res.json({ ok: true, invoice: cancelled });
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message || 'cancel_invoice_failed' });
   }
 });
 

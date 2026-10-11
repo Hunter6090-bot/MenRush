@@ -1,0 +1,95 @@
+-- Migration 085: Manual invoice Premium stopgap while card checkout is not live.
+-- Renumbered from 067 (main already has 067_sauna_category_icon; 082 to 084 are
+-- held by open PRs #406 and #410). Never applied
+-- under the old name because it never reached main.
+-- Allows manual creation, tracking, user viewing, and confirmation of Premium invoices.
+-- Does not store processor-specific tokens or fake live checkouts.
+
+SET LOCAL lock_timeout = '5s';
+
+CREATE TABLE IF NOT EXISTS premium_invoices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  invoice_number VARCHAR(64) NOT NULL UNIQUE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan_tier VARCHAR(20) NOT NULL DEFAULT 'premium',
+  plan_days INTEGER NOT NULL DEFAULT 30,
+  amount_pence INTEGER NOT NULL,
+  currency VARCHAR(3) NOT NULL DEFAULT 'GBP',
+  status VARCHAR(20) NOT NULL DEFAULT 'unpaid',
+  payment_method VARCHAR(50) NOT NULL DEFAULT 'bank_transfer',
+  payment_reference VARCHAR(64) NOT NULL,
+  notes TEXT,
+  paid_at TIMESTAMPTZ,
+  confirmed_by_admin_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  cancelled_at TIMESTAMPTZ,
+  -- When the member asked for this invoice (bought Premium). The 14 day
+  -- cancellation window (Terms 7.6A) runs from here, not from payment.
+  -- Defaults to created_at (trigger below); the app also sets it on insert.
+  requested_at TIMESTAMPTZ,
+  -- When the member chose "Start my Premium as soon as my payment is confirmed"
+  -- (Terms 7.6A). NULL means not chosen: Premium starts after the 14 days.
+  immediate_start_consent_at TIMESTAMPTZ,
+  -- 7.6A cancellation of a paid invoice (admin only). Refund is paid by hand by bank transfer.
+  refund_amount_pence INTEGER,
+  refund_days_had INTEGER,
+  cancelled_by VARCHAR(64),
+  refund_paid_at TIMESTAMPTZ,
+  refund_paid_by VARCHAR(64),
+  -- Claim for sending the refund email: one sender at a time (resend lock).
+  refund_email_claimed_at TIMESTAMPTZ,
+  metadata JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 085 has never been applied anywhere (it is not on main yet); this keeps any
+-- local dev table from an earlier draft of this branch in step.
+ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS immediate_start_consent_at TIMESTAMPTZ;
+ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ;
+ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS refund_email_claimed_at TIMESTAMPTZ;
+ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS refund_amount_pence INTEGER;
+ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS refund_days_had INTEGER;
+ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS cancelled_by VARCHAR(64);
+ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS refund_paid_at TIMESTAMPTZ;
+ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS refund_paid_by VARCHAR(64);
+
+-- requested_at: backfill existing rows from created_at, then default new rows to
+-- created_at (a column DEFAULT cannot read another column, so a trigger does it).
+ALTER TABLE premium_invoices ALTER COLUMN requested_at DROP DEFAULT;
+UPDATE premium_invoices SET requested_at = created_at WHERE requested_at IS NULL;
+CREATE OR REPLACE FUNCTION premium_invoices_default_requested_at() RETURNS trigger AS $$
+BEGIN
+  IF NEW.requested_at IS NULL THEN
+    NEW.requested_at := COALESCE(NEW.created_at, NOW());
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS premium_invoices_requested_at_default ON premium_invoices;
+CREATE TRIGGER premium_invoices_requested_at_default
+  BEFORE INSERT ON premium_invoices
+  FOR EACH ROW EXECUTE FUNCTION premium_invoices_default_requested_at();
+ALTER TABLE premium_invoices ALTER COLUMN requested_at SET NOT NULL;
+
+DO $$ BEGIN
+  ALTER TABLE premium_invoices
+    ADD CONSTRAINT premium_invoices_status_check
+    CHECK (status IN ('unpaid', 'paid', 'cancelled', 'refunded'));
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+  WHEN invalid_column_reference THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE premium_invoices
+    ADD CONSTRAINT premium_invoices_plan_tier_check
+    CHECK (plan_tier IN ('premium', 'premium_plus'));
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+  WHEN invalid_column_reference THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_premium_invoices_user ON premium_invoices(user_id);
+CREATE INDEX IF NOT EXISTS idx_premium_invoices_status ON premium_invoices(status);
+CREATE INDEX IF NOT EXISTS idx_premium_invoices_invoice_number ON premium_invoices(invoice_number);
+CREATE INDEX IF NOT EXISTS idx_premium_invoices_payment_ref ON premium_invoices(payment_reference);

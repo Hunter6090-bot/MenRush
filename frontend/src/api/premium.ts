@@ -8,11 +8,47 @@ export type PremiumPlan = {
   period_days: number;
 };
 
+export type PremiumInvoice = {
+  id: string;
+  invoice_number: string;
+  user_id: string;
+  plan_tier: 'premium' | 'premium_plus';
+  plan_days: number;
+  amount_pence: number;
+  currency: string;
+  status: 'unpaid' | 'paid' | 'cancelled' | 'refunded';
+  payment_method: string;
+  payment_reference: string;
+  notes: string | null;
+  paid_at: string | null;
+  /** Set when the member chose to start Premium as soon as payment is confirmed. */
+  immediate_start_consent_at?: string | null;
+  /** When the member asked for the invoice; the 14 day window runs from here. */
+  requested_at?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ManualPaymentInstructions = {
+  account_name: string | null;
+  sort_code: string | null;
+  account_number: string | null;
+  bank_name: string | null;
+  currency: string;
+  payment_reference: string;
+  instructions: string;
+  bank_configured?: boolean;
+  /** When this invoice's Premium starts, from the member's recorded choice. */
+  premium_start_line?: string | null;
+};
+
 export type PremiumStatus = {
   tier: 'free' | 'premium' | 'premium_plus';
   is_premium: boolean;
   beta_premium_included: boolean;
   premium_until: string | null;
+  /** In the future while a paid invoice waits for the 14 day cancellation period. */
+  premium_starts_at?: string | null;
   features: string[];
   free_limits: {
     likesPerDay: number;
@@ -32,4 +68,23 @@ export const premiumAPI = {
       tier,
       return_url: returnUrl,
     }),
+  getInvoices: () =>
+    apiClient.get<{ invoices: PremiumInvoice[] }>('/premium/invoices'),
+  getUnpaidInvoice: () =>
+    apiClient.get<{
+      invoice: PremiumInvoice | null;
+      payment_instructions?: ManualPaymentInstructions;
+    }>('/premium/invoices/unpaid'),
+  // The server sets the amount and days from its price list; sending them is refused (400).
+  createInvoice: (data: {
+    plan_tier?: 'premium';
+    /** Optional (default false): true only if the member ticked "Start my Premium as soon as my payment is confirmed". */
+    immediate_start_consent: boolean;
+  }) =>
+    apiClient.post<{
+      invoice: PremiumInvoice;
+      payment_instructions: ManualPaymentInstructions;
+    }>('/premium/invoices', data),
+  cancelInvoice: (id: string) =>
+    apiClient.post<{ ok: boolean; invoice: PremiumInvoice }>(`/premium/invoices/${id}/cancel`),
 };

@@ -21,6 +21,7 @@ import {
   ConfirmEmailSchema,
   ResendConfirmEmailSchema,
   ChangePasswordSchema,
+  SetPasswordSchema,
   ChangeEmailSchema,
   DeleteAccountSchema,
   TwoFactorCodeSchema,
@@ -37,6 +38,7 @@ import {
   isAdultAssuranceTestFixtureAllowed,
 } from '../services/adult-assurance.service';
 import { VeriffConfigError } from '../services/veriff.service';
+import { privateNoStore } from '../middleware/noStore';
 
 const router = Router();
 
@@ -404,6 +406,43 @@ router.post('/change-password', authMiddleware, accountChangeLimiter, async (req
     const status =
       msg === 'Current password is incorrect' || msg === 'User not found' ? 401 : 400;
     res.status(status).json({ error: msg });
+  }
+});
+
+router.get('/password-status', privateNoStore, authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const hasPassword = await authService.hasPassword(req.userId!);
+    res.json({ has_password: hasPassword });
+  } catch (error: any) {
+    res.status(500).json({ error: 'could_not_check_password_status' });
+  }
+});
+
+router.post('/set-password', privateNoStore, authMiddleware, accountChangeLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const data = SetPasswordSchema.parse(req.body);
+    const result = await authService.setOrChangePassword(req.userId!, data);
+    // Saving a password signs out every session (see setOrChangePassword).
+    // Give this browser a fresh session so the member stays signed in mid payment.
+    const refreshToken = await authSessionService.create(req.userId!, req.get('user-agent'));
+    res.json({
+      ok: true,
+      message: 'Password updated.',
+      hasExistingPassword: result.hasExistingPassword,
+      token: authService.issueAccessToken(req.userId!),
+      refresh_token: refreshToken,
+    });
+  } catch (error: any) {
+    const msg = error?.message || 'Could not update password';
+    // A wrong or missing current password is a form error, not an expired
+    // session: never 401 here, or the client interceptor signs the member out.
+    if (msg === 'Current password is incorrect') {
+      return res.status(400).json({ error: msg, code: 'wrong_current_password' });
+    }
+    if (msg === 'Current password is required') {
+      return res.status(400).json({ error: msg, code: 'current_password_required' });
+    }
+    res.status(msg === 'User not found' ? 401 : 400).json({ error: msg });
   }
 });
 

@@ -44,7 +44,7 @@ import {
 } from './promo.service';
 import { assertPrideInviteEmailMatch } from './prideInvite.service';
 import { ageFromDateOfBirth } from '../lib/age';
-import { premiumService } from './premium.service';
+import { premiumService, premiumTruthFromRow } from './premium.service';
 import { referralService } from './referral.service';
 import {
   adultAssuranceService,
@@ -485,7 +485,10 @@ export const authService = {
           [user!.id],
         );
         if (refreshed.rows[0]) {
-          Object.assign(user!, refreshed.rows[0]);
+          Object.assign(user!, refreshed.rows[0], {
+            // Single Premium rule, from this transaction's row (respects a delayed start).
+            ...premiumTruthFromRow(refreshed.rows[0], { betaFree: premiumService.isBetaPremiumFree() }),
+          });
         }
       }
 
@@ -645,7 +648,8 @@ export const authService = {
               COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified,
               u.verification_status,
               COALESCE(u.is_premium, FALSE) AS is_premium,
-              COALESCE(u.premium_tier, 'free') AS premium_tier
+              COALESCE(u.premium_tier, 'free') AS premium_tier,
+              u.premium_until, u.premium_starts_at
          FROM email_confirm_tokens t
          JOIN users u ON u.id = t.user_id
         WHERE t.token_hash = $1`,
@@ -708,8 +712,8 @@ export const authService = {
       photo_url: row.photo_url ?? undefined,
       is_verified: row.is_verified,
       verification_status: row.verification_status,
-      is_premium: row.is_premium ?? false,
-      premium_tier: row.premium_tier ?? 'free',
+      // Single Premium rule (respects the delayed 14-day start and expiry).
+      ...premiumTruthFromRow(row, { betaFree: premiumService.isBetaPremiumFree() }),
     };
 
     return {
@@ -757,6 +761,7 @@ export const authService = {
       `SELECT id, email, password_hash, name, photo_url, COALESCE(is_verified AND verification_provider = 'veriff', FALSE) AS is_verified, verification_status,
               COALESCE(is_premium, FALSE) AS is_premium,
               COALESCE(premium_tier, 'free') AS premium_tier,
+              premium_until, premium_starts_at,
               COALESCE(totp_enabled, FALSE) AS totp_enabled,
               COALESCE(email_confirmed, TRUE) AS email_confirmed
          FROM users WHERE LOWER(email) = $1`,
@@ -793,8 +798,8 @@ export const authService = {
       photo_url: user.photo_url ?? undefined,
       is_verified: user.is_verified,
       verification_status: user.verification_status,
-      is_premium: user.is_premium ?? false,
-      premium_tier: user.premium_tier ?? 'free',
+      // Single Premium rule (respects the delayed 14-day start and expiry).
+      ...premiumTruthFromRow(user, { betaFree: premiumService.isBetaPremiumFree() }),
     };
 
     if (user.totp_enabled) {
@@ -908,7 +913,8 @@ export const authService = {
     const result = await query(
       `SELECT id, email, name, photo_url, COALESCE(is_verified AND verification_provider = 'veriff', FALSE) AS is_verified, verification_status,
               COALESCE(is_premium, FALSE) AS is_premium,
-              COALESCE(premium_tier, 'free') AS premium_tier
+              COALESCE(premium_tier, 'free') AS premium_tier,
+              premium_until, premium_starts_at
          FROM users WHERE id = $1`,
       [userId],
     );
@@ -932,8 +938,8 @@ export const authService = {
         photo_url: user.photo_url ?? undefined,
         is_verified: user.is_verified,
         verification_status: user.verification_status,
-        is_premium: user.is_premium ?? false,
-        premium_tier: user.premium_tier ?? 'free',
+        // Single Premium rule (respects the delayed 14-day start and expiry).
+        ...premiumTruthFromRow(user, { betaFree: premiumService.isBetaPremiumFree() }),
       },
       token: signToken(user.id),
       ...(deviceTrustToken ? { deviceTrustToken } : {}),
@@ -1120,6 +1126,66 @@ export const authService = {
     await authSessionService.revokeAll(userId);
 
     return { ok: true };
+  },
+
+  /**
+   * Check whether user has an existing usable password.
+   */
+  async hasPassword(userId: string): Promise<boolean> {
+    const result = await query(`SELECT password_hash FROM users WHERE id = $1`, [userId]);
+    if (result.rows.length === 0) return false;
+    const hash = result.rows[0].password_hash;
+    return Boolean(hash && hash.trim().length > 0);
+  },
+
+  /**
+   * Set or change password.
+   * If user already has a password, requires current_password verification and checks it differs.
+   * If user has no password (e.g. social/magic-link only), allows setting without current_password.
+   */
+  async setOrChangePassword(
+    userId: string,
+    data: { current_password?: string; new_password: string },
+  ) {
+    const result = await query(`SELECT password_hash FROM users WHERE id = $1`, [userId]);
+    if (result.rows.length === 0) {
+      throw new Error('User not found');
+    }
+
+    const currentHash = result.rows[0].password_hash;
+    const hasExistingPassword = Boolean(currentHash && currentHash.trim().length > 0);
+
+    if (hasExistingPassword) {
+      if (!data.current_password) {
+        throw new Error('Current password is required');
+      }
+      const valid = await bcryptjs.compare(data.current_password, currentHash);
+      if (!valid) {
+        throw new Error('Current password is incorrect');
+      }
+      if (data.current_password === data.new_password) {
+        throw new Error('New password must be different from your current password');
+      }
+    }
+
+    const hashedPassword = await bcryptjs.hash(data.new_password, 10);
+    await query(
+      `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+      [hashedPassword, userId],
+    );
+
+    await query(
+      `UPDATE password_reset_tokens SET used_at = NOW()
+       WHERE user_id = $1 AND used_at IS NULL`,
+      [userId],
+    );
+
+    const { trustedDeviceService } = await import('./trusted-device.service');
+    await trustedDeviceService.revokeAll(userId);
+    const { authSessionService } = await import('./auth-session.service');
+    await authSessionService.revokeAll(userId);
+
+    return { ok: true, hasExistingPassword };
   },
 
   async getAccountEmail(userId: string) {
