@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SiteFooter } from '../components/SiteFooter';
+import { LOCATION_RETENTION_TEXT } from '../lib/legalLocationRetention';
 
 type Section = {
   id: string;
@@ -98,14 +99,11 @@ export const Terms = () => {
           >
             <header>
               <span className="inline-block rounded-full border border-[#c8861c]/30 bg-[#c8861c]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#c8861c]">
-                Last updated: 06 May 2026
+                Last updated: 10 October 2026
               </span>
               <h1 className="mr-page-heading mt-4">
                 Terms and Conditions
               </h1>
-              <p className="mt-2 text-sm text-[#a89070]">
-                Effective: <Strong>June 2026</Strong> — at public launch.
-              </p>
             </header>
 
             {/* Adult-content warning */}
@@ -158,9 +156,9 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  By accessing or using the MenRush platform — including our website at{' '}
+                  By accessing or using the MenRush platform, including our website at{' '}
                   <A href="https://menrush.com">menrush.com</A> and any associated mobile
-                  application (collectively, the "<Strong>Platform</Strong>") — you confirm that
+                  application (collectively, the "<Strong>Platform</Strong>"), you confirm that
                   you have read, understood, and agree to be bound by these Terms. If you do not
                   agree, do not use the Platform.
                 </>,
@@ -298,7 +296,7 @@ export const Terms = () => {
                 className="mt-6 rounded-r border-l-[3px] border-[#c8861c] bg-[#1e1208] p-4 text-[15px] leading-[1.7] text-[#f0e4cc]/90"
               >
                 <Strong>4.3</Strong> MenRush is a platform for consensual adult connection. Any
-                non-consensual behaviour — including sharing images of others without consent —
+                non-consensual behaviour, including sharing images of others without consent,
                 will result in immediate account termination and may be reported to law
                 enforcement.
               </aside>
@@ -353,13 +351,20 @@ export const Terms = () => {
               {para(
                 <>
                   <Strong>6.2</Strong> By enabling location services, you consent to your
-                  approximate location being visible to other users within the Platform.
+                  approximate location being visible to other members, unless you use Ghost or
+                  hidden mode. Even an approximate location can help someone nearby work out
+                  roughly where you are, so set Discretion to suit you.
                 </>,
               )}
               {para(
                 <>
-                  <Strong>6.3</Strong> Your exact GPS coordinates are never shared with other
-                  users. Only proximity (e.g. "500m away") is displayed.
+                  <Strong>6.3</Strong> Unless you choose to share it yourself in a chat, we never show your
+                  exact location to other members. They
+                  see an approximate position, moved by your Discretion setting, and distances
+                  rounded to "under 1 mile" or whole miles. Members who choose Ghost or hidden
+                  mode don't appear on the map. If you choose to share a place or location
+                  yourself, for example in a chat or a check-in, other members will see what you
+                  share.
                 </>,
               )}
               {para(
@@ -370,12 +375,7 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>6.5</Strong> Location data is retained for up to 6 months in accordance
-                  with our{' '}
-                  <Link to="/privacy" className="text-[#c8861c] hover:text-[#d9a038] hover:underline">
-                    Privacy Policy
-                  </Link>
-                  .
+                  <Strong>6.5</Strong> {LOCATION_RETENTION_TEXT}
                 </>,
               )}
             </section>
@@ -391,12 +391,10 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>7.2</Strong> Waitlist members who joined before our public launch are
-                  entitled to <Strong>30 days of Premium free</Strong>, as stated at the time of
-                  sign-up, unless a valid promotional offer (including a Pride /{' '}
-                  <span className="font-mono tracking-wide">PRIDE</span> promo code) grants a
-                  longer free Premium period instead. Where such a promo applies, it replaces the
-                  30-day waitlist reward — it is not added on top.
+                  <Strong>7.2</Strong> Members who registered before 1 October 2026 received{' '}
+                  <Strong>30 days of Premium free</Strong>, unless a valid promotional code
+                  (including a Pride code) granted a longer free Premium period instead. Where
+                  such a code applies, it replaces the 30 days. It is not added on top.
                 </>,
               )}
               {para(
@@ -434,17 +432,21 @@ export const Terms = () => {
                   <Strong>7.7</Strong> Pride promotional offer (menrush.com/pride). New Pride
                   invites are issued 21 to 31 August 2026 only. The printed public code{' '}
                   <span className="font-mono tracking-wide">PRIDE 3MONTH FREE</span> may be entered
-                  at register by 5 September 2026. A personal code from an earlier email still works
-                  at register by 31 October 2026. Redeeming a valid Pride code grants 3 months of
-                  Premium from launch. One grant per person. No stacking. Pride replaces the 30-day
-                  waitlist Premium gift in clause 7.2. It does not add to that gift. Cannot be
+                  at register by 5 September 2026. All other Pride codes work at register up to and
+                  including 31 October 2026 (23:59:59 UK time) and are refused from 1 November 2026.
+                  That covers both kinds: Brighton Pride personal promo codes sent by email, and
+                  MenRush Pride invites (MENRUSH codes) from the menrush.com/pride claim form. The
+                  claim form closes at the same time. Redeeming a valid Pride code grants 3 months of
+                  Premium. One grant per person. No stacking. Pride replaces the 30 days of
+                  Premium in clause 7.2. It does not add to them. Cannot be
                   combined with the{' '}
                   <span className="font-mono tracking-wide">BSF26</span> promo in clause 7.8 or the{' '}
                   <span className="font-mono tracking-wide">MR3FREE</span> promo in clause 7.9. 18+
                   only. UK-first. You will not be billed for this offer. MenRush is not a sponsor of
-                  Southampton Pride or Manchester Village Pride. Duration: if booked before launch,
-                  Premium starts at launch. On-time open 1 October 2026 ends 1 January 2027. If
-                  launch slips, 3 months from the actual open date.
+                  Brighton Pride, Southampton Pride or Manchester Village Pride. Duration: for a code redeemed before
+                  1 October 2026, Premium runs from 1 October 2026 to 1 January 2027. For a code
+                  redeemed on or after 1 October 2026, Premium runs for 3 months from the day you
+                  register. So if you have an unused Pride code, register by 31 October 2026.
                 </>,
               )}
               {para(
@@ -457,8 +459,8 @@ export const Terms = () => {
                   Europe/London, Premium starts 1 October 2026. If redeemed on 1 October, Premium
                   starts 1 October. If redeemed on 2, 3, 4 or 5 October Europe/London, Premium
                   starts that calendar day. One grant per person. No stacking. Does not stack with
-                  Pride (clause 7.7) or MR3FREE (clause 7.9). Replaces the 30-day waitlist Premium
-                  gift in clause 7.2. It does not add to that gift. 18+ only. You will not be billed
+                  Pride (clause 7.7) or MR3FREE (clause 7.9). Replaces the 30 days of Premium in
+                  clause 7.2. It does not add to them. 18+ only. You will not be billed
                   for this offer. Promoter: Bronze Apps UK Limited trading as MenRush.
                 </>,
               )}
@@ -472,8 +474,8 @@ export const Terms = () => {
                   Redeeming a valid code grants 3 months of Premium free, unlocked from day one
                   (starting the registration calendar day). One grant per account. No stacking.
                   Does not cancel 12-month promises made to early members. Does not wipe existing Premium. Does not
-                  stack with Pride (clause 7.7) or BSF26 (clause 7.8). Replaces the 30-day waitlist
-                  Premium gift in clause 7.2. It does not add to that gift. 18+ only. You will not
+                  stack with Pride (clause 7.7) or BSF26 (clause 7.8). Replaces the 30 days of
+                  Premium in clause 7.2. It does not add to them. 18+ only. You will not
                   be billed for this offer. Promoter: Bronze Apps UK Limited trading as MenRush.
                 </>,
               )}
@@ -738,7 +740,7 @@ export const Terms = () => {
             </section>
 
             <p className="mt-12 text-center text-[11px] uppercase tracking-[0.3em] text-[#a89070]/70">
-              — End of Terms —
+              End of Terms
             </p>
           </article>
         </div>

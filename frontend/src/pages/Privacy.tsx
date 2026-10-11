@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { SiteFooter } from '../components/SiteFooter';
+import { LOCATION_RETENTION_TEXT, TRAVEL_TRIP_RETENTION_TEXT } from '../lib/legalLocationRetention';
 
 const sections = [
   {
@@ -7,7 +8,7 @@ const sections = [
     items: [
       'Account details such as email, display name, age and encrypted login credentials.',
       'Profile content you choose to add, including photos, bio, interests, mood and preferences.',
-      'Approximate location data when you use nearby discovery, Pulse, rooms or location features.',
+      'Precise location from your device, with your permission, when you use the map and nearby discovery. We use it to work out an approximate position and rounded distance that other members can see. Unless you choose to share it yourself in a chat, we never show your exact location to other members.',
       'Messages, media metadata, reports, blocks and safety signals needed to operate the service.',
       'Device, log and security information used to protect accounts and prevent abuse.',
     ],
@@ -16,10 +17,10 @@ const sections = [
     title: 'How we use it',
     items: [
       'To create your account, authenticate you and provide the MenRush app experience.',
-      'To show nearby profiles using privacy-bucketed distance rather than exact public coordinates.',
+      'To show nearby profiles. Distances are shown rounded, as "under 1 mile" or in whole miles.',
       'To run verification, moderation, support, safety reviews and abuse prevention.',
-      'To send transactional emails, waitlist updates and service notices.',
-      'To improve product reliability, performance and launch readiness.',
+      'To send transactional emails and service notices.',
+      'To improve product reliability and performance.',
     ],
   },
   {
@@ -67,6 +68,21 @@ export const Privacy = () => {
               </section>
             ))}
           </div>
+
+          <section
+            className="mt-6 rounded-2xl border border-[#3D2B0E] bg-[#0D0A06]/55 p-5"
+            aria-labelledby="privacy-location-retention"
+          >
+            <h2 id="privacy-location-retention" className="text-lg font-bold">
+              How long we keep location
+            </h2>
+            <p className="mt-2 text-sm leading-7 text-[var(--cream-muted)]" data-testid="privacy-location-retention">
+              {LOCATION_RETENTION_TEXT}
+            </p>
+            <p className="mt-2 text-sm leading-7 text-[var(--cream-muted)]" data-testid="privacy-travel-retention">
+              {TRAVEL_TRIP_RETENTION_TEXT}
+            </p>
+          </section>
 
           <section className="mt-6 rounded-2xl border border-[#3D2B0E] bg-[#0D0A06]/55 p-5">
             <h2 className="text-lg font-bold">Sharing and processors</h2>

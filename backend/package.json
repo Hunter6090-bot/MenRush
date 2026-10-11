@@ -77,6 +77,8 @@
     "test:nightlife-checkin": "ts-node scripts/nightlife-checkin-checks.ts",
     "test:hot-spot-free-counts": "ts-node --transpile-only scripts/hot-spot-free-counts-checks.ts",
     "test:hot-spot-live-sort-integration": "ts-node --transpile-only scripts/hot-spot-live-sort-integration.ts",
+    "test:pride-personal-expiry": "ts-node scripts/pride-personal-expiry-checks.ts",
+    "test:pride-personal-expiry-integration": "ts-node --transpile-only scripts/pride-personal-expiry-integration.ts",
     "test:hot-spot-ghost-live-count": "ts-node scripts/hot-spot-ghost-live-count-integration.ts",
     "test:events-ghost-first-checkin": "ts-node scripts/events-ghost-first-checkin-integration.ts",
     "test:pride-invite-register-integration": "ts-node --transpile-only scripts/pride-invite-register-integration.ts",

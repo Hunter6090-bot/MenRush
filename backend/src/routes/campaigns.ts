@@ -23,7 +23,7 @@
 
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { personalPrideExpiredMessage, promoService } from '../services/promo.service';
+import { personalPrideExpiredMessage, PRIDE_CLAIM_ENDED_MESSAGE, promoService } from '../services/promo.service';
 import {
   PRIDE_WAITLIST_CAMPAIGN_ID,
   prideInviteService,
@@ -166,6 +166,10 @@ router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Resp
         code: 'campaign_closed',
         redirect: '/pride',
       });
+      return;
+    }
+    if (err.message === 'pride_codes_ended') {
+      res.status(410).json({ error: PRIDE_CLAIM_ENDED_MESSAGE, code: 'pride_codes_ended' });
       return;
     }
     if (err.message === 'issue_window_closed') {

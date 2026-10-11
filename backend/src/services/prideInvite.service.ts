@@ -6,6 +6,7 @@ import {
   normalizeInviteCode,
 } from './invite-code.service';
 import {
+  isPrideCodeRedeemOpen,
   isPrideInviteIssueOpen,
   promoService,
   SHARED_PRIDE_MONTHS_FREE,
@@ -77,6 +78,7 @@ export function buildPrideFlaggedInviteEmail(params: {
                     and enter this code at register:
                     <a href="${registerUrl}" style="color:#C4832A;">menrush.com/register</a>
                     (the link includes your code).
+                    Please register by 31 October, when all Pride codes end.
                     One person gets one Pride grant.
                   </p>
                 </td>
@@ -90,6 +92,9 @@ export function buildPrideFlaggedInviteEmail(params: {
             </ul>
             <p style="margin:0 0 24px;font-size:15px;color:#5a4a3a;line-height:1.6;">
               If this email is late or you do not receive a code, reply to this message or use Support on menrush.com.
+            </p>
+            <p style="margin:0 0 24px;font-size:15px;color:#7a6a5a;line-height:1.6;">
+              All the best,<br>MenRush
             </p>
             <p style="margin:0;font-size:11px;color:#3a2a1a;line-height:1.6;border-top:1px solid #1a1210;padding-top:20px;">
               New Pride codes were issued only 21-31&nbsp;August&nbsp;2026 from /pride.
@@ -114,6 +119,7 @@ This one code is your invite and gives you 3 months of Premium. Your 3 months st
 
 Create your account with this same email (${to}) and enter the code at register:
 ${registerUrl}
+Please register by 31 October, when all Pride codes end.
 One person gets one Pride grant.
 
 The bargain:
@@ -122,6 +128,9 @@ The bargain:
 - Does not stack with other Premium offers
 
 If this email is late or missing, reply or use Support.
+
+All the best,
+MenRush
 
 New Pride codes issued only 21-31 August 2026 from /pride. 18+.
 Bronze Apps UK Limited (trading as MenRush).`;
@@ -187,13 +196,18 @@ async function mintPrideFlaggedInvite(email: string): Promise<string> {
 }
 
 /**
- * /pride claim (21–31 Aug UK for NEW codes): subscribe + email a Pride-flagged MENRUSH invite.
- * After the window closes, resend of an existing unused invite is still allowed.
+ * /pride claim (21 to 31 Aug UK for NEW codes): subscribe + email a Pride-flagged MENRUSH invite.
+ * After the window closes, resend of an existing unused invite is still allowed,
+ * until all Pride codes end at 31 Oct 2026 23:59:59 London. Then nothing is sent.
  * Homepage /#waitlist stays ordinary invite-only.
  */
 export const prideInviteService = {
   async issueFromPridePage(emailRaw: string): Promise<PrideInviteIssueResult> {
     const email = emailRaw.trim().toLowerCase();
+    // After 31 Oct 23:59:59 London no Pride code works, so no new codes and no resends.
+    if (!isPrideCodeRedeemOpen()) {
+      throw new Error('pride_codes_ended');
+    }
     const windowOpen = isPrideInviteIssueOpen();
 
     // Already fully granted via another path. Do not mint a Pride invite on top.
